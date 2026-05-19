@@ -1,0 +1,495 @@
+\documentclass{article}
+
+\usepackage[preprint]{neurips_2025}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shapes}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{enumitem}
+
+% ---- theorem environments ----
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+\newtheorem{assumption}{Assumption}
+
+% ---- macros ----
+\newcommand{\cG}{\mathcal{G}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\renewcommand{\do}{\mathrm{do}}
+\newcommand{\Pa}{\mathrm{Pa}}
+\newcommand{\An}{\mathrm{An}}
+\newcommand{\De}{\mathrm{De}}
+\newcommand{\GP}{\mathcal{GP}}
+\newcommand{\CCBO}{\textsc{CCBO}}
+\newcommand{\CBO}{\textsc{CBO}}
+\newcommand{\BO}{\textsc{BO}}
+\newcommand{\RCCBO}{\textsc{RCCBO}}
+\newcommand{\Gq}{\mathcal{G}^{\pi}}
+\newcommand{\Gg}{\mathcal{G}}
+\newcommand{\Ga}{\mathcal{G}^\alpha}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+% ==========================================
+\title{Coarsened Causal Bayesian Optimization\\
+{\large\normalfont\itshape draft skeleton}}
+
+\author{Anonymous}
+
+\begin{document}
+\maketitle
+
+% ==========================================
+\begin{abstract}
+% CONTENT (4 sentences): (1) problem — CBO needs full DAG, practitioners have only cluster knowledge; (2) contribution — CCBO on C-DAGs with two-tier prior, plus RCCBO as online-discovery teaser; (3) key finding — intra-cluster misspec invisible (Prop. 2), non-manip merges free, manip merges collapse ID asymmetrically; (4) scope — two benchmarks, two misspec types, monotonic refinement verified.
+\end{abstract}
+
+% ==========================================
+\section{Introduction}
+\label{sec:intro}
+
+% CONTENT (≤1 page): motivate coarsening-as-regularization (drop any cluster-knowledge-elicitation claims we don't empirically test); state the three contributions below; foreground Prop. 2 as the structural insight; one short paragraph of related work pointing to CBO, C-DAG identification (Anand 2023), and RePaRe (Madaleno 2026).
+
+\paragraph{Contributions.}
+\begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
+  \item % CONTENT: formalise CCBO — BO on a C-DAG with two-tier prior (informative when identifiable on $\Gq$, uninformative otherwise).
+  \item % CONTENT: prove intra-cluster invariance (Prop. \ref{prop:invariance}) and verify it empirically under two misspecification scenarios.
+  \item % CONTENT: introduce RCCBO as a teaser — start from no structure, refine monotonically via RePaRe (Prop. \ref{prop:refinement}).
+\end{itemize}
+
+
+% ==========================================
+\section{Background}
+\label{sec:background}
+
+% CONTENT (≤0.5 page total; heavy citation, minimal prose).
+
+\paragraph{SCMs.}
+% CONTENT: one sentence defining $\mathcal{M}=\langle \mathbf{U},\mathbf{V},\mathcal{F},P(\mathbf{U})\rangle$ and $\do(X_S=\mathbf{x}_S)$; cite Pearl 2009.
+
+\paragraph{Causal Bayesian Optimization.}
+% CONTENT: one sentence — CBO optimises $\E[Y \mid \do(X_S=\mathbf{x}_S)]$ over non-dominated intervention sets (MIS/POMIS) with causal GP priors; cite Aglietti 2020 and Garnett 2023.
+\begin{equation}
+  \label{eq:cbo_obj}
+  (S^*, \mathbf{x}^*) = \arg\min_{\substack{S \in \mathfrak{S} \\ \mathbf{x}_S \in \mathcal{X}_S}}
+  \E\!\left[Y \mid \do(X_S = \mathbf{x}_S)\right].
+\end{equation}
+
+\paragraph{Coarsening and C-DAGs.}
+% CONTENT: one sentence — partition $\pi$ is valid iff $\Gq$ is acyclic; cite Madaleno 2026, Anand 2023 (soundness of do-calculus on C-DAGs), Wahl 2024 ($\sigma$-Markov transfers, faithfulness does not).
+
+\begin{definition}[Coarsening~\citep{madaleno2026coarsening}]
+\label{def:coarsening}
+Given a DAG $\Gg$ on $\mathbf{V}$, a \textbf{coarsening} is a partition $\pi=\{C_1,\ldots,C_{d'}\}$ such that the induced quotient $\Gq$, with nodes $\{C_1,\ldots,C_{d'}\}$ and $C_k\to C_\ell$ iff $\exists V_i\in C_k, V_j\in C_\ell$ with $V_i\to V_j$ in $\Gg$, is a DAG.
+\end{definition}
+
+
+% ==========================================
+\section{Coarsened Causal Bayesian Optimization}
+\label{sec:ccbo}
+
+% CONTENT (≤1.5 pages): the technical core. Keep equations; drop expository re-derivations.
+
+\subsection{Setup}
+
+% CONTENT: two sentences — $\pi$ valid partition of non-target variables; $Y$ kept singleton; manipulative clusters $\mathbf{X}^\pi=\{C_k:C_k\cap\mathbf{X}\neq\emptyset\}$; intervening on $C_k$ means $\do(C_k\cap\mathbf{X})$.
+
+\begin{equation}
+  \label{eq:ccbo_exploration}
+  \mathfrak{S}^{\pi} = \Bigl\{\, \bigcup_{C_k \in \mathcal{S}} (C_k \cap \mathbf{X})
+  \;\Big|\; \emptyset \neq \mathcal{S} \subseteq \mathbf{X}^{\pi},\;
+  |\mathcal{S}| \leq m \,\Bigr\}.
+\end{equation}
+
+\begin{remark}[Intervention granularity]
+\label{rem:granularity}
+% CONTENT: one line — merging manipulative variables forces joint interventions.
+\end{remark}
+
+\subsection{Two-tier causal GP prior}
+\label{sec:causal_prior}
+
+% CONTENT (one short paragraph): identification is performed on $\Gq$ (not $\Gg$) using the complete ID algorithm \citep{shpitser2006identification} via \texttt{ananke-causal} on the projected ADMG. When ID returns \textsc{NotIdentified}, we fall back to the observational mean $\bar{Y}_{\mathrm{obs}}$ (uninformative prior); the BO loop then learns the interventional effect purely from experimental data. Cite Pearl 1995/2009, Anand 2023, Tian-Pearl 2002.
+
+\begin{equation}
+  \label{eq:two_tier_prior}
+  \mu_0^S(\mathbf{x}_S) = \begin{cases}
+    \hat{\E}[Y \mid \do(X_S = \mathbf{x}_S)] & \text{if identifiable from } \Gq, \\
+    \bar{Y}_{\mathrm{obs}} & \text{otherwise.}
+  \end{cases}
+\end{equation}
+
+\begin{table}[t]
+  \centering
+  %% one-line diagnostic caption — how identification on $\Gq$ depends on $\pi$ for CompleteGraph, showing $\pi_\top$ recovers CBO while coarsening collapses some sets to uninformative priors.
+  \caption{Identification method on $\Gq$ for each intervention set, CompleteGraph. $\pi_\top$ = identity; $\{B,D\},\{E\}$ = manip.\ cluster.}
+  \label{tab:identification}
+  \vspace{4pt}
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Partition} & \textbf{Intervention set $S$} & \textbf{Method on $\Gq$} & \textbf{Details} \\
+    \midrule
+    \multirow{7}{*}{$\pi_\top$ (identity)}
+    & $\{D\}$     & Backdoor  & $\mathbf{Z} = \{C\}$ \\
+    & $\{E\}$     & Backdoor  & $\mathbf{Z} = \{A, C\}$ \\
+    & $\{B\}$     & Frontdoor & $\mathbf{M} = \{C\}$ \\
+    & $\{D, E\}$  & Backdoor  & $\mathbf{Z} = \{A, B\}$ \\
+    & $\{B, D\}$  & G-computation & Propagate through $\{C\}, \{E\}$ \\
+    & $\{B, E\}$  & G-computation & Propagate through $\{C\}, \{D\}$ \\
+    & $\{B, D, E\}$ & G-computation & Propagate through $\{C\}$ \\
+    \midrule
+    \multirow{3}{*}{$\{B,D\},\{E\}$ (manip.\ cluster)}
+    & $\{E\}$       & Backdoor      & $\mathbf{Z} = \{A, C\}$ \\
+    & $\{B, D\}$    & Uninformative & Bidirected edge $\{B,D\}\leftrightarrow Y$ on $\Gq$ \\
+    & $\{B, D, E\}$ & Uninformative & Same; $E$ does not break confounding \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Assumptions}
+\label{sec:assumptions}
+
+% CONTENT: this is the honest methodological-caveats box; three bullets.
+\begin{assumption}[Valid partition]
+\label{ass:valid}
+% CONTENT: the practitioner supplies a partition $\pi$ whose quotient $\Gq$ is acyclic.
+\end{assumption}
+\begin{assumption}[Cluster-level identification as subset prior]
+\label{ass:cluster_prior}
+% CONTENT: identification is derived for $\do(C_k)$ (cluster-level; Anand 2023) and re-used as a GP prior mean for subset interventions $\do(C_k\cap\mathbf{X})$. This is a heuristic — not a formal ID guarantee for sub-cluster do's.
+\end{assumption}
+\begin{assumption}[GID-PO completeness boundary]
+\label{ass:id_scheme}
+% CONTENT: we use the Shpitser-Pearl ID algorithm~\citep{shpitser2006identification} on the projected ADMG $\Gq$, implemented via \texttt{ananke-causal}. ID is sound and complete for non-parametric identification from $\Gq$; non-identified queries return a \textsc{NotIdentified} exception and fall back to uninformative prior. This is a principled — not heuristic — fallback.
+\end{assumption}
+
+\subsection{Algorithm}
+
+\begin{algorithm}[t]
+\caption{\CCBO: Coarsened Causal Bayesian Optimization}
+\label{alg:ccbo}
+\begin{algorithmic}[1]
+\REQUIRE $\Gq$ (ADMG with bidirected edges for hidden confounders); $\pi$; target $Y$; manipulative set $\mathbf{X}$; budget $T$; observational data.
+\STATE Compute $\mathbf{X}^\pi$ and exploration set $\mathfrak{S}^{\pi}$ via Eq.~\eqref{eq:ccbo_exploration}.
+\STATE For each $S \in \mathfrak{S}^{\pi}$, call \textsc{ID} (Shpitser \& Pearl 2006) on $\Gq$ via \texttt{ananke-causal}; compute $\mu_0^S$ via Eq.~\eqref{eq:two_tier_prior}; fall back to $\bar{Y}_{\mathrm{obs}}$ if \textsc{NotIdentified}.
+\STATE Collect initial interventional data $\mathcal{D}_0$.
+\FOR{$t = 1, \ldots, T$}
+  \STATE Update GP posteriors $(\mu_t^S, k_t^S)$ for all $S \in \mathfrak{S}^{\pi}$.
+  \STATE $(S_t, \mathbf{x}_t) \leftarrow \arg\max_{S,\mathbf{x}} \mathrm{EI}_{S,t}(\mathbf{x})$.
+  \STATE Observe $y_t$; update $\mathcal{D}_t$.
+\ENDFOR
+\RETURN $\mathbf{x}_{t^*}$ where $t^* = \arg\min_t y_t$.
+\end{algorithmic}
+\end{algorithm}
+
+
+% ==========================================
+\section{Theoretical properties}
+\label{sec:theory}
+
+% CONTENT (≤0.5 page): three propositions, foreground Prop. 2.
+
+\begin{proposition}[Identity recovery]
+\label{prop:identity}
+When $\pi=\pi_\top$, \CCBO{} reduces to \CBO{} with power-set exploration.
+\end{proposition}
+% CONTENT: one-line proof — identity partition gives singleton clusters, so $\mathfrak{S}^{\pi_\top}$ is the full power set and $\Gq=\Gg$.
+
+\begin{proposition}[Identification invariance under intra-cluster edges]
+\label{prop:invariance}
+Let $\pi$ be a valid coarsening of $\Gg$ and $e=(V_i\to V_j)$ with $V_i,V_j\in C_k\in\pi$. Then (i) $\Gq=(\Gg\setminus e)^{\pi}$, and (ii) for every $S\in\mathfrak{S}^\pi$, the identification formula for $\E[Y\mid\do(X_S=\mathbf{x}_S)]$ derived from $\Gq$ is the same under $\Gg$ and $\Gg\setminus e$.
+\end{proposition}
+\begin{proof}
+% CONTENT: 3 lines — inter-cluster edges unaffected by removing an intra-cluster $e$; $\Gq$ identical; every downstream object (ES, adjustment set, ID formula) depends only on $\Gq$.
+\end{proof}
+
+\begin{remark}[Structural robustness]
+\label{rem:structural_robustness}
+% CONTENT: one short paragraph foregrounding Prop. 2 — intra-cluster misspecification is invisible; this is the paper's core insight.
+\end{remark}
+
+\begin{proposition}[Refinement monotonicity]
+\label{prop:refinement}
+Let $\pi'$ refine $\pi$. Then (i) $\pi'$ is valid; (ii) $\mathfrak{S}^{\pi'}\supseteq\mathfrak{S}^\pi$ in the sense that every entry in $\mathfrak{S}^\pi$ maps to at least one entry in $\mathfrak{S}^{\pi'}$; (iii) every effect identifiable from $\Gq$ remains identifiable from $\mathcal{G}^{\pi'}$.
+\end{proposition}
+\begin{proof}
+% CONTENT: 4 lines — cycles can't form under refinement; splitting a cluster can only add ES entries; refinement can only remove bidirected edges, never add them.
+\end{proof}
+
+
+% ==========================================
+\section{Recursive CCBO (teaser)}
+\label{sec:rccbo}
+
+% CONTENT (≤1 page total): one-paragraph motivation — BO $\to$ CCBO $\to$ CBO as evidence accumulates; refinement via RePaRe on interventional data; by Prop. \ref{prop:refinement} every refinement is monotonically safe. Pointer to \S\ref{sec:rccbo_exp}.
+
+\begin{algorithm}[t]
+\caption{\RCCBO: Recursive Coarsened Causal Bayesian Optimization}
+\label{alg:rccbo}
+\begin{algorithmic}[1]
+\REQUIRE Manipulative $\mathbf{X}$, $\mathcal{D}_\text{obs}$, budget $T$, phase $k$, RePaRe levels $\alpha,\beta$.
+\STATE $\pi\leftarrow\text{None}$; $\mathfrak{S}\leftarrow\{\{x\}:x\in\mathbf{X}\}$; $\mathcal{D}_\text{int}\leftarrow\emptyset$.
+\WHILE{budget remaining}
+  \IF{$\pi\neq\text{None}$} \STATE Build $\Gq$; compute $\mathfrak{S}^\pi$ and two-tier priors \ELSE \STATE Uninformative priors \ENDIF
+  \STATE Run $\min(k,\text{rem.})$ trials of \CBO{} on $\mathfrak{S}$; record full-variable samples into $\mathcal{D}_\text{int}$.
+  \STATE $\pi'\leftarrow\textsc{RePaRe}(\mathcal{D}_\text{obs},\mathcal{D}_\text{int};\alpha,\beta)$.
+  \IF{$\pi'\neq\pi$} \STATE Patch GP state; $\pi\leftarrow\pi'$. \ENDIF
+\ENDWHILE
+\RETURN $\mathbf{x}_{t^*}$, final $\pi$.
+\end{algorithmic}
+\end{algorithm}
+
+
+% ==========================================
+\section{Related work}
+\label{sec:related}
+
+% CONTENT (≤0.4 page): compare the five nearest competitors on three axes — what is learned, what is assumed, whether the search space is manipulable-set-bounded.
+
+\begin{table}[h]
+  \centering
+  \caption{Positioning of \CCBO/\RCCBO{} vs.\ nearest-neighbor methods.}
+  \label{tab:related}
+  \vspace{4pt}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Method} & \textbf{What is learned} & \textbf{Prior assumed} & \textbf{Search space} \\
+    \midrule
+    GACBO~\citep{mukherjee2024gacbo}  & Posterior over full DAGs & Uniform DAG prior & $\mathbf{M}$ \\
+    Durand 2025           & $\mathrm{Pa}(Y) \subseteq \mathbf{M}$ & $Y$ has no downstream effect & $\mathbf{M}$ \\
+    Park 2025~\citep{park2025dmis}    & PAG $\to$ MAG refinement & MEC known & Partial $\mathbf{M}$ \\
+    CBO~\citep{aglietti2020causal}    & Nothing (oracle DAG) & Full DAG & POMIS \\
+    \midrule
+    \CCBO{} (ours) & Nothing (partition given) & Partition of $\mathbf{M}$ & POMIS on $\Gq$ \\
+    \RCCBO{} (ours) & Partition $\pi$ of $\mathbf{M}$ & None (start coarsest) & Monotone refines to CBO \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% CONTENT: one sentence each on GACBO (heavy per-trial cost), Durand (Pa(Y) identification limit), Park (requires MEC), Lee-Bareinboim causal bandits~\citep{lee2018structural} (regret bound; atomic interventions only). \CCBO{} is the first to exploit a partition structure on $\mathbf{M}$ without learning any edge.
+
+
+% ==========================================
+\section{Experiments}
+\label{sec:experiments}
+
+% CONTENT (≤2 pages total; keep figures/tables; remove re-interpretation that the reader can see from the figures).
+
+\subsection{Setup}
+\label{sec:exp_setup}
+
+% CONTENT: one paragraph — two benchmarks: (1) CompleteGraph \citep{aglietti2020causal} — six observables, two latents $U_1,U_2$, manipulative $\mathbf{X}=\{B,D,E\}$, non-manipulative $\{A,C\}$, Lee-2019 projection induces bidirected $B\leftrightarrow Y$ and $D\leftrightarrow Y$; (2) SimplifiedCoralGraph (coral bleaching sub-graph from Aglietti 2020) — ten variables, manipulative $\mathbf{X}=\{N,O,C,T,D\}$, five non-manipulable observables projected to bidirected edges. Methods: BO (non-causal, full $|\mathbf{X}|$-dimensional search), CBO on the fine-grained projected ADMG $G^*$, CCBO (three representative partitions per benchmark), RCCBO. Protocol: 5 seeds $\times$ 40 trials, same seed set across all methods; unit cost; $n_{\mathrm{init}}=20$ interventional points.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.32\textwidth]{figures/CompleteGraph_dag.pdf}
+  %% DAG caption — orange $=$ manipulative, green $=$ target, dashed $=$ latent confounders.
+  \caption{Causal DAG (CompleteGraph). Orange = manipulative; green = target; bidirected $\leftrightarrow$ = latent confounder.}
+  \label{fig:dag}
+\end{figure}
+
+\subsection{Main result}
+
+\begin{table}[t]
+  \centering
+  %% final best $Y$ across manipulative groupings for each benchmark; same 5-seed $\times$ 40-trial protocol for all rows.
+  \caption{Final best $Y$ (mean $\pm$ std, 5 seeds $\times$ 40 trials) per method and partition.}
+  \label{tab:results}
+  \vspace{4pt}
+  % CONTENT: regenerate from unified runner with consistent seeds across baselines and CCBO rows; columns: Method, Manipulative grouping, $|\mathfrak{S}^\pi|$, Final $Y$ (CompleteGraph), Final $Y$ (Benchmark 2).
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/CompleteGraph_convergence.pdf}
+  %% convergence per partition on CompleteGraph (5 seeds $\times$ 40 trials, mean $\pm$ std); CCBO-finest tracks CBO; CCBO-$\{B\
+  \caption{Convergence on CompleteGraph (5 seeds $\times$ 40 trials, mean $\pm$ std). CCBO-finest tracks CBO; CCBO-$\{B\},\{D,E\}$ collapses to uninformative prior.}
+  \label{fig:results}
+\end{figure}
+
+% CONTENT: one short paragraph flagging the two findings the table/figure make visible — (a) identity $\pi$ matches CBO; (b) merges involving $E$ collapse performance. Do not re-narrate the numbers.
+
+\subsection{Robustness (Prop.~\ref{prop:invariance})}
+\label{sec:robustness}
+
+% CONTENT: one paragraph — two misspecification scenarios: (i) missing inter-cluster edge $B\to C$, (ii) flipped intra-cluster edge (new); two partitions $\{B\},\{D\},\{E\}$ and $\{B,C,D\},\{E\}$; four conditions per scenario.
+
+\begin{table}[t]
+  \centering
+  %% Prop. \ref{prop:invariance
+  \caption{Prop. \ref{prop:invariance} validated across two misspec types and two benchmarks.}
+  \label{tab:wrong_edge}
+  \vspace{4pt}
+  % CONTENT: columns: Partition, Misspecification, $|\mathfrak{S}^\pi|$, Final $Y$.
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/CompleteGraph_wrong_edge.pdf}
+  %% convergence under correct vs. misspecified DAG; coarsened partition tracks correct DAG exactly.
+  \caption{Robustness: correct (solid) vs.\ misspecified (dashed) DAG. Intra-cluster misspec leaves CCBO unchanged (Prop.~\ref{prop:invariance}).}
+  \label{fig:wrong_edge}
+\end{figure}
+
+\subsection{RCCBO teaser}
+\label{sec:rccbo_exp}
+
+% CONTENT (one paragraph): RePaRe fires every $k=10$ trials; partition evolves; RCCBO reaches within a documented gap of the CBO oracle without prior graph knowledge; longer phase budgets refine further (limitation noted below).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/CompleteGraph_rccbo_convergence.pdf}
+  %% top panel convergence vs. baselines with dashed refinement markers; bottom panel partition-evolution trace. Use plot\_rccbo\_with\_partition\_evolution.
+  \caption{\textsc{RCCBO}: convergence (top) with dashed refinement markers and partition-evolution trace (bottom).}
+  \label{fig:rccbo_convergence}
+\end{figure}
+
+
+% ==========================================
+\section{Discussion}
+\label{sec:discussion}
+
+% CONTENT (≤0.3 page, 4 bullets of novel takeaways only — nothing that restates Results):
+\begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
+  \item % Prop. \ref{prop:invariance} = structural robustness, not an empirical coincidence.
+  \item % Non-manipulative merges are ID-preserving in expectation; a subtle within-grouping variance appears only when all manipulative variables are separated and a non-manip merge breaks adjustment.
+  \item % Manipulative merges collapse ID asymmetrically — only merges that absorb a distinct-role direct parent are catastrophic.
+  \item % RCCBO closes the BO $\to$ CBO gap with evidence under Prop. \ref{prop:refinement}, providing a practitioner a monotonically safe path from no structure to full structure.
+\end{itemize}
+
+
+% ==========================================
+\section{Limitations}
+\label{sec:limitations}
+
+% CONTENT (≤0.15 page): (i) BD/FD/g-comp incomplete as ID; (ii) cluster-vs-subset intervention heuristic (Assumption \ref{ass:cluster_prior}); (iii) two benchmarks only; (iv) RCCBO under-refines at small phase budgets; (v) faithfulness does not transfer from $\Gg$ to $\Gq$ (Wahl 2024).
+
+
+% ==========================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+% CONTENT (3 sentences): what was shown, where it lands on the BO $\to$ CCBO $\to$ CBO spectrum, one forward-looking sentence.
+
+
+% ==========================================
+\bibliographystyle{abbrvnat}
+\begin{thebibliography}{20}
+
+\bibitem[Anand et al.(2023)]{anand2023cdag}
+T.~V.~Anand, A.~H.~Ribeiro, J.~Tian, and E.~Bareinboim.
+\newblock Causal effect identification in cluster {DAG}s.
+\newblock In \emph{AAAI}, volume 37, pp.\ 12172--12179, 2023.
+
+\bibitem[Aglietti et al.(2020)]{aglietti2020causal}
+V.~Aglietti, X.~Lu, A.~Paleyes, and J.~Gonz{\'a}lez.
+\newblock Causal {B}ayesian optimization.
+\newblock In \emph{AISTATS}, volume 108 of \emph{PMLR}, pp.\ 3155--3164, 2020.
+
+\bibitem[Aglietti et al.(2021)]{aglietti2021dynamic}
+V.~Aglietti, N.~Dhir, J.~Gonz{\'a}lez, and T.~Damoulas.
+\newblock Dynamic causal {B}ayesian optimization.
+\newblock In \emph{NeurIPS}, volume 34, 2021.
+
+\bibitem[Aglietti et al.(2023)]{aglietti2023constrained}
+V.~Aglietti, Alan Malek, Ira Ktena, Silvia Chiappa.
+\newblock Constrained Causal {B}ayesian optimization.
+\newblock In \emph{ICML}, 2023.
+
+\bibitem[Gultchin et al.(2023)]{gultchin2023functional}
+Limor Gultchin, Virginia Aglietti, Alexis Bellot, Silvia Chiappa.
+\newblock Functional Causal {B}ayesian optimization.
+\newblock \emph{UAI}, 2023.
+
+\bibitem[Garnett(2023)]{garnett2023bayesian}
+R.~Garnett.
+\newblock \emph{Bayesian Optimization}.
+\newblock Cambridge University Press, 2023.
+
+\bibitem[Madaleno et al.(2026)]{madaleno2026coarsening}
+F.~Madaleno, P.~Misra, and A.~Markham.
+\newblock Coarsening causal {DAG} models.
+\newblock \emph{arXiv:2601.10531}, 2026.
+
+\bibitem[Pearl(1995)]{pearl1995causal}
+J.~Pearl.
+\newblock Causal diagrams for empirical research.
+\newblock \emph{Biometrika}, 82(4):669--688, 1995.
+
+\bibitem[Pearl(2009)]{pearl2009causality}
+J.~Pearl.
+\newblock \emph{Causality: Models, Reasoning and Inference}.
+\newblock Cambridge University Press, 2nd edition, 2009.
+
+\bibitem[Balandat et al.(2020)]{balandat2020botorch}
+M.~Balandat, B.~Karrer, D.~R.~Jiang, S.~Daulton, B.~Letham, A.~G.~Wilson, and E.~Bakshy.
+\newblock {BoTorch}: A framework for efficient {M}onte-{C}arlo {B}ayesian optimization.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem[Branchini et al.(2023)]{branchini2023causal}
+N.~Branchini, V.~Aglietti, N.~Sherr, and A.~Sherr.
+\newblock Causal {B}ayesian optimization via local causal discovery.
+\newblock In \emph{CLeaR}, volume 236 of \emph{PMLR}, 2023.
+
+\bibitem[Ferreira \& Assaad(2025)]{ferreira2025cdmg}
+E.~Ferreira and C.~K.~Assaad.
+\newblock Identifying macro causal effects in a {C-DMG} over {ADMG}s.
+\newblock \emph{arXiv:2504.01551}, 2025.
+
+\bibitem[Sussex et al.(2023)]{sussex2023model}
+S.~Sussex, A.~Makarova, and A.~Krause.
+\newblock Model-based causal {B}ayesian optimization.
+\newblock In \emph{ICLR}, 2023.
+
+\bibitem[Wahl et al.(2024)]{wahl2024foundations}
+J.~Wahl, U.~Ninad, and J.~Runge.
+\newblock Foundations of causal discovery on groups of variables.
+\newblock \emph{Journal of Causal Inference}, 12(1), 2024.
+
+\bibitem[Shpitser \& Pearl(2006)]{shpitser2006identification}
+I.~Shpitser and J.~Pearl.
+\newblock Identification of joint interventional distributions in recursive semi-{M}arkovian causal models.
+\newblock In \emph{AAAI}, 2006.
+
+\bibitem[Tian \& Pearl(2002)]{tian2002general}
+J.~Tian and J.~Pearl.
+\newblock A general identification condition for causal effects.
+\newblock In \emph{AAAI}, 2002.
+
+\bibitem[Lee et al.(2019)]{lee2019latent}
+S.~Lee, J.~Correa, and E.~Bareinboim.
+\newblock General identifiability with arbitrary surrogate experiments.
+\newblock In \emph{UAI}, 2019.
+
+\bibitem[Lee \& Bareinboim(2018)]{lee2018structural}
+S.~Lee and E.~Bareinboim.
+\newblock Structural causal bandits: Where to intervene?
+\newblock In \emph{NeurIPS}, 2018.
+
+\bibitem[Mukherjee et al.(2024)]{mukherjee2024gacbo}
+D.~Mukherjee, A.~Bhatt, and M.~Lemos.
+\newblock Graph-agnostic causal {B}ayesian optimization.
+\newblock \emph{arXiv}, 2024.
+
+\bibitem[Park et al.(2025)]{park2025dmis}
+J.~Park, M.~Zemplenyi, and V.~Aglietti.
+\newblock Causal {B}ayesian optimization under partial observability.
+\newblock \emph{arXiv}, 2025.
+
+\end{thebibliography}
+
+\end{document}

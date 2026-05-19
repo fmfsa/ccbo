@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "ccbo"
+version = "0.1.0"
+description = "Coarsened Causal Bayesian Optimization"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "networkx",
+    "matplotlib",
+    "seaborn",
+    "GPy",
+    "emukit",
+    "torch",
+    "botorch",
+    "gpytorch",
+    "dcor",
+]
+
+[tool.setuptools.packages.find]
+include = ["ccbo*"]

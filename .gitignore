@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# OS
+.DS_Store
+
+# Virtualenvs
+.venv/
+venv/
+.env
+
+# IDEs
+.idea/
+.vscode/
+
+# pytest / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Experiment outputs — large pickles, regenerated on the server
+results/
+results_*/
+
+# Paper build artefacts (keep .tex and final .pdf)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.synctex.gz
+paper/*.tex.bak
+
+# Local personal config
+Coarsened Causal Bayesian Optimization.json
+.claude/
