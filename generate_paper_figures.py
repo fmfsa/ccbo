@@ -50,32 +50,63 @@ def generate_dag_figure():
 # Fig 2: Main convergence (from 'main' condition)
 # ---------------------------------------------------------------------------
 
+def _method_sort_key(method):
+    """Order methods as BO, CBO, CCBO-* (sorted), RCCBO, then anything else."""
+    if method == 'BO':
+        return (0, method)
+    if method == 'CBO':
+        return (1, method)
+    if method.startswith('CCBO'):
+        return (2, method)
+    if method == 'RCCBO':
+        return (3, method)
+    return (4, method)
+
+
 def generate_comparison_figure(seeds=5):
+    """Benchmark-agnostic convergence comparison from the 'main' pkl.
+
+    Reads results/{BENCHMARK}_main_{seeds}seeds.pkl (seed -> method ->
+    {'global_opt', ...}) and plots one line per method (BO, CBO, each CCBO
+    coarsening, RCCBO) showing the mean +/- standard error across seeds.
+    """
     data = _load(f'{BENCHMARK}_main_{seeds}seeds.pkl')
     if data is None:
         return
 
-    # Build per-method lists of convergence curves
-    methods = ['BO', 'BO-botorch', 'CBO',
-               'CCBO-identity', 'CCBO-{BCD},{E}', 'CCBO-{B},{DE}',
-               'CCBO-all-merged', 'RCCBO']
+    # Union of method names across all seeds, in a stable display order.
+    methods = sorted({m for s in data for m in data[s]}, key=_method_sort_key)
 
-    results_list = {}
-    for method in methods:
+    # Distinct colour per method; BO drawn dashed to set the baseline apart.
+    palette = plt.get_cmap('tab10').colors
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    for i, method in enumerate(methods):
         curves = [data[s][method]['global_opt']
                   for s in data if method in data[s]]
-        if curves:
-            # Pad to common length
-            max_len = max(len(c) for c in curves)
-            arr = np.array([c + [c[-1]] * (max_len - len(c)) for c in curves])
-            results_list[method] = {
-                'mean': arr.mean(0),
-                'std': arr.std(0),
-                'global_opt': arr.mean(0).tolist(),
-            }
+        if not curves:
+            continue
+        # Pad to common length by repeating the last value.
+        max_len = max(len(c) for c in curves)
+        arr = np.array([c + [c[-1]] * (max_len - len(c)) for c in curves])
+        mean = arr.mean(0)
+        sem = arr.std(0) / np.sqrt(arr.shape[0])
+        xs = np.arange(len(mean))
+        ls = '--' if method == 'BO' else '-'
+        color = palette[i % len(palette)]
+        ax.plot(xs, mean, color=color, lw=2.2, ls=ls, label=method, zorder=5)
+        ax.fill_between(xs, mean - sem, mean + sem, color=color, alpha=0.15)
+
+    ax.set_xlabel('Optimization step')
+    ax.set_ylabel(r'Best $Y$ found ($\downarrow$)')
+    ax.set_title(f'{BENCHMARK}: BO vs CBO vs CCBO vs RCCBO')
+    ax.legend(fontsize=9, loc='best', framealpha=0.9)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
 
     out = os.path.join(FIGURES_DIR, f'{BENCHMARK}_comparison.pdf')
-    plot_convergence_and_final(results_list, BENCHMARK, output_path=out)
+    fig.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close(fig)
     print(f"Saved {out}")
 
 

@@ -69,12 +69,22 @@ REPRESENTATIVE_COARSENINGS_SIMPLIFIEDCORALGRAPH = [
      'CCBO-all-merged'),
 ]
 
+# LightTunnel M = {R, G, B, P1, P2}
+# Coarse partition {R,G,B} | {P1,P2} | {Y} — the partition under which Lee-2019
+# latent projection drops the spurious R->G edge (see wrong_edge condition).
+REPRESENTATIVE_COARSENINGS_LIGHTTUNNEL = [
+    ([frozenset({'R', 'G', 'B'}), frozenset({'P1', 'P2'}), frozenset({'Y'})],
+     'CCBO-{RGB},{P1P2}'),
+]
+
 
 def _get_representative_coarsenings(benchmark):
     if benchmark == 'CompleteGraph':
         return REPRESENTATIVE_COARSENINGS_COMPLETEGRAPH
     elif benchmark == 'SimplifiedCoralGraph':
         return REPRESENTATIVE_COARSENINGS_SIMPLIFIEDCORALGRAPH
+    elif benchmark == 'LightTunnel':
+        return REPRESENTATIVE_COARSENINGS_LIGHTTUNNEL
     else:
         return []
 
@@ -125,10 +135,16 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
         dag_edges, nodes, hidden_nodes, _ = get_dag_edges_from_sem(benchmark)
         hidden_conf = get_hidden_confounders(benchmark)
 
+        # LightTunnel has 5 manipulable variables; capping the intervention size
+        # at 1 keeps the exploration set to cluster singletons so each CBO trial
+        # stays fast (mirrors the wrong_edge condition rationale below).
+        max_size = 1 if benchmark == 'LightTunnel' else 3
+
         for partition, label in _get_representative_coarsenings(benchmark):
             print(f"\n--- {label} ---")
             try:
                 cg = CoarsenedGraph(graph, partition, benchmark, obs,
+                                    max_intervention_size=max_size,
                                     num_mc_samples=2000)
                 functions = cg.fit_all_models()
                 MIS, _, manip_vars = cg.get_sets()
