@@ -86,23 +86,28 @@ PYTHONPATH=. python -m ccbo.cbo.data.LightTunnel.generate_observations
 ### 4. Multi-seed BO experiments
 
 ```bash
-# CompleteGraph (Aglietti 2020 toy): main comparison + wrong-edge robustness
-python run_experiments.py --benchmark CompleteGraph --condition main      --seeds 5 --trials 40
-python run_experiments.py --benchmark CompleteGraph --condition wrong_edge --seeds 5 --trials 40
+# Full paper suite (10 seeds x 40 trials, sequential, checkpointed per seed)
+./run_full_suite.sh
 
-# Light tunnel — wrong-edge condition with WrongRG misspec
-python run_experiments.py --benchmark LightTunnel    --condition wrong_edge --seeds 5 --trials 30
+# Or individual conditions:
+python run_experiments.py --benchmark CompleteGraph --condition main        # BO/CBO/GACBO/CCBO
+python run_experiments.py --benchmark CompleteGraph --condition wrong_edge  # tier-1 misspec damage
+python run_experiments.py --benchmark CompleteGraph --condition sweep       # price-of-coarsening lattice
+python run_experiments.py --benchmark LightTunnel   --condition wrong_edge  # tier-2 (arm) damage + invariance
 ```
 
-Results land in `results/` (per-benchmark pickles). Each CBO trial is heavy
-(GPy + emukit gradient-based acquisition); plan for ~minutes per seed at
-this budget on a multi-core box.
+Results land in `results/` (per-benchmark pickles); a fairness check
+asserts identical trial counts and seed coverage across methods. Each CBO
+trial is heavy (GPy + emukit gradient-based acquisition); plan for
+~minutes per seed per method.
 
-### 5. Figures
+### 5. Figures and LaTeX tables
 
 ```bash
-python generate_paper_figures.py --benchmark CompleteGraph --seeds 5
-python generate_paper_figures.py --benchmark LightTunnel   --seeds 5 --only wrong_edge
+python generate_paper_figures.py --benchmark CompleteGraph
+python generate_paper_figures.py --benchmark LightTunnel --only wrong_edge
+python generate_paper_figures.py --benchmark CompleteGraph --only tables
+# Tables land in paper/tables/ and are \input by paper/ccbo_paper.tex.
 ```
 
 ## What's the headline result?

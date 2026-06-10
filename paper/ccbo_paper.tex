@@ -511,8 +511,20 @@ and \CCBO{} under representative partitions.
 \begin{table}[t]
   \centering
   \caption{Final best $Y$ (mean $\pm$ s.e., 10 seeds $\times$ 40 trials)
-  per method. \todo{fill from \texttt{results/*\_main\_10seeds.pkl}}}
+  per method.}
   \label{tab:results}
+  \vspace{4pt}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    \textbf{Method} & \textbf{CompleteGraph} & \textbf{SimplifiedCoralGraph} \\
+    \midrule
+    % Rows are emitted by generate_paper_figures.py --only tables into
+    % paper/tables/{B}_main.tex; merge the two benchmark columns here once
+    % the 10-seed runs land.
+    \todo{\texttt{paper/tables/*\_main.tex} pending 10-seed runs} & & \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \subsection{Main comparison and the coarsening sweep}
@@ -569,10 +581,22 @@ every seed (the cluster arm also attains $\E[Y|\do(R,G,B{=}0)] \approx
 
 \begin{table}[t]
   \centering
-  \caption{Robustness under intra-cluster misspecification.
-  \todo{fill: partition $\times$ misspecification, $|\ESpi|$, final $Y$,
-  paired per-seed gap}}
+  \caption{Robustness under misspecification (LightTunnel; 10 seeds).
+  ``Gap'' is the paired per-seed difference to the same partition under
+  the correct DAG; $\pm 0.000$ for the coarse partition reflects
+  byte-identical trajectories (Prop.~\ref{prop:invariance}).}
   \label{tab:wrong_edge}
+  \vspace{4pt}
+  \small
+  \begin{tabular}{@{}llccc@{}}
+    \toprule
+    \textbf{Partition} & \textbf{Assumed DAG} & $|\ESpi|$ &
+    \textbf{Final $Y$} & \textbf{Gap vs.\ correct} \\
+    \midrule
+    % The included file ends with \bottomrule (a \bottomrule after \input
+    % inside tabular triggers "Misplaced \noalign").
+    \input{tables/LightTunnel_wrong_edge}
+  \end{tabular}
 \end{table}
 
 

@@ -51,14 +51,14 @@ def generate_dag_figure():
 # ---------------------------------------------------------------------------
 
 def _method_sort_key(method):
-    """Order methods as BO, CBO, CCBO-* (sorted), RCCBO, then anything else."""
+    """Order methods as BO, CBO, GACBO, CCBO-* (sorted), then anything else."""
     if method == 'BO':
         return (0, method)
     if method == 'CBO':
         return (1, method)
-    if method.startswith('CCBO'):
+    if method == 'GACBO':
         return (2, method)
-    if method == 'RCCBO':
+    if method.startswith('CCBO'):
         return (3, method)
     return (4, method)
 
@@ -99,7 +99,7 @@ def generate_comparison_figure(seeds=5):
 
     ax.set_xlabel('Optimization step')
     ax.set_ylabel(r'Best $Y$ found ($\downarrow$)')
-    ax.set_title(f'{BENCHMARK}: BO vs CBO vs CCBO vs RCCBO')
+    ax.set_title(f'{BENCHMARK}: BO vs CBO vs GACBO vs CCBO')
     ax.legend(fontsize=9, loc='best', framealpha=0.9)
     ax.grid(alpha=0.25)
     fig.tight_layout()
@@ -212,6 +212,117 @@ def _generate_lt_wrong_edge_figure(results):
 
 
 # ---------------------------------------------------------------------------
+# Fig: Coarsening sweep (from 'sweep' condition) — the V(pi) staircase
+# ---------------------------------------------------------------------------
+
+def generate_sweep_figure(seeds=10):
+    """Final Y vs partition fineness across the valid coarsening lattice."""
+    data = _load(f'{BENCHMARK}_sweep_{seeds}seeds.pkl')
+    if data is None:
+        return
+
+    # label -> (num_parts, finals across seeds)
+    entries = {}
+    for s in data:
+        for label, r in data[s].items():
+            entries.setdefault(label, (r['num_parts'], []))[1].append(
+                r['global_opt'][-1])
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    rng = np.random.RandomState(0)
+    for label, (nparts, finals) in sorted(entries.items(),
+                                          key=lambda kv: -kv[1][0]):
+        finals = np.array(finals)
+        jitter = rng.uniform(-0.08, 0.08)
+        ax.errorbar(nparts + jitter, finals.mean(),
+                    yerr=finals.std() / np.sqrt(len(finals)),
+                    fmt='o', capsize=3, ms=6)
+        ax.annotate(label.replace('CCBO-', ''), (nparts + jitter, finals.mean()),
+                    textcoords='offset points', xytext=(6, 4), fontsize=7)
+    ax.set_xlabel('Partition fineness (number of clusters incl. $\\{Y\\}$)')
+    ax.set_ylabel(r'Final best $Y$ ($\downarrow$)')
+    ax.set_title(f'{BENCHMARK}: price of coarsening (Prop. 4)')
+    ax.invert_xaxis()  # coarse -> fine left to right? keep finest on left
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    out = os.path.join(FIGURES_DIR, f'{BENCHMARK}_sweep.pdf')
+    fig.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    print(f"Saved {out}")
+
+
+# ---------------------------------------------------------------------------
+# LaTeX tables (stdout + paper/tables/*.tex)
+# ---------------------------------------------------------------------------
+
+TABLES_DIR = os.path.join('paper', 'tables')
+
+
+def emit_main_table(seeds=10):
+    """LaTeX rows for the main-results table (mean ± s.e. of final Y)."""
+    data = _load(f'{BENCHMARK}_main_{seeds}seeds.pkl')
+    if data is None:
+        return
+    os.makedirs(TABLES_DIR, exist_ok=True)
+    methods = sorted({m for s in data for m in data[s]}, key=_method_sort_key)
+    lines = []
+    for m in methods:
+        finals = np.array([data[s][m]['global_opt'][-1]
+                           for s in data if m in data[s]])
+        sem = finals.std() / np.sqrt(len(finals))
+        label = m.replace('{', '\\{').replace('}', '\\}')
+        lines.append(f"{label} & ${finals.mean():.3f} \\pm {sem:.3f}$ \\\\")
+    out = os.path.join(TABLES_DIR, f'{BENCHMARK}_main.tex')
+    with open(out, 'w') as f:
+        # \bottomrule lives inside the included file: \input followed by
+        # \bottomrule in the outer tabular triggers "Misplaced \noalign".
+        f.write('\n'.join(lines) + '\n\\bottomrule\n')
+    print(f"Saved {out}")
+    print('\n'.join(lines))
+
+
+def emit_wrong_edge_table(seeds=10):
+    """LaTeX rows for the robustness table, with paired per-seed gaps."""
+    data = _load(f'{BENCHMARK}_wrong_edge_{seeds}seeds.pkl')
+    if data is None:
+        return
+    os.makedirs(TABLES_DIR, exist_ok=True)
+    from collections import defaultdict
+    grouped = defaultdict(dict)   # (partition, misspec) -> seed -> final
+    num_es = {}
+    for r in data:
+        grouped[(r['partition_label'], r['misspec'])][r['seed']] = \
+            r['global_opt'][-1]
+        num_es[(r['partition_label'], r['misspec'])] = r['num_es']
+    lines = []
+    parts = sorted({k[0] for k in grouped})
+    for part in parts:
+        base = grouped.get((part, 'correct'), {})
+        for (p, mis), per_seed in sorted(grouped.items()):
+            if p != part:
+                continue
+            finals = np.array([per_seed[s] for s in sorted(per_seed)])
+            sem = finals.std() / np.sqrt(len(finals))
+            if mis == 'correct' or not base:
+                gap = '---'
+            else:
+                seeds_common = sorted(set(per_seed) & set(base))
+                diffs = np.array([per_seed[s] - base[s] for s in seeds_common])
+                gap = f"${diffs.mean():+.3f} \\pm " \
+                      f"{diffs.std()/np.sqrt(len(diffs)):.3f}$"
+            label_p = p.replace('{', '\\{').replace('}', '\\}')
+            lines.append(
+                f"{label_p} & {mis} & {num_es[(p, mis)]} & "
+                f"${finals.mean():.3f} \\pm {sem:.3f}$ & {gap} \\\\")
+    out = os.path.join(TABLES_DIR, f'{BENCHMARK}_wrong_edge.tex')
+    with open(out, 'w') as f:
+        # \bottomrule lives inside the included file (see emit_main_table).
+        f.write('\n'.join(lines) + '\n\\bottomrule\n')
+    print(f"Saved {out}")
+    print('\n'.join(lines))
+
+
+# ---------------------------------------------------------------------------
 # Fig 4: RCCBO teaser (from 'rccbo_teaser' condition)
 # ---------------------------------------------------------------------------
 
@@ -260,10 +371,11 @@ if __name__ == '__main__':
     parser.add_argument('--benchmark', default='CompleteGraph',
                         choices=['CompleteGraph', 'SimplifiedCoralGraph',
                                  'LightTunnel'])
-    parser.add_argument('--seeds', default=5, type=int)
+    parser.add_argument('--seeds', default=10, type=int)
     parser.add_argument('--only', default=None,
-                        choices=[None, 'dag', 'comparison', 'wrong_edge', 'rccbo'],
-                        help='Generate only this figure (default: all four)')
+                        choices=[None, 'dag', 'comparison', 'wrong_edge',
+                                 'sweep', 'tables'],
+                        help='Generate only this output (default: all)')
     args = parser.parse_args()
     BENCHMARK = args.benchmark
 
@@ -276,7 +388,13 @@ if __name__ == '__main__':
         generate_comparison_figure(seeds=args.seeds)
     if args.only in (None, 'wrong_edge'):
         generate_wrong_edge_figure(seeds=args.seeds)
-    if args.only in (None, 'rccbo'):
-        generate_rccbo_figure(seeds=args.seeds)
+        emit_wrong_edge_table(seeds=args.seeds)
+    if args.only in (None, 'sweep'):
+        generate_sweep_figure(seeds=args.seeds)
+    if args.only == 'tables':
+        emit_main_table(seeds=args.seeds)
+        emit_wrong_edge_table(seeds=args.seeds)
+    if args.only is None:
+        emit_main_table(seeds=args.seeds)
     print_multi_seed_summary(seeds=args.seeds)
     print(f"\nFigures saved to {FIGURES_DIR}")
