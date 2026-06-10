@@ -147,18 +147,18 @@ def _generate_lt_wrong_edge_figure(results):
                                  k[1] == 'correct',
                                  k))
     # Above gives a deterministic order; we want a stable one:
-    # ('finest','correct'), ('finest','WrongRG'),
-    # ('{RGB},{P1P2}','correct'), ('{RGB},{P1P2}','WrongRG')
+    # ('finest','correct'), ('finest','WrongBG'),
+    # ('{RGB},{P1P2}','correct'), ('{RGB},{P1P2}','WrongBG')
     canonical_order = [
         ('finest', 'correct'),
-        ('finest', 'WrongRG'),
+        ('finest', 'WrongBG'),
         ('{RGB},{P1P2}', 'correct'),
-        ('{RGB},{P1P2}', 'WrongRG'),
+        ('{RGB},{P1P2}', 'WrongBG'),
     ]
     keys = [k for k in canonical_order if k in grouped]
 
     colors = {'finest': '#d62728', '{RGB},{P1P2}': '#1f77b4'}
-    linestyles = {'correct': '-', 'WrongRG': '--'}
+    linestyles = {'correct': '-', 'WrongBG': '--'}
 
     # Convergence figure
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -169,7 +169,7 @@ def _generate_lt_wrong_edge_figure(results):
         mean = arr.mean(0)
         sem = arr.std(0) / np.sqrt(arr.shape[0])
         xs = np.arange(len(mean))
-        label = f"{part} — {'correct DAG' if mis == 'correct' else 'WrongRG DAG'}"
+        label = f"{part} — {'correct DAG' if mis == 'correct' else 'WrongBG DAG'}"
         ax.plot(xs, mean, color=colors[part], ls=linestyles[mis], lw=2,
                 label=label, zorder=5)
         ax.fill_between(xs, mean - sem, mean + sem, color=colors[part],

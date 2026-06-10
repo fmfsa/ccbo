@@ -27,6 +27,7 @@ import pandas as pd
 import pathlib
 
 from ccbo.run_experiment import run_single_experiment, run_bo_baseline, get_original_graph
+from ccbo.baselines import gacbo
 from ccbo.rccbo.rccbo import rccbo
 from ccbo.coarsening import (
     enumerate_valid_coarsenings_manip, get_dag_edges_from_sem,
@@ -112,7 +113,7 @@ REPRESENTATIVE_COARSENINGS_SIMPLIFIEDCORALGRAPH = [
 
 # LightTunnel M = {R, G, B, P1, P2}
 # Coarse partition {R,G,B} | {P1,P2} | {Y} — the partition under which Lee-2019
-# latent projection drops the spurious R->G edge (see wrong_edge condition).
+# latent projection drops the spurious B->G edge (see wrong_edge condition).
 REPRESENTATIVE_COARSENINGS_LIGHTTUNNEL = [
     ([frozenset({'R', 'G', 'B'}), frozenset({'P1', 'P2'}), frozenset({'Y'})],
      'CCBO-{RGB},{P1P2}'),
@@ -170,6 +171,17 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
         r = run_single_experiment(benchmark, -1, trials, num_interventions, type_cost,
                                   initial_num_obs_samples, True, 0, 'min', seed=seed)
         results[seed]['CBO'] = {'global_opt': r['global_opt'], 'method': 'CBO'}
+
+        # GACBO (graph-uncertainty baseline: uniform prior over a plausible
+        # DAG family, union exploration set, model-averaged causal prior)
+        print(f"\n--- GACBO ---")
+        r = gacbo(benchmark, num_trials=trials,
+                  num_interventions=num_interventions, type_cost=type_cost,
+                  initial_num_obs_samples=initial_num_obs_samples,
+                  task='min', seed=seed,
+                  max_intervention_size=_max_intervention_size(benchmark))
+        results[seed]['GACBO'] = {'global_opt': r['global_opt'],
+                                  'method': 'GACBO', 'family': r['family']}
 
         # Representative CCBO coarsenings
         graph, obs, full_obs = _load_graph(benchmark, initial_num_obs_samples)
@@ -343,14 +355,14 @@ def run_wrong_edge_condition(benchmark, seeds, trials, output_dir,
             frozenset({'Y'}),
         ]
 
-        # WrongRG: spurious intra-cluster edge R -> G inside {R, G, B}.
+        # WrongBG: spurious intra-cluster edge B -> G inside {R, G, B}.
         # CCBO under the coarser partition projects it out, so coarse/correct
-        # and coarse/WrongRG should match within seed noise.
+        # and coarse/WrongBG should match within seed noise.
         conditions = [
             (finest,  'finest',        'LightTunnel',          'correct'),
-            (finest,  'finest',        'LightTunnel_WrongRG',  'WrongRG'),
+            (finest,  'finest',        'LightTunnel_WrongBG',  'WrongBG'),
             (coarser, '{RGB},{P1P2}',  'LightTunnel',          'correct'),
-            (coarser, '{RGB},{P1P2}',  'LightTunnel_WrongRG',  'WrongRG'),
+            (coarser, '{RGB},{P1P2}',  'LightTunnel_WrongBG',  'WrongBG'),
         ]
 
     all_results = []
@@ -382,6 +394,124 @@ def run_wrong_edge_condition(benchmark, seeds, trials, output_dir,
         pickle.dump(all_results, f)
     print(f"\nSaved {out}")
     return all_results
+
+
+# ---------------------------------------------------------------------------
+# Condition: sweep  (final Y vs. partition fineness across the lattice)
+# ---------------------------------------------------------------------------
+
+def _sweep_partitions(benchmark, per_level=2):
+    """Structured sample of the valid-coarsening lattice.
+
+    All valid coarsenings for small lattices; otherwise up to ``per_level``
+    partitions per fineness level (num_parts), chosen deterministically
+    (lexicographically first), always including the finest and the
+    coarsest valid partition.
+    """
+    coarsenings = enumerate_valid_coarsenings_manip(benchmark)
+
+    def _label(partition):
+        manip = [p for p in partition if p != frozenset({'Y'})]
+        return 'CCBO-' + '|'.join(
+            '{' + ','.join(sorted(p)) + '}' for p in sorted(
+                manip, key=lambda c: sorted(c)))
+
+    if len(coarsenings) <= 8:
+        return [(c['partition'], _label(c['partition']), c['num_parts'])
+                for c in coarsenings]
+
+    by_level = {}
+    for c in coarsenings:
+        by_level.setdefault(c['num_parts'], []).append(c)
+    chosen = []
+    levels = sorted(by_level, reverse=True)  # finest first
+    for i, lvl in enumerate(levels):
+        cands = sorted(by_level[lvl],
+                       key=lambda c: _label(c['partition']))
+        take = len(cands) if lvl in (levels[0], levels[-1]) else per_level
+        chosen.extend(cands[:take])
+    return [(c['partition'], _label(c['partition']), c['num_parts'])
+            for c in chosen]
+
+
+def run_sweep_condition(benchmark, seeds, trials, output_dir,
+                        num_interventions=10, type_cost=1,
+                        initial_num_obs_samples=100):
+    """CCBO across the coarsening lattice → final-Y vs. fineness data."""
+    partitions = _sweep_partitions(benchmark)
+    print(f"Sweep over {len(partitions)} partitions:")
+    for _, label, nparts in partitions:
+        print(f"  [{nparts} parts] {label}")
+
+    results = {s: {} for s in range(seeds)}
+    max_size = _max_intervention_size(benchmark)
+
+    for seed in range(seeds):
+        print(f"\n{'#'*60}  SEED {seed}  {'#'*60}")
+        graph, obs, full_obs = _load_graph(benchmark, initial_num_obs_samples)
+
+        for partition, label, nparts in partitions:
+            print(f"\n--- {label} ---")
+            np.random.seed(seed)
+            try:
+                cg = CoarsenedGraph(graph, partition, benchmark, obs,
+                                    max_intervention_size=max_size,
+                                    num_mc_samples=2000)
+                functions = cg.fit_all_models()
+                MIS, _, manip_vars = cg.get_sets()
+                dict_ranges = cg.get_interventional_ranges()
+                costs = cg.get_cost_structure(type_cost)
+
+                int_data = generate_interventional_data(
+                    cg.define_SEM, MIS, dict_ranges,
+                    num_points=20, num_mc_samples=2000, seed=seed)
+                _, _, coverage = compute_coverage(obs, manip_vars, dict_ranges)
+                x_list, y_list, best_x, opt_y, best_var = \
+                    define_initial_data_CBO(
+                        int_data, num_interventions, MIS, 0, 'min')
+
+                (current_cost, _, _, global_opt, _, _) = CBO(
+                    trials, MIS, manip_vars, x_list, y_list, best_x, opt_y,
+                    best_var, dict_ranges, functions, obs, coverage, cg,
+                    20, costs, full_obs, 'min',
+                    initial_num_obs_samples + 50, initial_num_obs_samples,
+                    num_interventions, Causal_prior=True)
+
+                results[seed][label] = {
+                    'global_opt': global_opt, 'method': label,
+                    'num_parts': nparts,
+                    'partition': cg.get_partition_description(),
+                    'es': cg.get_exploration_set_description(),
+                    'num_es': len(MIS),
+                }
+                print(f"  Final Y: {global_opt[-1]:.4f}  |ES|={len(MIS)}")
+            except Exception as e:
+                print(f"  {label} failed: {e}")
+                import traceback; traceback.print_exc()
+
+        ckpt = os.path.join(output_dir, f'{benchmark}_sweep_{seeds}seeds.pkl')
+        with open(ckpt, 'wb') as f:
+            pickle.dump(results, f)
+        print(f"  [checkpoint saved: seed {seed} complete]")
+
+    print(f"\n{'='*70}\nSWEEP SUMMARY — {benchmark}\n{'='*70}")
+    labels = sorted({m for s in results for m in results[s]},
+                    key=lambda m: -next(results[s][m]['num_parts']
+                                        for s in results if m in results[s]))
+    for label in labels:
+        finals = [results[s][label]['global_opt'][-1]
+                  for s in results if label in results[s]]
+        nparts = next(results[s][label]['num_parts']
+                      for s in results if label in results[s])
+        if finals:
+            print(f"  [{nparts} parts] {label:45s}: "
+                  f"{np.mean(finals):.3f} ± {np.std(finals):.3f}")
+
+    out = os.path.join(output_dir, f'{benchmark}_sweep_{seeds}seeds.pkl')
+    with open(out, 'wb') as f:
+        pickle.dump(results, f)
+    print(f"\nSaved {out}")
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +575,7 @@ def main():
                                  'LightTunnel'],
                         help='Which benchmark to run')
     parser.add_argument('--condition', default='main',
-                        choices=['main', 'wrong_edge'],
+                        choices=['main', 'wrong_edge', 'sweep'],
                         help='Experiment condition')
     parser.add_argument('--seeds', default=10, type=int,
                         help='Number of random seeds')
@@ -470,6 +600,9 @@ def main():
     elif args.condition == 'wrong_edge':
         run_wrong_edge_condition(args.benchmark, args.seeds, args.trials,
                                  args.output_dir)
+    elif args.condition == 'sweep':
+        run_sweep_condition(args.benchmark, args.seeds, args.trials,
+                            args.output_dir)
 
 
 if __name__ == '__main__':

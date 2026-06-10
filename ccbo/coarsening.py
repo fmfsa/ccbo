@@ -210,12 +210,12 @@ def get_hidden_confounders(graph_name):
         return [
             ('U', ['X', 'Y']),
         ]
-    elif graph_name in ('LightTunnel', 'LightTunnel_WrongRG'):
-        # U_color is the latent confounder shared by R and G in the SEM;
-        # it produces observational corr(R, G) > 0 which is what makes
-        # the WrongRG misspec actually affect CBO's adjustment.
+    elif graph_name in ('LightTunnel', 'LightTunnel_WrongBG'):
+        # U_color is the latent confounder shared by B and G in the SEM;
+        # it produces observational corr(B, G) > 0 which is what makes
+        # the WrongBG misspec actually affect CBO's identification.
         return [
-            ('U_color', ['R', 'G']),
+            ('U_color', ['B', 'G']),
         ]
     else:
         return []
@@ -287,16 +287,18 @@ def get_dag_edges_from_sem(graph_name):
         hidden_nodes = []
         manipulative_variables = ['R', 'G', 'B', 'P1', 'P2']
 
-    elif graph_name == 'LightTunnel_WrongRG':
-        # Misspecification: a spurious intra-cluster edge R -> G inside the
-        # color cluster {R, G, B}. CBO derived from this DAG uses the
-        # observational fit G | R when adjusting for do(R), which (thanks
-        # to U_color) has a nontrivial slope -> biased adjustment.
-        # Under the coarsening {R,G,B}|{P1,P2}|{Y}, both endpoints of R->G
-        # sit in cluster {R,G,B}; Lee-2019 latent projection drops this
-        # edge, so the C-DAG is identical to LightTunnel's.
+    elif graph_name == 'LightTunnel_WrongBG':
+        # Misspecification: a spurious intra-cluster edge B -> G inside the
+        # color cluster {R, G, B}. Together with the U_color-induced
+        # bidirected B <-> G this forms a bow, so P(Y | do(B)) is NOT
+        # identifiable from this assumed DAG — the fine-grained exploration
+        # set loses its best singleton arm {B} (B is the highest-weight
+        # vis_3 channel). Under the coarsening {R,G,B}|{P1,P2}|{Y}, both
+        # endpoints of B->G sit in cluster {R,G,B}; Lee-2019 latent
+        # projection drops the edge, so the C-DAG is identical to
+        # LightTunnel's and CCBO is provably unaffected.
         dag_edges = [
-            ('R', 'G'),
+            ('B', 'G'),
             ('R', 'Y'), ('G', 'Y'), ('B', 'Y'),
             ('P1', 'Y'), ('P2', 'Y'),
         ]

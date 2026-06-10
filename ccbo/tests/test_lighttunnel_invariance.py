@@ -2,7 +2,7 @@
 Direct test of the headline LightTunnel claim:
 
 Under the coarse partition {R,G,B} | {P1,P2} | {Y}, the spurious intra-cluster
-edge R -> G in LightTunnel_WrongRG is dropped by Lee-2019 latent projection
+edge B -> G in LightTunnel_WrongBG is dropped by Lee-2019 latent projection
 and the resulting C-DAG is byte-identical to LightTunnel's. Therefore the
 adjustment formulas CCBO derives from the assumed fine DAG are the same
 whether the assumed DAG is correct or misspecified.
@@ -52,13 +52,13 @@ def test_coarse_cdag_invariant_to_intra_cluster_edge():
     cg_wrong = CoarsenedGraph(
         g, COARSE_PARTITION, 'LightTunnel', obs,
         max_intervention_size=2, num_mc_samples=200,
-        assumed_graph_name='LightTunnel_WrongRG',
+        assumed_graph_name='LightTunnel_WrongBG',
     )
 
     sig_true = _admg_signature(cg_true._coarsened_admg)
     sig_wrong = _admg_signature(cg_wrong._coarsened_admg)
     assert sig_true == sig_wrong, (
-        f"Coarsening should hide the intra-cluster R->G edge but C-DAGs differ:\n"
+        f"Coarsening should hide the intra-cluster B->G edge but C-DAGs differ:\n"
         f"  true:  {sig_true}\n"
         f"  wrong: {sig_wrong}"
     )
@@ -92,19 +92,19 @@ def test_finest_partition_records_wrong_edge():
     cg_wrong = CoarsenedGraph(
         g, finest, 'LightTunnel', obs,
         max_intervention_size=1, num_mc_samples=200,
-        assumed_graph_name='LightTunnel_WrongRG',
+        assumed_graph_name='LightTunnel_WrongBG',
     )
 
     sig_true = _admg_signature(cg_true._coarsened_admg)
     sig_wrong = _admg_signature(cg_wrong._coarsened_admg)
     assert sig_true != sig_wrong, (
-        f"Finest partition should see the wrong R->G edge but signatures match:\n"
+        f"Finest partition should see the wrong B->G edge but signatures match:\n"
         f"  {sig_true}"
     )
 
 
 if __name__ == "__main__":
     test_coarse_cdag_invariant_to_intra_cluster_edge()
-    print("PASS: coarse C-DAG invariant under R->G misspecification")
+    print("PASS: coarse C-DAG invariant under B->G misspecification")
     test_finest_partition_records_wrong_edge()
-    print("PASS: finest partition does see the R->G misspecification")
+    print("PASS: finest partition does see the B->G misspecification")

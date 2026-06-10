@@ -2,9 +2,9 @@
 Generate ``observations.pkl`` for the LightTunnel benchmark.
 
 Draws 5000 rows from ``LightTunnel.define_SEM()`` (which routes the inputs
-through ``lt.Deterministic`` for Y) and asserts ``corr(R, G) > 0.4``. The
-correlation is the lever that makes the ``LightTunnel_WrongRG`` misspec
-actually bite -- if the data did not show R-G correlation, the spurious
+through ``lt.Deterministic`` for Y) and asserts ``corr(B, G) > 0.4``. The
+correlation is the lever that makes the ``LightTunnel_WrongBG`` misspec
+actually bite -- if the data did not show B-G correlation, the spurious
 intra-cluster edge would not affect CBO's adjustment.
 
 Run from the repo root:
@@ -20,7 +20,7 @@ from ccbo.generic_do import sample_from_model
 
 N_SAMPLES = 5000
 SEED = 0
-MIN_RG_CORR = 0.4
+MIN_BG_CORR = 0.4
 
 
 def main():
@@ -45,11 +45,11 @@ def main():
     # a latent confounder and CBO does not observe it).
     df = df[['R', 'G', 'B', 'P1', 'P2', 'Y']]
 
-    rg_corr = float(df['R'].corr(df['G']))
-    print(f"Generated {len(df)} samples; corr(R, G) = {rg_corr:.3f}")
-    assert rg_corr > MIN_RG_CORR, (
-        f"corr(R, G) = {rg_corr:.3f} is too low (need > {MIN_RG_CORR}); "
-        f"the WrongRG misspecification would not affect CBO without this "
+    bg_corr = float(df['B'].corr(df['G']))
+    print(f"Generated {len(df)} samples; corr(B, G) = {bg_corr:.3f}")
+    assert bg_corr > MIN_BG_CORR, (
+        f"corr(B, G) = {bg_corr:.3f} is too low (need > {MIN_BG_CORR}); "
+        f"the WrongBG misspecification would not affect CBO without this "
         f"observational correlation. Increase _SIGMA_U_COLOR in "
         f"ccbo/cbo/graphs/LightTunnel.py or N_SAMPLES."
     )

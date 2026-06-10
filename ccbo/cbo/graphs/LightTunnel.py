@@ -3,15 +3,25 @@ LightTunnel GraphStructure.
 
 Causal model
 ------------
-Manipulable: R, G, B, P1, P2  (each in [0, 1])
+Manipulable: R, G, B, P1, P2  (colors in [0, 1]; polarizer interventions
+                               restricted to [0.4, 0.6] — hardware-limit
+                               style constraint that keeps the polarizer
+                               arms from dominating the color arms)
 Target:      Y                (scaled vis_3 sensor reading from lt.Deterministic)
-Hidden:      U_color          (latent confounder on R and G; creates
-                               observational corr(R, G) > 0 without a
-                               causal R -> G edge)
+Hidden:      U_color          (latent confounder on B and G; creates
+                               observational corr(B, G) > 0 without a
+                               causal B -> G edge)
 
 Observable DAG (used by adjustment / C-DAG identification):
     R -> Y     G -> Y     B -> Y     P1 -> Y     P2 -> Y
-    R <-> G    (bidirected, from projecting out U_color)
+    B <-> G    (bidirected, from projecting out U_color)
+
+B and G are the two highest-weight channels of the vis_3 sensor (S-matrix
+row [0.894, 1.587, 2.684] for R, G, B), so the misspecified variant
+LightTunnel_WrongBG (spurious B -> G on top of the B <-> G confounding)
+creates a bow that makes do(B) — the best singleton arm — non-identifiable
+at the fine level. Under the coarse partition {R,G,B} | {P1,P2} | {Y} the
+bow is intra-cluster and provably invisible.
 
 This SEM doubles as the data-generating process for observations.pkl
 (see ccbo/cbo/data/LightTunnel/generate_observations.py).
@@ -59,8 +69,8 @@ _FIXED_SENSOR_INPUTS = {
 # hyperparameters in a comfortable regime.
 _Y_SCALE = 500.0
 
-# Latent confounder strength on R, G.  Larger => stronger observational
-# correlation between R and G, which is what makes the WrongRG misspec bite.
+# Latent confounder strength on B, G.  Larger => stronger observational
+# correlation between B and G, which is what makes the WrongBG misspec bite.
 _SIGMA_U_COLOR = 0.15
 _SIGMA_INPUT = 0.10
 _SIGMA_Y = 0.02
@@ -123,14 +133,14 @@ class LightTunnel(graph.GraphStructure):
         def fU(epsilon, **kw):
             return _SIGMA_U_COLOR * epsilon[0]
 
-        def fR(epsilon, U_color, **kw):
-            return float(np.clip(0.5 + U_color + _SIGMA_INPUT * epsilon[1], 0.0, 1.0))
+        def fR(epsilon, **kw):
+            return float(np.clip(0.5 + _SIGMA_INPUT * epsilon[1], 0.0, 1.0))
 
         def fG(epsilon, U_color, **kw):
             return float(np.clip(0.5 + U_color + _SIGMA_INPUT * epsilon[2], 0.0, 1.0))
 
-        def fB(epsilon, **kw):
-            return float(np.clip(0.5 + _SIGMA_INPUT * epsilon[3], 0.0, 1.0))
+        def fB(epsilon, U_color, **kw):
+            return float(np.clip(0.5 + U_color + _SIGMA_INPUT * epsilon[3], 0.0, 1.0))
 
         def fP1(epsilon, **kw):
             return float(np.clip(0.5 + _SIGMA_INPUT * epsilon[4], 0.0, 1.0))
@@ -166,12 +176,16 @@ class LightTunnel(graph.GraphStructure):
         return ['R', 'G', 'B', 'P1', 'P2']
 
     def get_interventional_ranges(self):
+        # Polarizer interventions are range-limited (|ΔP| <= 36°, Malus
+        # factor >= cos²(36°) ≈ 0.65) so the polarizer arms cannot reach
+        # the crossed-polarizer optimum; the interesting structure lives in
+        # the color channels.
         return OrderedDict([
             ('R', [0.0, 1.0]),
             ('G', [0.0, 1.0]),
             ('B', [0.0, 1.0]),
-            ('P1', [0.0, 1.0]),
-            ('P2', [0.0, 1.0]),
+            ('P1', [0.4, 0.6]),
+            ('P2', [0.4, 0.6]),
         ])
 
     # ------------------------------------------------------------------

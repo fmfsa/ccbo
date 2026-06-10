@@ -39,7 +39,8 @@ def _plausible_family(experiment):
     variants that already exist as named graphs in ``coarsening.py``.
     """
     family = [experiment]
-    for variant in (f'{experiment}_NoBC', f'{experiment}_NoCD'):
+    for variant in (f'{experiment}_NoBC', f'{experiment}_NoCD',
+                    f'{experiment}_NoST', f'{experiment}_WrongBG'):
         try:
             get_dag_edges_from_sem(variant)
             family.append(variant)
@@ -50,7 +51,7 @@ def _plausible_family(experiment):
 
 def gacbo(experiment, num_trials=40, num_interventions=10, type_cost=1,
           initial_num_obs_samples=100, task='min', seed=9,
-          num_mc_samples=2000):
+          num_mc_samples=2000, max_intervention_size=3):
     """
     Run GACBO on a benchmark.
 
@@ -84,6 +85,7 @@ def gacbo(experiment, num_trials=40, num_interventions=10, type_cost=1,
         coarsenings = enumerate_valid_coarsenings_manip(gname)
         finest = coarsenings[0]['partition']  # sorted finest-first
         cg = CoarsenedGraph(original_graph, finest, gname, obs,
+                             max_intervention_size=max_intervention_size,
                              num_mc_samples=num_mc_samples,
                              assumed_graph_name=gname)
         cgraphs.append(cg)

@@ -3,18 +3,18 @@ Numerical demonstration of the LightTunnel misspecification gap.
 
 What we show
 ------------
-Under a coarse partition `{R,G,B} | {P1,P2} | {Y}`, the spurious R->G edge
-in `LightTunnel_WrongRG` is dropped by Lee-2019 latent projection. Two
+Under a coarse partition `{R,G,B} | {P1,P2} | {Y}`, the spurious B->G edge
+in `LightTunnel_WrongBG` is dropped by Lee-2019 latent projection. Two
 observable consequences follow:
 
-  1.  Exploration set: finest/correct includes `{R}`; finest/WrongRG drops
-      it because the bow (R -> G plus the U_color-induced R <-> G
+  1.  Exploration set: finest/correct includes `{B}`; finest/WrongBG drops
+      it because the bow (B -> G plus the U_color-induced B <-> G
       bidirected edge) breaks do-calculus identification at the fine
       level.  At the coarse level both DAGs yield the same ES.
 
   2.  Adjustment: at the coarse level the color-cluster intervention
       yields byte-identical do-effects under both DAGs (the C-DAG is
-      invariant). At the fine level the WrongRG misspec changes both
+      invariant). At the fine level the WrongBG misspec changes both
       the ES and the adjustment formulas for the surviving singletons.
 
 This is a structural numerical demo -- no BO loop. Runs in a few seconds.
@@ -72,12 +72,12 @@ def test_lighttunnel_misspec_gap():
               frozenset({'Y'})]
 
     cg_fine_true = _build_cg(g, obs, finest, 'LightTunnel', 1)
-    cg_fine_wrong = _build_cg(g, obs, finest, 'LightTunnel_WrongRG', 1)
+    cg_fine_wrong = _build_cg(g, obs, finest, 'LightTunnel_WrongBG', 1)
     cg_coarse_true = _build_cg(g, obs, coarse, 'LightTunnel', 1)
-    cg_coarse_wrong = _build_cg(g, obs, coarse, 'LightTunnel_WrongRG', 1)
+    cg_coarse_wrong = _build_cg(g, obs, coarse, 'LightTunnel_WrongBG', 1)
 
-    print(f"corr(R, G) in observational data = "
-          f"{obs['R'].corr(obs['G']):.3f}\n")
+    print(f"corr(B, G) in observational data = "
+          f"{obs['B'].corr(obs['G']):.3f}\n")
 
     # ----------------------------------------------------------------------
     # (a) Exploration-set effect of the misspec at the fine level
@@ -89,29 +89,33 @@ def test_lighttunnel_misspec_gap():
 
     print("Exploration set under each (partition, assumed DAG):")
     print(f"  finest / LightTunnel        : {es_fine_true}")
-    print(f"  finest / LightTunnel_WrongRG: {es_fine_wrong}")
+    print(f"  finest / LightTunnel_WrongBG: {es_fine_wrong}")
     print(f"  coarse / LightTunnel        : {es_coarse_true}")
-    print(f"  coarse / LightTunnel_WrongRG: {es_coarse_wrong}")
+    print(f"  coarse / LightTunnel_WrongBG: {es_coarse_wrong}")
     print()
 
     assert es_fine_true != es_fine_wrong, (
-        "Expected the WrongRG misspec to remove at least one entry from "
-        "the fine-level exploration set (R becomes non-identifiable via "
-        "the R->G + R<->G bow)."
+        "Expected the WrongBG misspec to remove at least one entry from "
+        "the fine-level exploration set (B becomes non-identifiable via "
+        "the B->G + B<->G bow)."
+    )
+    assert ['B'] in es_fine_true and ['B'] not in es_fine_wrong, (
+        "The lost arm must be {B} — the highest-weight singleton — for the "
+        "misspecification to carry a performance cost."
     )
     assert es_coarse_true == es_coarse_wrong, (
         "Cluster invariance broken: coarse exploration sets differ between "
-        "correct and WrongRG DAGs."
+        "correct and WrongBG DAGs."
     )
     es_lost = {tuple(s) for s in es_fine_true} - {tuple(s) for s in es_fine_wrong}
     print(f"  Misspec cost (fine ES entries CBO can no longer intervene on): "
           f"{[list(e) for e in es_lost]}\n")
 
     # ----------------------------------------------------------------------
-    # (b) Cluster-level do-effect: byte-identical across correct / WrongRG
+    # (b) Cluster-level do-effect: byte-identical across correct / WrongBG
     # ----------------------------------------------------------------------
     print("Coarse-level cluster intervention E[Y | do(R=G=B=r)]:")
-    print(f"  {'r':>5s}  {'true':>12s}  {'WrongRG':>12s}  "
+    print(f"  {'r':>5s}  {'true':>12s}  {'WrongBG':>12s}  "
           f"{'|Δ|':>10s}")
     print("  " + "-" * 45)
 
@@ -141,15 +145,15 @@ def test_lighttunnel_misspec_gap():
 
     # ----------------------------------------------------------------------
     # (c) For surviving fine singletons in both DAGs, the adjustment can
-    #     still differ because the WrongRG DAG conditions G on R via the
+    #     still differ because the WrongBG DAG conditions G on B via the
     #     observational regression.
     # ----------------------------------------------------------------------
     print("Fine-level singleton do-effects (surviving entries):")
-    print(f"  {'var':>3s} {'r':>5s}  {'true':>12s}  {'WrongRG':>12s}  "
+    print(f"  {'var':>3s} {'r':>5s}  {'true':>12s}  {'WrongBG':>12s}  "
           f"{'|Δ|':>10s}")
     print("  " + "-" * 50)
     fine_diffs = []
-    for var in ('G', 'B', 'P1', 'P2'):
+    for var in ('R', 'G', 'P1', 'P2'):
         def _singleton_for(v):
             def pred(k):
                 others = set('RGB') | {'P1', 'P2'} - {v}
@@ -181,7 +185,7 @@ def test_lighttunnel_misspec_gap():
           f"{max(fine_diffs):.2e}")
     print(f"max |coarse_true - coarse_wrong|: {max(coarse_diffs):.2e}\n")
 
-    print("PASS: WrongRG drops {R} from the fine ES; coarse ES is "
+    print("PASS: WrongBG drops {B} from the fine ES; coarse ES is "
           "invariant; coarse adjustments match exactly.")
 
 
