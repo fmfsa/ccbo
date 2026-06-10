@@ -39,6 +39,47 @@ from ccbo.cbo.utils import compute_coverage, define_initial_data_CBO
 
 
 # ---------------------------------------------------------------------------
+# Unified experiment protocol
+# ---------------------------------------------------------------------------
+# One protocol per benchmark, applied to EVERY method (BO, CBO, all CCBO
+# partitions). In particular `max_intervention_size` — the cap on how many
+# C-DAG cluster vertices may be jointly intervened on — is a property of the
+# benchmark, never of the method, so no method gets a larger search space
+# than another. LightTunnel uses cap 1 because it serves only as the
+# invariance demonstration (paired correct-vs-misspecified comparisons
+# within the same partition); it carries no cross-method performance claim.
+
+PROTOCOL = {
+    'CompleteGraph':        {'max_intervention_size': 3},
+    'SimplifiedCoralGraph': {'max_intervention_size': 3},
+    'LightTunnel':          {'max_intervention_size': 1},
+}
+
+
+def _max_intervention_size(benchmark):
+    return PROTOCOL[benchmark]['max_intervention_size']
+
+
+def check_fairness(results, context=''):
+    """Assert all methods in a main-condition result dict are comparable.
+
+    Every (seed, method) trajectory must have the same length (same trial
+    budget + same single initial incumbent), and every seed must contain
+    the same method set.
+    """
+    method_sets = {s: frozenset(results[s].keys()) for s in results}
+    if len(set(method_sets.values())) > 1:
+        raise AssertionError(
+            f"[fairness{context}] method sets differ across seeds: "
+            f"{method_sets}")
+    lengths = {(s, m): len(results[s][m]['global_opt'])
+               for s in results for m in results[s]}
+    if len(set(lengths.values())) > 1:
+        raise AssertionError(
+            f"[fairness{context}] trajectory lengths differ: {lengths}")
+
+
+# ---------------------------------------------------------------------------
 # Benchmark-specific representative coarsenings for 'main' condition
 # ---------------------------------------------------------------------------
 # All partitions are manipulable-only (Lee-2019 standard):
@@ -135,10 +176,7 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
         dag_edges, nodes, hidden_nodes, _ = get_dag_edges_from_sem(benchmark)
         hidden_conf = get_hidden_confounders(benchmark)
 
-        # LightTunnel has 5 manipulable variables; capping the intervention size
-        # at 1 keeps the exploration set to cluster singletons so each CBO trial
-        # stays fast (mirrors the wrong_edge condition rationale below).
-        max_size = 1 if benchmark == 'LightTunnel' else 3
+        max_size = _max_intervention_size(benchmark)
 
         for partition, label in _get_representative_coarsenings(benchmark):
             print(f"\n--- {label} ---")
@@ -193,6 +231,8 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
         if finals:
             print(f"  {method:35s}: {np.mean(finals):.3f} ± {np.std(finals):.3f}")
 
+    check_fairness(results, context=f' {benchmark}/main')
+
     out = os.path.join(output_dir, f'{benchmark}_main_{seeds}seeds.pkl')
     with open(out, 'wb') as f:
         pickle.dump(results, f)
@@ -211,12 +251,7 @@ def _run_wrong_edge_condition(original_graph, obs, full_obs, benchmark,
                                initial_num_obs_samples, seed):
     np.random.seed(seed)
     label = f'{partition_label}/{misspec_label}/seed{seed}'
-    # LightTunnel has 5 manipulable variables; the default max_intervention_size=3
-    # would enumerate C(5,1)+C(5,2)+C(5,3)=25 exploration sets and make each
-    # CBO trial ~25x slower than CompleteGraph's. Cap at 1 (singletons only)
-    # so each condition completes in minutes rather than hours; the misspec
-    # robustness claim is fully exercised by singleton interventions.
-    max_size = 1 if benchmark == 'LightTunnel' else 3
+    max_size = _max_intervention_size(benchmark)
     try:
         cg = CoarsenedGraph(original_graph, partition, benchmark, obs,
                             max_intervention_size=max_size,
@@ -412,7 +447,7 @@ def main():
     parser.add_argument('--condition', default='main',
                         choices=['main', 'wrong_edge'],
                         help='Experiment condition')
-    parser.add_argument('--seeds', default=5, type=int,
+    parser.add_argument('--seeds', default=10, type=int,
                         help='Number of random seeds')
     parser.add_argument('--trials', default=40, type=int,
                         help='Optimization trials per method per seed')

@@ -100,11 +100,23 @@ def evaluate_graph(graph_name, num_test_points=5, max_fine_vars=3, verbose=True)
                 })
                 continue
 
+            # Draw test points inside the overlap of the interventional
+            # range and the observational support (5-95% quantiles). The
+            # adjustment FORMULA is only testable where the observational
+            # GPs have data; outside support every observational prior
+            # extrapolates (a property of CBO-style priors, corrected by
+            # the BO loop, not an identification error).
             np.random.seed(123)
-            test_values = [
-                [np.random.uniform(*dict_ranges[v]) for v in fine_vars]
-                for _ in range(num_test_points)
-            ]
+            test_values = []
+            for _ in range(num_test_points):
+                point = []
+                for v in fine_vars:
+                    lo = max(dict_ranges[v][0],
+                             float(observational_samples[v].quantile(0.05)))
+                    hi = min(dict_ranges[v][1],
+                             float(observational_samples[v].quantile(0.95)))
+                    point.append(np.random.uniform(lo, hi))
+                test_values.append(point)
 
             errors = []
             for vals in test_values:
