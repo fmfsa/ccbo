@@ -500,7 +500,7 @@ def _admg(vertices, di=(), bi=()):
 
 
 def latent_project(di_edges, bi_edges, vertices, keep):
-    """
+    r"""
     Richardson-Spirtes / Verma-Pearl latent projection of an ADMG.
 
     Given an ADMG ``G = (V, di, bi)`` and a subset ``K ⊆ V``, return the
@@ -829,13 +829,30 @@ def _subgraph(admg, vertices):
     return _admg(V, di=di, bi=bi)
 
 
+def _descendants_di(admg, sources):
+    """Descendants of ``sources`` w.r.t. directed edges only (inclusive)."""
+    desc = set(sources)
+    succs = {v: set() for v in admg['vertices']}
+    for u, v in admg['di']:
+        succs.setdefault(u, set()).add(v)
+    stack = list(sources)
+    while stack:
+        cur = stack.pop()
+        for s in succs.get(cur, ()):
+            if s not in desc:
+                desc.add(s)
+                stack.append(s)
+    return desc
+
+
 def _muct_ib(admg, target):
     """
     Compute (MUCT, IB) on ``admg`` for the given ``target`` per
-    Lee & Bareinboim 2018.
+    Lee & Bareinboim 2018 (Def. of MUCT / interventional border).
 
-    MUCT = minimal unobserved-confounder territory reachable from ``target``
-    through the c-component closure + ancestors.
+    MUCT = minimal T ⊆ An(target) with target ∈ T that is closed, within
+           the ancestral subgraph G[An(target)], under (i) c-components and
+           (ii) directed descendants.
     IB   = interventional border: parents of MUCT (in the directed graph)
            that are not themselves in MUCT.
     """
@@ -844,20 +861,16 @@ def _muct_ib(admg, target):
     anc = _ancestors_di(admg, {target})
     sub = _subgraph(admg, anc)
 
-    # Iteratively grow MUCT: start with {target}; close under c-component
-    # within the ancestral subgraph; then add directed ancestors that share
-    # a c-component edge with anything in MUCT; repeat to fixpoint.
+    # Fixpoint: alternate c-component closure and descendant closure inside
+    # the ancestral subgraph until stable.
     muct = {target}
     while True:
         old = set(muct)
-        # Close under c-component in sub
         closed = set()
         for v in muct:
             closed |= _c_component(sub, v)
         muct |= closed
-        # Add any vertex in sub that is an ancestor of a muct vertex AND
-        # shares a bidirected edge with any muct vertex.  Equivalently:
-        # take c-component neighbours of muct inside sub.
+        muct |= _descendants_di(sub, muct)
         if muct == old:
             break
 
@@ -913,9 +926,12 @@ def compute_POMIS(admg, manipulable_vertices, target):
     for r in range(0, len(M) + 1):
         for combo in itertools.combinations(M, r):
             X = set(combo)
-            # Mutilate: drop all incoming directed edges to X
+            # Mutilate: do(X) removes every arrowhead into X — incoming
+            # directed edges AND bidirected edges incident to X (the latent
+            # common cause no longer reaches X, so the bidirected edge
+            # disappears from the ADMG over observables).
             di_mut = {(u, v) for u, v in admg['di'] if v not in X}
-            bi_mut = set(admg['bi'])  # bi edges incident to X survive
+            bi_mut = {e for e in admg['bi'] if not (set(tuple(e)) & X)}
             g_mut = _admg(admg['vertices'], di=di_mut, bi=bi_mut)
             _, ib, _ = _muct_ib(g_mut, target)
             # Restrict IB to the manipulable set before comparison

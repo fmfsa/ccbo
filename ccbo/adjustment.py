@@ -662,14 +662,22 @@ def _ananke_id_check(admg_dict, X_vertices, Y_vertex):
     identifiable : bool
     functional : str or None
         Symbolic Tian-Pearl factorisation as returned by ananke (diagnostic).
+    deferred : str or None
+        None when the gate ran; otherwise a short reason string recording
+        that ananke crashed at runtime and the decision was deferred to the
+        (sound but incomplete) estimator cascade.  Callers should surface
+        this in their identification info.
     """
     try:
         from ananke.graphs import ADMG
         from ananke.identification import OneLineID
-    except ImportError:
-        # ananke unavailable -> skip the gate (assume identifiable and let
-        # the estimator cascade decide).  Log once at import time ideally.
-        return True, None
+    except ImportError as e:
+        # The two-tier prior is only principled if the identifiability gate
+        # is complete. Running without ananke would silently treat every
+        # query as identifiable, so make it a hard requirement.
+        raise ImportError(
+            "ananke-causal is required for the CCBO identifiability gate "
+            "(pip install ananke-causal)") from e
 
     # Stringify the ADMG for ananke's interface.
     name_map = {v: _admg_cluster_name(v) if isinstance(v, frozenset) else str(v)
@@ -681,11 +689,11 @@ def _ananke_id_check(admg_dict, X_vertices, Y_vertex):
     try:
         aa = ADMG(vs, di, bi)
     except (ValueError, TypeError, KeyError, AssertionError) as e:
-        warnings.warn(
-            f"ananke ADMG construction failed for X={X_vertices}, Y={Y_vertex} "
-            f"({type(e).__name__}: {e}); deferring to estimator cascade.",
-            RuntimeWarning, stacklevel=2)
-        return True, None
+        reason = (f"ananke ADMG construction failed for X={X_vertices}, "
+                  f"Y={Y_vertex} ({type(e).__name__}: {e})")
+        warnings.warn(reason + "; deferring to estimator cascade.",
+                      RuntimeWarning, stacklevel=2)
+        return True, None, reason
 
     X_names = [name_map[x] for x in X_vertices if x in name_map]
     Y_name = name_map[Y_vertex]
@@ -700,13 +708,13 @@ def _ananke_id_check(admg_dict, X_vertices, Y_vertex):
                 # Functional extraction is best-effort; the id() result above
                 # is what callers actually use. Silent fallback is correct.
                 functional = None
-        return identifiable, functional
+        return identifiable, functional, None
     except (ValueError, TypeError, KeyError, AssertionError) as e:
-        warnings.warn(
-            f"ananke OneLineID failed for X={X_names}, Y={Y_name} "
-            f"({type(e).__name__}: {e}); deferring to estimator cascade.",
-            RuntimeWarning, stacklevel=2)
-        return True, None
+        reason = (f"ananke OneLineID failed for X={X_names}, Y={Y_name} "
+                  f"({type(e).__name__}: {e})")
+        warnings.warn(reason + "; deferring to estimator cascade.",
+                      RuntimeWarning, stacklevel=2)
+        return True, None, reason
 
 
 def _expand_admg_to_dag(admg_dict):
@@ -818,7 +826,7 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
                       'reason': 'target_or_intervention_not_in_cdag'}
 
     # ---- Ananke GID-PO identifiability gate -----------------------------
-    identifiable, functional = _ananke_id_check(
+    identifiable, functional, gate_deferred = _ananke_id_check(
         admg, intervention_clusters, target_cluster)
     if not identifiable:
         return None, {
@@ -852,6 +860,7 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
             'method': 'backdoor_cdag',
             'identifiable': True,
             'functional': functional,
+            'gate_deferred': gate_deferred,
             'adjustment_clusters': [_admg_cluster_name(c) for c in Z_clusters],
             'adjustment_fine_vars': Z_fine_vars,
         }
@@ -873,6 +882,7 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
             'method': 'frontdoor_cdag',
             'identifiable': True,
             'functional': functional,
+            'gate_deferred': gate_deferred,
             'mediator_clusters': [_admg_cluster_name(c) for c in M_clusters],
             'mediator_fine_vars': M_fine_vars,
         }
@@ -890,6 +900,7 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
             'method': 'gcomputation_cdag',
             'identifiable': True,
             'functional': functional,
+            'gate_deferred': gate_deferred,
         }
 
     # Ananke said identifiable but our sound (non-complete) cascade missed
@@ -898,6 +909,7 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
         'method': 'none',
         'identifiable': True,
         'functional': functional,
+        'gate_deferred': gate_deferred,
         'reason': 'ananke_identifiable_but_cascade_missed',
     }
 

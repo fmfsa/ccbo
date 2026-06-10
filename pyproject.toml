@@ -20,6 +20,8 @@ dependencies = [
     "botorch",
     "gpytorch",
     "dcor",
+    "ananke-causal",
+    "causalchamber",
 ]
 
 [tool.setuptools.packages.find]

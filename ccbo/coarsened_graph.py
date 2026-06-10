@@ -147,7 +147,7 @@ class CoarsenedGraph(GraphStructure):
             key = frozenset(combo)
             if key in seen or len(key) == 0 or len(key) > self.max_intervention_size:
                 return
-            ok, _ = _ananke_id_check(self._coarsened_admg, set(combo), target_node)
+            ok, _, _ = _ananke_id_check(self._coarsened_admg, set(combo), target_node)
             if ok:
                 seen.add(key)
                 exploration_tuples.append(combo)
