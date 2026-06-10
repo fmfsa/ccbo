@@ -7,6 +7,7 @@ identical (global_opt, partition_history, exploration_set, final_partition).
 """
 
 import numpy as np
+import pytest
 
 from ccbo.rccbo.rccbo import rccbo
 
@@ -22,6 +23,7 @@ def _strip_nondeterministic(result):
     }
 
 
+@pytest.mark.slow
 def test_rccbo_seed_reproducibility():
     """Two rccbo calls with the same seed must produce identical results.
 

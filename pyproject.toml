@@ -26,3 +26,10 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ["ccbo*"]
+
+[tool.pytest.ini_options]
+testpaths = ["ccbo/tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: long-running validation (GP fits / MC sampling / full RCCBO runs); run with -m slow",
+]

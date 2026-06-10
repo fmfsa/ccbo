@@ -167,7 +167,15 @@ class CoarsenedGraph(GraphStructure):
             fine_vars = []
             for node in combo:
                 fine_vars.extend(self._node_to_manip_vars[node])
-            self._exploration_set.append(sorted(fine_vars))
+            fine_vars = sorted(fine_vars)
+            # Invariant: every exploration-set entry intervenes on FULL
+            # clusters (do(C_k) assigns all members of C_k). The cluster-
+            # level identification produced by make_cdag_do_function is
+            # exact for these queries; no sub-cluster heuristic exists.
+            assert fine_vars == sorted(v for node in combo for v in node), (
+                f"ES entry {fine_vars} is not a union of full clusters "
+                f"{[sorted(c) for c in combo]}")
+            self._exploration_set.append(fine_vars)
 
         # Full manipulable variable list for standard BO
         all_manip = set()

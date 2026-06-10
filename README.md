@@ -1,11 +1,15 @@
 # CCBO — Coarsened Causal Bayesian Optimization
 
-Implementation of CCBO (Coarsened CBO) and RCCBO (Recursive CCBO), plus a
-light-tunnel benchmark built on top of the
+Implementation of CCBO (Coarsened CBO), plus a light-tunnel benchmark built
+on top of the
 [`causalchamber`](https://github.com/juangamella/causal-chamber-package)
 simulators that demonstrates the headline claim: under a coarsening of the
 manipulable variables, intra-cluster DAG misspecifications are **provably
 invisible** to the do-calculus identification CCBO uses.
+
+RCCBO (Recursive CCBO — online partition discovery via RePaRe) ships in
+`ccbo/rccbo/` but is **excluded from the paper experiment matrix**; see
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md) for the backlog it must clear first.
 
 ## Repository layout
 
@@ -27,17 +31,19 @@ ccbo/
 │       └── LightTunnel/
 │           ├── generate_observations.py
 │           └── observations.pkl
-├── rccbo/                    # Recursive CCBO (BO -> RePaRe -> CCBO)
+├── rccbo/                    # Recursive CCBO (excluded from paper; see KNOWN_ISSUES.md)
 │   ├── rccbo.py
 │   ├── repare_bridge.py
 │   ├── state_manager.py
 │   └── partition_ops.py
 ├── repare_lib/               # Vendored RePaRe partition-discovery routine
-└── tests/
-    ├── test_do_accuracy.py
-    ├── test_rccbo_determinism.py        # Locks in the seed fixes
-    ├── test_lighttunnel_invariance.py   # Structural claim (PASSES)
-    └── test_lighttunnel_do_effect.py    # Numerical claim (PASSES)
+└── tests/                    # pytest suite (slow tests behind -m slow)
+    ├── test_pomis_lb18.py               # POMIS vs LB18 hand-derived truth
+    ├── test_seed_handling.py            # Target fn must not touch global RNG
+    ├── test_do_accuracy.py              # Do-function RMSE vs true SEM [slow]
+    ├── test_rccbo_determinism.py        # RCCBO seed reproducibility [slow]
+    ├── test_lighttunnel_invariance.py   # Structural claim
+    └── test_lighttunnel_do_effect.py    # Numerical claim [slow]
 
 paper/
 ├── ccbo_paper.tex
@@ -63,16 +69,11 @@ pip install causalchamber  # for the light-tunnel simulator
 ### 2. Tests (the publishable claims)
 
 ```bash
-PYTHONPATH=. python ccbo/tests/test_lighttunnel_invariance.py
-# Asserts: under the coarse partition, LightTunnel and LightTunnel_WrongRG
-# produce byte-identical C-DAGs; under the finest, they differ.
-
-PYTHONPATH=. python ccbo/tests/test_lighttunnel_do_effect.py
-# Surfaces the misspec gap numerically: shows which exploration-set entries
-# the WrongRG DAG loses and verifies coarse adjustments are byte-identical.
-
-PYTHONPATH=. python ccbo/tests/test_rccbo_determinism.py
-# Locks in the seed-handling fixes (A1 audit).
+pytest             # fast suite: POMIS vs Lee-Bareinboim 2018 ground truth,
+                   # C-DAG invariance under intra-cluster misspecification,
+                   # seed-handling contract
+pytest -m slow     # adds the heavy validations: numerical misspec gap,
+                   # do-function RMSE vs true SEM, RCCBO determinism
 ```
 
 ### 3. Regenerate observational data (optional)

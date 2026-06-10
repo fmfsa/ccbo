@@ -24,6 +24,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from ccbo.cbo.graphs import LightTunnel
 from ccbo.coarsened_graph import CoarsenedGraph
@@ -60,7 +61,8 @@ def _find_do(do_dict, var_set_pred):
     return None, None
 
 
-def main():
+@pytest.mark.slow
+def test_lighttunnel_misspec_gap():
     obs = _load_obs()
     g = LightTunnel(obs)
 
@@ -184,4 +186,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    test_lighttunnel_misspec_gap()

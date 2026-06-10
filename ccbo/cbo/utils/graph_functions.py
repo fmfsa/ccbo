@@ -73,10 +73,18 @@ def Intervention_function(*interventions, model, target_variable,
         num_interventions = len(interventions[0])
         for i in range(num_interventions):
             interventions[0][list(interventions[0].keys())[i]] = value[0,i]
-    
+
         mutilated_model = intervene_dict(model, **interventions[0])
-        np.random.seed(1)
-        samples = [sample_from_model(mutilated_model) for _ in range(num_samples)]
+        # Common random numbers: every target evaluation uses the same
+        # fixed noise stream, so the evaluated objective is a deterministic
+        # surface shared by all methods and seeds. A *local* RandomState is
+        # essential here — seeding the global RNG (as a previous version
+        # did) clobbered the experiment seed on every evaluation, making
+        # all in-loop randomness identical across nominally different seeds.
+        rng = np.random.RandomState(1)
+        samples = [sample_from_model(mutilated_model,
+                                     epsilon=rng.randn(len(mutilated_model)))
+                   for _ in range(num_samples)]
         samples = pd.DataFrame(samples)
         return np.asarray(np.mean(samples['Y']))[np.newaxis,np.newaxis]
     

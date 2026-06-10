@@ -12,11 +12,11 @@ python run_experiments.py --benchmark CompleteGraph --condition main
 # Wrong-edge robustness: two misspecification types × two partitions
 python run_experiments.py --benchmark CompleteGraph --condition wrong_edge
 
-# RCCBO teaser: RCCBO + baselines only
-python run_experiments.py --benchmark CompleteGraph --condition rccbo_teaser
-
 # Run on SimplifiedCoralGraph
 python run_experiments.py --benchmark SimplifiedCoralGraph --condition main
+
+RCCBO is excluded from the paper experiment matrix (see KNOWN_ISSUES.md);
+run_rccbo_teaser() is kept callable for follow-up work.
 """
 
 import os
@@ -111,7 +111,7 @@ def _load_graph(benchmark, initial_num_obs_samples=100):
 def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
                        num_interventions=10, type_cost=1,
                        initial_num_obs_samples=100):
-    """BO + CBO + representative CCBO variants + RCCBO, multi-seed."""
+    """BO + CBO + representative CCBO variants, multi-seed."""
     results = {s: {} for s in range(seeds)}
 
     for seed in range(seeds):
@@ -177,16 +177,6 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
             except Exception as e:
                 print(f"  {label} failed: {e}")
                 import traceback; traceback.print_exc()
-
-        # RCCBO
-        print(f"\n--- RCCBO ---")
-        r = rccbo(benchmark, trials, k_phase=k_phase,
-                  num_interventions=num_interventions, type_cost=type_cost,
-                  initial_num_obs_samples=initial_num_obs_samples,
-                  task='min', num_mc_samples=2000, seed=seed)
-        results[seed]['RCCBO'] = r
-        print(f"  Final Y: {r['global_opt'][-1]:.4f}")
-        print(f"  Final partition: {r.get('final_partition', 'none')}")
 
         # Checkpoint after each seed so a crash only loses the current seed
         ckpt = os.path.join(output_dir, f'{benchmark}_main_{seeds}seeds.pkl')
@@ -360,7 +350,8 @@ def run_wrong_edge_condition(benchmark, seeds, trials, output_dir,
 
 
 # ---------------------------------------------------------------------------
-# Condition: rccbo_teaser
+# Condition: rccbo_teaser  (EXCLUDED from the paper experiment matrix —
+# see KNOWN_ISSUES.md; kept callable for follow-up work)
 # ---------------------------------------------------------------------------
 
 def run_rccbo_teaser(benchmark, seeds, trials, k_phase, output_dir,
@@ -419,7 +410,7 @@ def main():
                                  'LightTunnel'],
                         help='Which benchmark to run')
     parser.add_argument('--condition', default='main',
-                        choices=['main', 'wrong_edge', 'rccbo_teaser'],
+                        choices=['main', 'wrong_edge'],
                         help='Experiment condition')
     parser.add_argument('--seeds', default=5, type=int,
                         help='Number of random seeds')
@@ -444,9 +435,6 @@ def main():
     elif args.condition == 'wrong_edge':
         run_wrong_edge_condition(args.benchmark, args.seeds, args.trials,
                                  args.output_dir)
-    elif args.condition == 'rccbo_teaser':
-        run_rccbo_teaser(args.benchmark, args.seeds, args.trials, args.k_phase,
-                         args.output_dir)
 
 
 if __name__ == '__main__':

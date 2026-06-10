@@ -14,6 +14,7 @@ DAG.  This is the full Plan §4 stack.
 import os
 import numpy as np
 import pandas as pd
+import pytest
 
 from ccbo.adjustment import make_cdag_do_function
 from ccbo.coarsening import enumerate_valid_coarsenings_manip, compute_POMIS
@@ -33,7 +34,7 @@ def true_do_mc(sem_fn, intervention_vars, values, num_samples=50000, seed=42):
     return float(np.mean(y_values)), float(np.var(y_values))
 
 
-def test_graph(graph_name, num_test_points=5, max_fine_vars=3, verbose=True):
+def evaluate_graph(graph_name, num_test_points=5, max_fine_vars=3, verbose=True):
     """
     Test all POMIS-based interventions under every valid manipulable-only
     coarsening of a benchmark.
@@ -130,6 +131,24 @@ def test_graph(graph_name, num_test_points=5, max_fine_vars=3, verbose=True):
     return results
 
 
+@pytest.mark.slow
+def test_completegraph_do_accuracy():
+    """All identifiable C-DAG do-functions track the true SEM do-effect.
+
+    RMSE < 0.5 on a target whose range spans several units; loose enough to
+    absorb GP-fit noise, tight enough to catch a wrong adjustment formula.
+    """
+    results = evaluate_graph('CompleteGraph', num_test_points=3,
+                             verbose=False)
+    identifiable = [r for r in results if r['rmse'] is not None]
+    assert identifiable, "No identifiable do-functions found on CompleteGraph"
+    bad = [r for r in identifiable if r['rmse'] > 0.5]
+    assert not bad, (
+        "Do-functions with RMSE > 0.5 vs true SEM: "
+        + "; ".join(f"[{r['partition']}] do({r['intervention']}) "
+                    f"rmse={r['rmse']:.3f} ({r['method']})" for r in bad))
+
+
 def main():
     print("=" * 60)
     print("Do-Function Accuracy Validation (Lee-2019 + ananke GID-PO)")
@@ -144,7 +163,7 @@ def main():
 
     for graph_name in benchmarks:
         print(f"\n--- {graph_name} ---")
-        results = test_graph(graph_name, num_test_points=5)
+        results = evaluate_graph(graph_name, num_test_points=5)
 
         identifiable = [r for r in results if r['rmse'] is not None]
         non_ident = [r for r in results if r['rmse'] is None]
