@@ -505,49 +505,84 @@ trajectory lengths and seed coverage in every results file. Methods:
 true fine-grained projected ADMG, GACBO \citep{mukherjee2024gacbo} with a
 plausible family containing the true graph and its misspecified variants,
 and \CCBO{} under representative partitions.
-% RESULTS-DEPENDENT: fill Table 2 and Figures from
-% results/{B}_main_10seeds.pkl after the 10-seed runs complete.
 
 \begin{table}[t]
   \centering
   \caption{Final best $Y$ (mean $\pm$ s.e., 10 seeds $\times$ 40 trials)
-  per method.}
+  per method. Tables are auto-generated from the result files; both
+  included files end with their own \texttt{\textbackslash bottomrule}.}
   \label{tab:results}
   \vspace{4pt}
   \small
-  \begin{tabular}{@{}lcc@{}}
-    \toprule
-    \textbf{Method} & \textbf{CompleteGraph} & \textbf{SimplifiedCoralGraph} \\
-    \midrule
-    % Rows are emitted by generate_paper_figures.py --only tables into
-    % paper/tables/{B}_main.tex; merge the two benchmark columns here once
-    % the 10-seed runs land.
-    \todo{\texttt{paper/tables/*\_main.tex} pending 10-seed runs} & & \\
-    \bottomrule
-  \end{tabular}
+  \begin{subtable}[t]{0.46\textwidth}
+    \centering
+    \caption*{CompleteGraph}
+    \begin{tabular}{@{}lc@{}}
+      \toprule
+      \textbf{Method} & \textbf{Final $Y$} \\
+      \midrule
+      \input{tables/CompleteGraph_main}
+    \end{tabular}
+  \end{subtable}
+  \hfill
+  \begin{subtable}[t]{0.5\textwidth}
+    \centering
+    \caption*{SimplifiedCoralGraph}
+    \begin{tabular}{@{}lc@{}}
+      \toprule
+      \textbf{Method} & \textbf{Final $Y$} \\
+      \midrule
+      \input{tables/SimplifiedCoralGraph_main}
+    \end{tabular}
+  \end{subtable}
 \end{table}
 
 \subsection{Main comparison and the coarsening sweep}
 \label{sec:main_results}
 
-% RESULTS-DEPENDENT (expected from 5-seed pilots): CCBO-finest matches CBO;
-% CCBO-{B},{DE} lands at the V(pi) floor predicted by Prop 4 (forced joint
-% do(D,E) excludes the singleton optimum); BO trails far behind on both
-% synthetic benchmarks.
-The coarsening sweep runs \CCBO{} across the valid lattice (all
-coarsenings for CompleteGraph; a structured finest-to-coarsest sample of
-the 47 for SimplifiedCoralGraph) and plots final $Y$ against partition
-fineness, tracing the $V(\pi)$ staircase of Prop.~\ref{prop:price}
-empirically: coarsenings whose clusters align with an optimal intervention
-set are lossless; merges that force joint interventions over a singleton
-optimum pay exactly the predicted price.
+Table~\ref{tab:results} and Figure~\ref{fig:results} give the main
+comparison. On both benchmarks \CCBO{} at the finest partition matches the
+full-knowledge methods --- on CompleteGraph it attains $-3.50 \pm 0.03$
+versus $-3.11 \pm 0.20$ for \CBO{} and $-3.20 \pm 0.18$ for GACBO, with an
+order of magnitude less seed variance (the complete-ID-derived priors are
+better calibrated than \CBO's hand-derived adjustment estimators, which
+occasionally trap a seed in a sub-optimal arm); on SimplifiedCoralGraph
+all three agree to three digits ($36.06$--$36.10$). The two extremes
+bracket the spectrum: plain \BO{} and the all-merged partition both
+collapse to $\approx 9.3 \times 10^{3}$ on SimplifiedCoralGraph ---
+merging everything hands \CCBO{} exactly \BO's joint
+$|\mathbf{X}|$-dimensional search problem, causal prior notwithstanding.
+
+The coarsening sweep (Figure~\ref{fig:sweep}) runs \CCBO{} across the
+valid lattice (all coarsenings for CompleteGraph; a structured
+finest-to-coarsest sample of the 47 for SimplifiedCoralGraph) and traces
+the $V(\pi)$ staircase of Prop.~\ref{prop:price} empirically. The price
+is graded and merge-specific, not a function of fineness alone: merging
+$\{C,D\}$ is \emph{lossless} ($36.05$, indistinguishable from the finest
+$36.06$ --- no optimal set separates $C$ from $D$), $\{C,N\}$ costs
+little ($36.45$), $\{C,D,O\}$ costs $40\%$ ($51.2$), and $\{C,D,N,O\}$
+is catastrophic ($4.3 \times 10^{3}$). Which clusters you merge matters
+far more than how many; Prop.~\ref{prop:price} states the exact
+losslessness condition.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/CompleteGraph_comparison.pdf}
-  \caption{Convergence on CompleteGraph (mean $\pm$ s.e.). \todo{regenerate
-  at 10 seeds with GACBO}}
+  \includegraphics[width=0.49\textwidth]{figures/CompleteGraph_comparison.pdf}
+  \includegraphics[width=0.49\textwidth]{figures/SimplifiedCoralGraph_comparison.pdf}
+  \caption{Convergence (mean $\pm$ s.e., 10 seeds): CompleteGraph (left)
+  and SimplifiedCoralGraph (right, log-scaled gap between the \BO{}-like
+  and \CBO{}-like regimes).}
   \label{fig:results}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/SimplifiedCoralGraph_sweep.pdf}
+  \caption{Price of coarsening on SimplifiedCoralGraph: final $Y$
+  (mean $\pm$ s.e., 10 seeds) across a finest-to-coarsest sample of the
+  valid-partition lattice. The staircase of Prop.~\ref{prop:price} is
+  graded and merge-specific.}
+  \label{fig:sweep}
 \end{figure}
 
 \subsection{Robustness: two damage regimes}
@@ -555,29 +590,53 @@ optimum pay exactly the predicted price.
 
 We separate the two tiers of Remark~\ref{rem:taxonomy}.
 
-\textbf{Tier-1 (prior bias) --- CompleteGraph.} Deleting the
-inter-cluster edge $B \to C$ (\texttt{NoBC}) or the edge $C \to D$
-(\texttt{NoCD}) leaves all identifiability verdicts intact but corrupts
-the priors of the affected arms. Fine-grained \CBO{} pays a convergence
-cost early and recovers with data.
-% RESULTS-DEPENDENT: quantify from CompleteGraph_wrong_edge_10seeds.pkl.
+\textbf{Tier-1 (prior bias) --- CompleteGraph
+(Table~\ref{tab:wrong_edge_cg}).} Deleting the inter-cluster edge $B \to
+C$ (\texttt{NoBC}) or the edge $C \to D$ (\texttt{NoCD}) leaves all
+identifiability verdicts intact but corrupts the priors of the affected
+arms. The damage is real but partially self-healing: under
+\texttt{NoBC} the fine-grained method's paired per-seed gap is $+0.263
+\pm 0.185$ --- a modest mean shift hiding a six-fold variance inflation
+($\pm 0.199$ vs.\ $\pm 0.035$ s.e.), i.e.\ some seeds recover fully and
+some stay trapped; \texttt{NoCD} is absorbed entirely ($-0.020 \pm
+0.029$). The coarse partition is unaffected by either ($\pm 0.001$),
+sitting at its Prop.~\ref{prop:price} floor: under
+$\{B\},\{D,E\}$ both misspecified edges either lie inside a cluster or
+are made redundant at the quotient level ($C \to E$ keeps the
+$\{C\}\to\{D,E\}$ cluster edge alive when $C \to D$ is deleted).
 
-\textbf{Tier-2 (arm damage) --- LightTunnel.} The misspecified DAG
-\texttt{WrongBG} adds a single spurious intra-cluster edge $B \to G$.
-Together with the (real) latent confounding $B \leftrightarrow G$ this
-forms a bow, so $P(Y \mid \do(B))$ is not identifiable from the assumed
-fine graph: the identity-partition exploration set provably loses its
-best arm $\{B\}$ (ground-truth arm values: $\min_b \E[Y|\do(B{=}b)] =
-0.40$ vs.\ $0.60$ for the best surviving singleton $\{G\}$). No amount of
-interventional data restores a deleted arm. Under the coarse partition
-$\{R,G,B\},\{P_1,P_2\}$ the bow is intra-cluster:
+\textbf{Tier-2 (arm damage) --- LightTunnel
+(Table~\ref{tab:wrong_edge}).} The misspecified DAG \texttt{WrongBG} adds
+a single spurious intra-cluster edge $B \to G$. Together with the (real)
+latent confounding $B \leftrightarrow G$ this forms a bow, so $P(Y \mid
+\do(B))$ is not identifiable from the assumed fine graph: the
+identity-partition exploration set provably loses its best arm $\{B\}$
+(ground-truth arm values: $\min_b \E[Y|\do(B{=}b)] = 0.40$ vs.\ $0.60$
+for the best surviving singleton $\{G\}$). No amount of interventional
+data restores a deleted arm, and the experiment shows exactly that: the
+paired gap is $+0.195 \pm 0.000$ at every seed. Under the coarse
+partition $\{R,G,B\},\{P_1,P_2\}$ the bow is intra-cluster:
 Prop.~\ref{prop:invariance} applies, and the \CCBO{} trajectories under
 the correct and misspecified DAGs are \emph{byte-for-byte identical} at
-every seed (the cluster arm also attains $\E[Y|\do(R,G,B{=}0)] \approx
-0$, dominating every singleton).
-% RESULTS-DEPENDENT: fill the four-condition table (finest/coarse x
-% correct/WrongBG) from LightTunnel_wrong_edge_10seeds.pkl; report paired
-% per-seed gaps and the byte-identity check.
+all 10 seeds (the cluster arm also attains $\E[Y|\do(R,G,B{=}0)]
+\approx 0$, dominating every singleton).
+
+\begin{table}[t]
+  \centering
+  \caption{Tier-1 robustness (CompleteGraph; 10 seeds): prior-bias
+  damage is partially self-healing for the fine partition and absent for
+  the coarse one.}
+  \label{tab:wrong_edge_cg}
+  \vspace{4pt}
+  \small
+  \begin{tabular}{@{}llccc@{}}
+    \toprule
+    \textbf{Partition} & \textbf{Assumed DAG} & $|\ESpi|$ &
+    \textbf{Final $Y$} & \textbf{Gap vs.\ correct} \\
+    \midrule
+    \input{tables/CompleteGraph_wrong_edge}
+  \end{tabular}
+\end{table}
 
 \begin{table}[t]
   \centering
