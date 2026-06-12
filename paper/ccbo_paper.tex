@@ -541,16 +541,38 @@ and \CCBO{} under representative partitions.
 \label{sec:main_results}
 
 Table~\ref{tab:results} and Figure~\ref{fig:results} give the main
-comparison. On both benchmarks \CCBO{} at the finest partition matches the
-full-knowledge methods --- on CompleteGraph it attains $-3.50 \pm 0.03$
-versus $-3.11 \pm 0.20$ for \CBO{} and $-3.20 \pm 0.18$ for GACBO, with an
-order of magnitude less seed variance (the complete-ID-derived priors are
-better calibrated than \CBO's hand-derived adjustment estimators, which
-occasionally trap a seed in a sub-optimal arm); on SimplifiedCoralGraph
-all three agree to three digits ($36.06$--$36.10$). The two extremes
-bracket the spectrum: plain \BO{} and the all-merged partition both
-collapse to $\approx 9.3 \times 10^{3}$ on SimplifiedCoralGraph ---
-merging everything hands \CCBO{} exactly \BO's joint
+comparison. To interpret it we computed the ground-truth value of every
+arm on CompleteGraph by brute-force Monte Carlo on the true SEM: the
+unique optimum is the \emph{joint} arm $\{B,D\}$ with
+$\mu^*(\{B,D\}) = -3.60$ ($B=-5$, $D=3.3$), and --- a textbook instance
+of the ``where to intervene'' phenomenon of \citet{lee2018structural} ---
+additionally forcing $E$ destroys it ($\mu^*(\{B,D,E\}) = -0.57$):
+left alone, $E = f(A, \cdot)$ inherits $U_1$'s value through $A$ and
+partially compensates $U_1$'s direct effect on $Y$. Every entry of
+Table~\ref{tab:results} now reads as ``predicted floor $V(\pi)$, minus a
+small budget gap'': \CCBO{}-finest attains $-3.50 \pm 0.03$ against
+$V(\pi_\top) = -3.60$; the coarse partition $\{B\},\{D,E\}$ attains
+$-1.245 \pm 0.065$ against its Prop.~\ref{prop:price} floor
+$V(\pi) = \mu^*(\{B\}) = -1.31$ --- the optimal action $\do(B,D)$
+requires splitting the $\{D,E\}$ cluster and is simply not representable;
+\BO{} attains $-0.63$ against $\mu^*(\{B,D,E\}) = -0.57$ for its single
+joint arm.
+
+\CCBO{}-finest and the \CBO{} baseline deserve a careful reading. By
+Prop.~\ref{prop:identity} they are the \emph{same algorithm}; both
+exploration sets contain the optimal arm $\{B,D\}$, and both use the same
+adjustment sets (e.g.\ $\mathbf{Z}=\{A,C\}$ for $\do(E)$). The gap
+($-3.50 \pm 0.03$ vs.\ $-3.11 \pm 0.20$) is an implementation-quality
+statement about the priors --- the original release's hand-coded
+do-functions use fixed GP hyperparameters and intermittently trap a seed
+short of the 2-D optimum within the 40-trial budget, whereas the
+complete-ID pipeline's estimators are calibrated per query --- not
+evidence that coarsening helps at $\pi_\top$. GACBO sits in between
+($-3.20 \pm 0.18$); on SimplifiedCoralGraph all full-knowledge methods
+agree to three digits ($36.06$--$36.10$). The two extremes bracket the
+spectrum: plain \BO{} and the all-merged partition both collapse to
+$\approx 9.3 \times 10^{3}$ on SimplifiedCoralGraph --- merging
+everything hands \CCBO{} exactly \BO's joint
 $|\mathbf{X}|$-dimensional search problem, causal prior notwithstanding.
 
 The coarsening sweep (Figure~\ref{fig:sweep}) runs \CCBO{} across the
