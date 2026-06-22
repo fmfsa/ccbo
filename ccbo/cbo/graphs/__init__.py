@@ -2,4 +2,4 @@ from .graph import GraphStructure
 from .CompleteGraph import CompleteGraph
 from .CoralGraph import CoralGraph
 from .SimplifiedCoralGraph import SimplifiedCoralGraph
-from .LightTunnel import LightTunnel
+from .ConfoundedCluster import ConfoundedCluster

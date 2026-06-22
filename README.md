@@ -1,146 +1,111 @@
-# CCBO — Coarsened Causal Bayesian Optimization
+# QCBO — Quotient Causal Bayesian Optimization
 
-Implementation of CCBO (Coarsened CBO), plus a light-tunnel benchmark built
-on top of the
-[`causalchamber`](https://github.com/juangamella/causal-chamber-package)
-simulators that demonstrates the headline claim: under a coarsening of the
-manipulable variables, intra-cluster DAG misspecifications are **provably
-invisible** to the do-calculus identification CCBO uses.
+Quotient CBO (QCBO) drops CBO's requirement of a fully specified DAG over the
+manipulable variables. The practitioner supplies only a **partition** of the
+manipulable variables into clusters plus the cluster-level graph (a C-DAG);
+identification, exploration-set construction, and the causal GP prior are all
+derived from the **quotient** structure via Lee-2019 latent projection + the
+complete ID algorithm (`ananke`). Headline guarantee: any DAG misspecification
+**within** a cluster is provably invisible to QCBO, because it never appears in
+the quotient.
 
-RCCBO (Recursive CCBO — online partition discovery via RePaRe) ships in
+> The Python package is named `ccbo/` and the wrapper class is `CoarsenedGraph`
+> for historical reasons; these are internal names — the method is QCBO.
+
+We evaluate QCBO on a curated subset of the standardized **CausalBO benchmark**
+(`anonymous.4open.science/r/CausalBO_Benchmark`), scored with its own GAP /
+PA-GAP metrics, plus a purpose-built **confounded-cluster** benchmark that
+isolates the Tier-2 (arm-deletion) damage regime.
+
+RCCBO (Recursive QCBO — online partition discovery via RePaRe) ships in
 `ccbo/rccbo/` but is **excluded from the paper experiment matrix**; see
-[KNOWN_ISSUES.md](KNOWN_ISSUES.md) for the backlog it must clear first.
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ## Repository layout
 
 ```
 ccbo/
 ├── adjustment.py             # Backdoor / frontdoor / g-computation on C-DAGs
-├── coarsened_graph.py        # CoarsenedGraph wrapper (plugs into CBO)
-├── coarsening.py             # Lee-2019 latent projection + POMIS + DAG registry
+├── coarsened_graph.py        # CoarsenedGraph wrapper (implements QCBO; plugs into CBO)
+├── coarsening.py             # Lee-2019 latent projection + POMIS + graph registry
+├── metrics.py                # GAP / PA-GAP (match the CausalBO benchmark scorer)
+├── benchmark.py              # Adapter: run QCBO on CausalBO_Benchmark datasets
 ├── data_generation.py        # Interventional sampling utility
 ├── generic_do.py             # MC-based do-effect for arbitrary SEMs
-├── visualize.py              # DAG / convergence / wrong-edge plots
-├── cbo/                      # Vendored CBO (Aglietti 2020) — graphs, utils, data
-│   ├── cbo.py                # Main CBO loop
-│   ├── graphs/               # GraphStructure subclasses
-│   │   ├── CompleteGraph.py
-│   │   ├── SimplifiedCoralGraph.py
-│   │   └── LightTunnel*.py   # Light-tunnel benchmark (this repo)
-│   └── data/
-│       └── LightTunnel/
-│           ├── generate_observations.py
-│           └── observations.pkl
-├── rccbo/                    # Recursive CCBO (excluded from paper; see KNOWN_ISSUES.md)
-│   ├── rccbo.py
-│   ├── repare_bridge.py
-│   ├── state_manager.py
-│   └── partition_ops.py
-├── repare_lib/               # Vendored RePaRe partition-discovery routine
-└── tests/                    # pytest suite (slow tests behind -m slow)
-    ├── test_pomis_lb18.py               # POMIS vs LB18 hand-derived truth
-    ├── test_seed_handling.py            # Target fn must not touch global RNG
-    ├── test_do_accuracy.py              # Do-function RMSE vs true SEM [slow]
-    ├── test_rccbo_determinism.py        # RCCBO seed reproducibility [slow]
-    ├── test_lighttunnel_invariance.py   # Structural claim
-    └── test_lighttunnel_do_effect.py    # Numerical claim [slow]
+├── cbo/                      # Vendored CBO (Aglietti 2020) — loop, graphs, utils, data
+│   └── graphs/
+│       ├── CompleteGraph.py
+│       └── ConfoundedCluster*.py   # Tier-2 "bow" benchmark (this repo)
+├── rccbo/                    # Recursive QCBO (excluded from paper; see KNOWN_ISSUES.md)
+└── tests/
+    ├── test_pomis_lb18.py              # POMIS vs Lee-Bareinboim 2018 ground truth
+    ├── test_seed_handling.py           # Target fn must not touch global RNG
+    ├── test_bow_invariance.py          # Tier-2 structural claim (bow benchmark)
+    └── test_bow_do_effect.py           # Tier-2 numerical claim [slow]
 
-paper/
-├── ccbo_paper.tex
-├── ccbo_paper.pdf
-├── MFACBO_comparison.md      # Positioning vs Zeitler 2025 (CAR @ UAI)
-└── figures/                  # CompleteGraph and LightTunnel figures
-
-run_experiments.py            # CLI entry point for all conditions
-generate_paper_figures.py     # Builds paper figures from result pickles
+third_party/CausalBO_Benchmark/   # downloaded benchmark (datasets, SEMs, scorer)
+scripts/
+├── confoundedcluster_arm_values.py     # ground-truth arm values for the bow benchmark
+├── validate_benchmark_qcbo.py          # builds CoarsenedGraph on each benchmark dataset
+└── run_qcbo_benchmark_suite.py         # runs + scores QCBO on the curated subset
+run_experiments.py            # bespoke conditions (CompleteGraph Tier-1; bow Tier-2)
+generate_paper_figures.py     # builds paper figures/tables from results
 ```
 
 ## Quickstart
 
 ### 1. Environment
-
 ```bash
-conda create -n ccbo python=3.10
-conda activate ccbo
+conda create -n ccbo python=3.10 && conda activate ccbo
 pip install -e .
-pip install causalchamber  # for the light-tunnel simulator
 ```
 
-### 2. Tests (the publishable claims)
+### 2. Get the benchmark
+Download `CausalBO_Benchmark` into `third_party/` (it uses the same
+GPy/emukit stack; no extra runtime deps are needed for the curated subset).
 
+### 3. Tests
 ```bash
-pytest             # fast suite: POMIS vs Lee-Bareinboim 2018 ground truth,
-                   # C-DAG invariance under intra-cluster misspecification,
-                   # seed-handling contract
-pytest -m slow     # adds the heavy validations: numerical misspec gap,
-                   # do-function RMSE vs true SEM, RCCBO determinism
+pytest             # fast: POMIS vs LB18, bow-benchmark C-DAG invariance, seed contract
+pytest -m slow     # adds the numerical Tier-2 do-effect demonstration
 ```
 
-### 3. Regenerate observational data (optional)
-
+### 4. QCBO on the CausalBO benchmark
 ```bash
-PYTHONPATH=. python -m ccbo.cbo.data.LightTunnel.generate_observations
-# Writes ccbo/cbo/data/LightTunnel/observations.pkl and asserts corr(R,G) > 0.4.
+# Build the C-DAG + gated exploration set for every curated dataset (sanity):
+PYTHONPATH=. python scripts/validate_benchmark_qcbo.py
+# Run QCBO (finest = CBO; and coarse) and score with the benchmark's GAP/PA-GAP:
+PYTHONPATH=. python scripts/run_qcbo_benchmark_suite.py --trials 100 --seeds 5
+# -> results/qcbo_benchmark_results.json
 ```
+Curated subset: `toyGraph`, `synthetic` (=CompleteGraph), `synthetic_2`,
+`healthcare`, `epidemiology`, `ecology`. Each gets the identity partition
+(QCBO-finest ≡ CBO, Prop. 1) and a domain-meaningful coarse partition.
 
-### 4. Multi-seed BO experiments
-
+### 5. Bespoke robustness conditions + figures
 ```bash
-# Full paper suite (10 seeds x 40 trials, sequential, checkpointed per seed)
-./run_full_suite.sh
-
-# Or individual conditions:
-python run_experiments.py --benchmark CompleteGraph --condition main        # BO/CBO/GACBO/CCBO
-python run_experiments.py --benchmark CompleteGraph --condition wrong_edge  # tier-1 misspec damage
-python run_experiments.py --benchmark CompleteGraph --condition sweep       # price-of-coarsening lattice
-python run_experiments.py --benchmark LightTunnel   --condition wrong_edge  # tier-2 (arm) damage + invariance
-```
-
-Results land in `results/` (per-benchmark pickles); a fairness check
-asserts identical trial counts and seed coverage across methods. Each CBO
-trial is heavy (GPy + emukit gradient-based acquisition); plan for
-~minutes per seed per method.
-
-### 5. Figures and LaTeX tables
-
-```bash
-python generate_paper_figures.py --benchmark CompleteGraph
-python generate_paper_figures.py --benchmark LightTunnel --only wrong_edge
+python run_experiments.py --benchmark CompleteGraph     --condition wrong_edge  # Tier-1 (prior bias)
+python run_experiments.py --benchmark ConfoundedCluster --condition wrong_edge  # Tier-2 (arm deletion)
 python generate_paper_figures.py --benchmark CompleteGraph --only tables
-# Tables land in paper/tables/ and are \input by paper/ccbo_paper.tex.
 ```
 
-## What's the headline result?
+## Headline result (Tier-2, confounded-cluster benchmark)
 
-The light-tunnel benchmark uses `causalchamber.simulators.lt.Deterministic`
-with manipulable inputs `{R, G, B, P1, P2}` and target `Y = vis_3` (the
-sensor reading behind both polarisers). A latent confounder `U_color`
-on R and G yields observational `corr(R, G) ≈ 0.68`.
-
-Two DAGs are compared:
-
-* `LightTunnel` — true fine DAG (`R, G, B, P1, P2 → Y`; `U_color → R, G`).
-* `LightTunnel_WrongRG` — same plus a *spurious* intra-cluster edge `R → G`.
-
-Under the coarse partition `{R, G, B} | {P1, P2} | {Y}`:
-
-* Lee-2019 latent projection drops the spurious `R → G` edge (both
-  endpoints sit inside cluster `{R, G, B}`).
-* The resulting C-DAG is *byte-identical* under both fine DAGs.
-* CCBO's adjustment formulas are therefore identical → identical GP priors
-  → identical BO trajectories under the same seed.
-
-The two tests above prove this both structurally (graph signatures) and
-numerically (do-effect values). The multi-seed `wrong_edge` run produces
-the convergence / final-Y figures for the paper.
+Manipulable `{A, B, C}`, target `Y`, latent `U → {B, C}` (so `B ↔ C` with
+`corr(B,C) ≈ 0.70`); the strongest lever is `do(B)`. The misspecified variant
+`ConfoundedCluster_WrongBC` adds a *spurious* intra-cluster edge `B → C`.
+Together with `B ↔ C` this is a **bow**, so `P(Y | do(B))` becomes
+non-identifiable and the fine-grained method **loses its best target `{B}`**
+(ground-truth arms: `{B}`=−3.75, best survivor `{C}`=−2.75 → +1.0 unrecoverable
+gap). Under the coarse partition `{A} | {B,C} | {Y}` the bow is intra-cluster:
+Lee-2019 projection drops `B → C`, the C-DAG is byte-identical under both DAGs,
+and QCBO's trajectories coincide exactly. Proven structurally and numerically
+in `tests/test_bow_*.py`.
 
 ## Companion paper
-
-`paper/ccbo_paper.tex` is the manuscript draft. `paper/MFACBO_comparison.md`
-positions this work against Zeitler 2025 (UAI 2025 CAR workshop) — CCBO
-coarsens the *inputs* of the DAG; MFACBO coarsens the *outcome* through
-multi-fidelity measurements. The two axes are orthogonal.
+`paper/ccbo_paper.tex` is the manuscript (title: *Quotient Causal Bayesian
+Optimization*). `paper/MFACBO_comparison.md` positions this work against
+Zeitler 2025 — QCBO coarsens the DAG's *inputs*; MFACBO coarsens the *outcome*.
 
 ## License
-
 Research code; no license file shipped. Ask before reuse.

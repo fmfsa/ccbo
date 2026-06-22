@@ -1,8 +1,18 @@
 # Known issues — RCCBO / RePaRe backlog
 
-RCCBO is excluded from the current paper (the AISTATS submission covers CCBO
-only; online partition discovery is deferred to follow-up work). The issues
-below must be resolved before RCCBO results are reported anywhere.
+RCCBO is excluded from the current paper (the submission covers QCBO only;
+online partition discovery is deferred to follow-up work). The issues below
+must be resolved before RCCBO results are reported anywhere.
+
+## Baselines
+
+- **GACBO is not run as a head-to-head baseline.** Mukherjee 2024's RJ-MCMC
+  sampler over DAGs has no faithful public implementation, and an idealized
+  enumeration handed the true graph would be an optimistic stand-in
+  (`ccbo/baselines/gacbo.py` is kept for reference but unused). We instead
+  compare on the CausalBO benchmark via its own scorer. The benchmark ships a
+  baseline literally named "CCBO" (unrelated to our method) — we renamed ours
+  to **QCBO** to avoid the clash.
 
 ## RePaRe (vendored partition discovery, `ccbo/repare_lib/`)
 

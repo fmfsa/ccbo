@@ -236,7 +236,16 @@ class CoarsenedGraph(GraphStructure):
         choice: CCBO operates with C-DAG knowledge + experiments only, with
         the possibility of refining the C-DAG via future interventional data
         (e.g. using the RePaRe algorithm from Madaleno et al. 2026).
+
+        The result is memoized: it is a pure function of the (fixed) C-DAG,
+        partition, and initial observational sample, so it never changes over a
+        BO run. Callers such as the benchmark CBO loop invoke ``get_all_do``
+        once per trial; without the cache this re-fits every cluster GP each
+        time, which dominates wall-clock. Build once, reuse.
         """
+        if getattr(self, '_do_cache', None) is not None:
+            return self._do_cache
+
         do_dict = {}
         self._identification_info = {}
 
@@ -283,6 +292,7 @@ class CoarsenedGraph(GraphStructure):
                 ident['_uninformative'] = True
                 do_dict[full_name] = _make_uninformative_do(y_mean, y_var)
 
+        self._do_cache = do_dict
         return do_dict
 
     def get_identifiability_summary(self):

@@ -205,8 +205,8 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			# held by var_to_intervene here) rather than dict_interventions[index],
 			# which is a name-concatenated label string ('P1', 'RGB', 'P1P2'). The
 			# label only works as a per-variable index when every variable name is a
-			# single character; multi-char names (LightTunnel's P1/P2 and the coarse
-			# clusters) make get_new_dict_x walk the string's characters and break.
+			# single character; multi-char labels (the coarse clusters, e.g. 'BC',
+			# 'ABC') make get_new_dict_x walk the string's characters and break.
 			x_new_dict = get_new_dict_x(x_new_list[index], var_to_intervene)
 			cumulative_cost += total_cost(var_to_intervene, costs, x_new_dict)
 			var_to_intervene = dict_interventions[index]

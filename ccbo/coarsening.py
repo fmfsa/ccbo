@@ -189,6 +189,29 @@ def enumerate_valid_coarsenings(dag_edges, nodes, target='Y', hidden_nodes=None,
 # Graph metadata
 # ---------------------------------------------------------------------------
 
+# Runtime registry for externally-defined graphs (e.g. CausalBO_Benchmark
+# datasets registered by ccbo.benchmark). Each entry maps a graph name to a
+# dict with keys: dag_edges, nodes, hidden_nodes, manipulative_variables,
+# confounders (list of (latent, [vars...])).
+_REGISTERED_GRAPHS = {}
+
+
+def register_graph(name, dag_edges, nodes, hidden_nodes,
+                   manipulative_variables, confounders):
+    """Register graph metadata for a graph defined outside this module.
+
+    Lets `get_dag_edges_from_sem` / `get_hidden_confounders` serve benchmark
+    datasets without hard-coding a branch per dataset here.
+    """
+    _REGISTERED_GRAPHS[name] = {
+        'dag_edges': list(dag_edges),
+        'nodes': list(nodes),
+        'hidden_nodes': list(hidden_nodes),
+        'manipulative_variables': list(manipulative_variables),
+        'confounders': [(lat, list(vs)) for lat, vs in confounders],
+    }
+
+
 def get_hidden_confounders(graph_name):
     """
     Return hidden confounder structure for a named graph.
@@ -210,13 +233,17 @@ def get_hidden_confounders(graph_name):
         return [
             ('U', ['X', 'Y']),
         ]
-    elif graph_name in ('LightTunnel', 'LightTunnel_WrongBG'):
-        # U_color is the latent confounder shared by B and G in the SEM;
-        # it produces observational corr(B, G) > 0 which is what makes
-        # the WrongBG misspec actually affect CBO's identification.
+    elif graph_name in ('ConfoundedCluster', 'ConfoundedCluster_WrongBC'):
+        # U is the latent confounder shared by B and C in the SEM; it
+        # produces observational corr(B, C) > 0, which is what makes the
+        # WrongBC misspecification (a spurious B -> C edge) actually flip
+        # CBO's identifiability verdict for do(B).
         return [
-            ('U_color', ['B', 'G']),
+            ('U', ['B', 'C']),
         ]
+    elif graph_name in _REGISTERED_GRAPHS:
+        return [(lat, list(vs))
+                for lat, vs in _REGISTERED_GRAPHS[graph_name]['confounders']]
     else:
         return []
 
@@ -275,36 +302,33 @@ def get_dag_edges_from_sem(graph_name):
         hidden_nodes = []
         manipulative_variables = ['B', 'D', 'E']
 
-    elif graph_name == 'LightTunnel':
-        # Five direct parents of Y; no manipulable-to-manipulable edges.
-        # U_color is hidden (declared in get_hidden_confounders) and yields a
-        # bidirected R<->G edge in the projected ADMG.
+    elif graph_name == 'ConfoundedCluster':
+        # Three direct parents of Y; no manipulable-to-manipulable edges.
+        # U is hidden (declared in get_hidden_confounders) and yields a
+        # bidirected B<->C edge in the projected ADMG.
         dag_edges = [
-            ('R', 'Y'), ('G', 'Y'), ('B', 'Y'),
-            ('P1', 'Y'), ('P2', 'Y'),
+            ('A', 'Y'), ('B', 'Y'), ('C', 'Y'),
         ]
-        nodes = ['R', 'G', 'B', 'P1', 'P2', 'Y']
+        nodes = ['A', 'B', 'C', 'Y']
         hidden_nodes = []
-        manipulative_variables = ['R', 'G', 'B', 'P1', 'P2']
+        manipulative_variables = ['A', 'B', 'C']
 
-    elif graph_name == 'LightTunnel_WrongBG':
-        # Misspecification: a spurious intra-cluster edge B -> G inside the
-        # color cluster {R, G, B}. Together with the U_color-induced
-        # bidirected B <-> G this forms a bow, so P(Y | do(B)) is NOT
-        # identifiable from this assumed DAG — the fine-grained exploration
-        # set loses its best singleton arm {B} (B is the highest-weight
-        # vis_3 channel). Under the coarsening {R,G,B}|{P1,P2}|{Y}, both
-        # endpoints of B->G sit in cluster {R,G,B}; Lee-2019 latent
-        # projection drops the edge, so the C-DAG is identical to
-        # LightTunnel's and CCBO is provably unaffected.
+    elif graph_name == 'ConfoundedCluster_WrongBC':
+        # Misspecification: a spurious intra-cluster edge B -> C inside the
+        # confounded cluster {B, C}. Together with the U-induced bidirected
+        # B <-> C this forms a bow, so P(Y | do(B)) is NOT identifiable from
+        # this assumed DAG — the fine-grained exploration set loses its best
+        # singleton target {B} (B has the largest effect on Y). Under the
+        # coarsening {A}|{B,C}|{Y}, both endpoints of B->C sit in cluster
+        # {B,C}; Lee-2019 latent projection drops the edge, so the C-DAG is
+        # identical to ConfoundedCluster's and CCBO is provably unaffected.
         dag_edges = [
-            ('B', 'G'),
-            ('R', 'Y'), ('G', 'Y'), ('B', 'Y'),
-            ('P1', 'Y'), ('P2', 'Y'),
+            ('B', 'C'),
+            ('A', 'Y'), ('B', 'Y'), ('C', 'Y'),
         ]
-        nodes = ['R', 'G', 'B', 'P1', 'P2', 'Y']
+        nodes = ['A', 'B', 'C', 'Y']
         hidden_nodes = []
-        manipulative_variables = ['R', 'G', 'B', 'P1', 'P2']
+        manipulative_variables = ['A', 'B', 'C']
 
     elif graph_name in ('SimplifiedCoralGraph', 'SimplifiedCoralGraph_NoST'):
         # SEM from SimplifiedCoralGraph.py:
@@ -327,6 +351,11 @@ def get_dag_edges_from_sem(graph_name):
         nodes = ['N', 'L', 'TE', 'C', 'S', 'T', 'D', 'P', 'O', 'CO', 'Y']
         hidden_nodes = []
         manipulative_variables = ['N', 'O', 'C', 'T', 'D']
+
+    elif graph_name in _REGISTERED_GRAPHS:
+        g = _REGISTERED_GRAPHS[graph_name]
+        return (list(g['dag_edges']), list(g['nodes']),
+                list(g['hidden_nodes']), list(g['manipulative_variables']))
 
     else:
         raise ValueError(f"Unknown graph: {graph_name}")

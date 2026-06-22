@@ -36,8 +36,8 @@ def get_original_graph(experiment, observational_samples, true_obs=None):
         return CoralGraph(observational_samples, true_obs)
     elif experiment == 'SimplifiedCoralGraph':
         return SimplifiedCoralGraph(observational_samples, true_obs)
-    elif experiment in ('LightTunnel', 'LightTunnel_WrongBG'):
-        return LightTunnel(observational_samples)
+    elif experiment in ('ConfoundedCluster', 'ConfoundedCluster_WrongBC'):
+        return ConfoundedCluster(observational_samples)
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
 

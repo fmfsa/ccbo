@@ -14,7 +14,8 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ccbo.visualize import plot_dag, plot_convergence_and_final, plot_wrong_edge_comparison
+from ccbo.visualize import plot_dag
+from ccbo.metrics import gap, pa_gap, reference_optimum
 from ccbo.rccbo.visualize import plot_rccbo_with_partition_evolution
 
 RESULTS_DIR = 'results'
@@ -51,16 +52,14 @@ def generate_dag_figure():
 # ---------------------------------------------------------------------------
 
 def _method_sort_key(method):
-    """Order methods as BO, CBO, GACBO, CCBO-* (sorted), then anything else."""
+    """Order methods as BO, CBO, QCBO-* (sorted), then anything else."""
     if method == 'BO':
         return (0, method)
     if method == 'CBO':
         return (1, method)
-    if method == 'GACBO':
+    if method.startswith('QCBO'):
         return (2, method)
-    if method.startswith('CCBO'):
-        return (3, method)
-    return (4, method)
+    return (3, method)
 
 
 def generate_comparison_figure(seeds=5):
@@ -90,7 +89,7 @@ def generate_comparison_figure(seeds=5):
         max_len = max(len(c) for c in curves)
         arr = np.array([c + [c[-1]] * (max_len - len(c)) for c in curves])
         mean = arr.mean(0)
-        sem = arr.std(0) / np.sqrt(arr.shape[0])
+        sem = arr.std(0, ddof=1) / np.sqrt(arr.shape[0])
         xs = np.arange(len(mean))
         ls = '--' if method == 'BO' else '-'
         color = palette[i % len(palette)]
@@ -99,7 +98,7 @@ def generate_comparison_figure(seeds=5):
 
     ax.set_xlabel('Optimization step')
     ax.set_ylabel(r'Best $Y$ found ($\downarrow$)')
-    ax.set_title(f'{BENCHMARK}: BO vs CBO vs GACBO vs CCBO')
+    ax.set_title(f'{BENCHMARK}: BO vs CBO vs QCBO')
     ax.legend(fontsize=9, loc='best', framealpha=0.9)
     ax.grid(alpha=0.25)
     fig.tight_layout()
@@ -115,100 +114,59 @@ def generate_comparison_figure(seeds=5):
 # ---------------------------------------------------------------------------
 
 def generate_wrong_edge_figure(seeds=5):
+    """Benchmark-agnostic wrong-edge robustness figure.
+
+    The ``wrong_edge`` pkl is a list of per-(partition, misspec, seed) result
+    dicts. We draw one best-so-far curve per (partition, misspec): colour by
+    partition, solid for the correct DAG, dashed for each misspecification.
+    The companion numbers live in the LaTeX table (``emit_wrong_edge_table``).
+    """
     data = _load(f'{BENCHMARK}_wrong_edge_{seeds}seeds.pkl')
     if data is None:
         return
 
-    if BENCHMARK == 'LightTunnel':
-        _generate_lt_wrong_edge_figure(data)
-        return
-
-    out = os.path.join(FIGURES_DIR, f'{BENCHMARK}_wrong_edge.pdf')
-    plot_wrong_edge_comparison(data, output_path=out)
-    print(f"Saved {out}")
-
-
-def _generate_lt_wrong_edge_figure(results):
-    """Generic wrong-edge figure for LightTunnel results.
-
-    Groups results by (partition_label, misspec) and produces:
-      - lt_wrong_edge_convergence.pdf: 4 curves, mean +/- SE across seeds
-      - lt_wrong_edge_bar.pdf: final-Y bar chart for the 4 conditions
-    """
     from collections import defaultdict
-
     grouped = defaultdict(list)
-    for r in results:
+    for r in data:
         grouped[(r['partition_label'], r['misspec'])].append(r['global_opt'])
 
-    # Order: fine/correct, fine/misspec, coarse/correct, coarse/misspec
-    keys = sorted(grouped.keys(),
-                  key=lambda k: ('coarse' not in k[0].lower() and 'rgb' not in k[0].lower(),
-                                 k[1] == 'correct',
-                                 k))
-    # Above gives a deterministic order; we want a stable one:
-    # ('finest','correct'), ('finest','WrongBG'),
-    # ('{RGB},{P1P2}','correct'), ('{RGB},{P1P2}','WrongBG')
-    canonical_order = [
-        ('finest', 'correct'),
-        ('finest', 'WrongBG'),
-        ('{RGB},{P1P2}', 'correct'),
-        ('{RGB},{P1P2}', 'WrongBG'),
-    ]
-    keys = [k for k in canonical_order if k in grouped]
+    partitions = sorted({k[0] for k in grouped},
+                        key=lambda p: (p != 'finest', p))   # finest first
+    misspecs = sorted({k[1] for k in grouped},
+                      key=lambda m: (m != 'correct', m))    # correct first
+    palette = plt.get_cmap('tab10').colors
+    part_color = {p: palette[i % len(palette)] for i, p in enumerate(partitions)}
+    mis_ls = {m: ('-' if m == 'correct' else ls)
+              for m, ls in zip(misspecs, ['-', '--', ':', '-.'])}
 
-    colors = {'finest': '#d62728', '{RGB},{P1P2}': '#1f77b4'}
-    linestyles = {'correct': '-', 'WrongBG': '--'}
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
+    for part in partitions:
+        for mis in misspecs:
+            curves = grouped.get((part, mis))
+            if not curves:
+                continue
+            max_len = max(len(c) for c in curves)
+            arr = np.array([c + [c[-1]] * (max_len - len(c)) for c in curves])
+            mean = arr.mean(0)
+            sem = (arr.std(0, ddof=1) / np.sqrt(arr.shape[0])
+                   if arr.shape[0] > 1 else np.zeros_like(mean))
+            xs = np.arange(len(mean))
+            label = f"{part} — {mis}"
+            ax.plot(xs, mean, color=part_color[part], ls=mis_ls[mis], lw=2,
+                    label=label, zorder=5)
+            ax.fill_between(xs, mean - sem, mean + sem,
+                            color=part_color[part], alpha=0.15)
 
-    # Convergence figure
-    fig, ax = plt.subplots(figsize=(6, 4))
-    for part, mis in keys:
-        curves = grouped[(part, mis)]
-        max_len = max(len(c) for c in curves)
-        arr = np.array([c + [c[-1]] * (max_len - len(c)) for c in curves])
-        mean = arr.mean(0)
-        sem = arr.std(0) / np.sqrt(arr.shape[0])
-        xs = np.arange(len(mean))
-        label = f"{part} — {'correct DAG' if mis == 'correct' else 'WrongBG DAG'}"
-        ax.plot(xs, mean, color=colors[part], ls=linestyles[mis], lw=2,
-                label=label, zorder=5)
-        ax.fill_between(xs, mean - sem, mean + sem, color=colors[part],
-                        alpha=0.15)
     ax.set_xlabel("Optimization step")
-    ax.set_ylabel(r"Best $Y$ found  ($\downarrow$ if min, $\uparrow$ if max)")
-    ax.set_title("LightTunnel wrong-edge robustness")
+    ax.set_ylabel(r"Best $Y$ found ($\downarrow$)")
+    ax.set_title(f"{BENCHMARK}: robustness under misspecification")
     ax.legend(fontsize=8.5, loc='best', framealpha=0.9)
     ax.grid(alpha=0.25)
     fig.tight_layout()
-    out_conv = os.path.join(FIGURES_DIR, 'lt_wrong_edge_convergence.pdf')
-    fig.savefig(out_conv, dpi=200, bbox_inches='tight')
+    out = os.path.join(FIGURES_DIR, f'{BENCHMARK}_wrong_edge.pdf')
+    fig.savefig(out, dpi=200, bbox_inches='tight')
     plt.close(fig)
-    print(f"Saved {out_conv}")
-
-    # Bar chart of final Y
-    fig, ax = plt.subplots(figsize=(5.2, 3.6))
-    labels = []
-    means, sems, bar_colors = [], [], []
-    for part, mis in keys:
-        curves = grouped[(part, mis)]
-        finals = np.array([c[-1] for c in curves])
-        means.append(finals.mean())
-        sems.append(finals.std() / np.sqrt(len(finals)))
-        labels.append(f"{part}\n{mis}")
-        bar_colors.append(colors[part])
-    x = np.arange(len(keys))
-    ax.bar(x, means, yerr=sems, color=bar_colors, alpha=0.85,
-           capsize=4, edgecolor='black', linewidth=0.5)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("Final best $Y$")
-    ax.set_title("LightTunnel: misspecification gap")
-    ax.grid(alpha=0.25, axis='y')
-    fig.tight_layout()
-    out_bar = os.path.join(FIGURES_DIR, 'lt_wrong_edge_bar.pdf')
-    fig.savefig(out_bar, dpi=200, bbox_inches='tight')
-    plt.close(fig)
-    print(f"Saved {out_bar}")
+    print(f"Saved {out}")
 
 
 # ---------------------------------------------------------------------------
@@ -234,10 +192,11 @@ def generate_sweep_figure(seeds=10):
                                           key=lambda kv: -kv[1][0]):
         finals = np.array(finals)
         jitter = rng.uniform(-0.08, 0.08)
+        sem = finals.std(ddof=1) / np.sqrt(len(finals)) if len(finals) > 1 else 0.0
         ax.errorbar(nparts + jitter, finals.mean(),
-                    yerr=finals.std() / np.sqrt(len(finals)),
+                    yerr=sem,
                     fmt='o', capsize=3, ms=6)
-        ax.annotate(label.replace('CCBO-', ''), (nparts + jitter, finals.mean()),
+        ax.annotate(label.replace('QCBO-', ''), (nparts + jitter, finals.mean()),
                     textcoords='offset points', xytext=(6, 4), fontsize=7)
     ax.set_xlabel('Partition fineness (number of clusters incl. $\\{Y\\}$)')
     ax.set_ylabel(r'Final best $Y$ ($\downarrow$)')
@@ -258,20 +217,40 @@ def generate_sweep_figure(seeds=10):
 TABLES_DIR = os.path.join('paper', 'tables')
 
 
+def _sem(arr):
+    arr = np.asarray(arr, dtype=float)
+    return arr.std(ddof=1) / np.sqrt(len(arr)) if len(arr) > 1 else 0.0
+
+
 def emit_main_table(seeds=10):
-    """LaTeX rows for the main-results table (mean ± s.e. of final Y)."""
+    """LaTeX rows for the main-results table.
+
+    Columns: Method & Final Y & GAP & PA-GAP (each mean ± s.e. over seeds).
+    GAP / PA-GAP follow the survey's standardized definitions (ccbo.metrics)
+    and are normalized against the reference optimum y* (known oracle value
+    for CompleteGraph/ConfoundedCluster, else the best value observed).
+    """
     data = _load(f'{BENCHMARK}_main_{seeds}seeds.pkl')
     if data is None:
         return
     os.makedirs(TABLES_DIR, exist_ok=True)
     methods = sorted({m for s in data for m in data[s]}, key=_method_sort_key)
+
+    all_trajs = [data[s][m]['global_opt'] for s in data for m in data[s]]
+    y_star = reference_optimum(BENCHMARK, all_trajs, task='min')
+    print(f"[{BENCHMARK}] reference optimum y* = {y_star:.3f}")
+
     lines = []
     for m in methods:
-        finals = np.array([data[s][m]['global_opt'][-1]
-                           for s in data if m in data[s]])
-        sem = finals.std() / np.sqrt(len(finals))
+        trajs = [data[s][m]['global_opt'] for s in data if m in data[s]]
+        finals = np.array([t[-1] for t in trajs])
+        gaps = np.array([gap(t, y_star, 'min') for t in trajs])
+        pags = np.array([pa_gap(t, y_star, 'min') for t in trajs])
         label = m.replace('{', '\\{').replace('}', '\\}')
-        lines.append(f"{label} & ${finals.mean():.3f} \\pm {sem:.3f}$ \\\\")
+        lines.append(
+            f"{label} & ${finals.mean():.3f} \\pm {_sem(finals):.3f}$ & "
+            f"${gaps.mean():.3f} \\pm {_sem(gaps):.3f}$ & "
+            f"${pags.mean():.3f} \\pm {_sem(pags):.3f}$ \\\\")
     out = os.path.join(TABLES_DIR, f'{BENCHMARK}_main.tex')
     with open(out, 'w') as f:
         # \bottomrule lives inside the included file: \input followed by
@@ -302,18 +281,17 @@ def emit_wrong_edge_table(seeds=10):
             if p != part:
                 continue
             finals = np.array([per_seed[s] for s in sorted(per_seed)])
-            sem = finals.std() / np.sqrt(len(finals))
+            sem = _sem(finals)
             if mis == 'correct' or not base:
-                gap = '---'
+                gap_str = '---'
             else:
                 seeds_common = sorted(set(per_seed) & set(base))
                 diffs = np.array([per_seed[s] - base[s] for s in seeds_common])
-                gap = f"${diffs.mean():+.3f} \\pm " \
-                      f"{diffs.std()/np.sqrt(len(diffs)):.3f}$"
+                gap_str = f"${diffs.mean():+.3f} \\pm {_sem(diffs):.3f}$"
             label_p = p.replace('{', '\\{').replace('}', '\\}')
             lines.append(
                 f"{label_p} & {mis} & {num_es[(p, mis)]} & "
-                f"${finals.mean():.3f} \\pm {sem:.3f}$ & {gap} \\\\")
+                f"${finals.mean():.3f} \\pm {sem:.3f}$ & {gap_str} \\\\")
     out = os.path.join(TABLES_DIR, f'{BENCHMARK}_wrong_edge.tex')
     with open(out, 'w') as f:
         # \bottomrule lives inside the included file (see emit_main_table).
@@ -361,7 +339,8 @@ def print_multi_seed_summary(seeds=5):
         finals = [data[s][method]['global_opt'][-1]
                   for s in data if method in data[s]]
         if finals:
-            mean, std = np.mean(finals), np.std(finals)
+            mean = np.mean(finals)
+            std = np.std(finals, ddof=1) if len(finals) > 1 else 0.0
             print(f"  {method:35s}: ${mean:.2f} \\pm {std:.2f}$  (n={len(finals)})")
 
 
@@ -370,7 +349,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--benchmark', default='CompleteGraph',
                         choices=['CompleteGraph', 'SimplifiedCoralGraph',
-                                 'LightTunnel'])
+                                 'ConfoundedCluster'])
     parser.add_argument('--seeds', default=10, type=int)
     parser.add_argument('--only', default=None,
                         choices=[None, 'dag', 'comparison', 'wrong_edge',

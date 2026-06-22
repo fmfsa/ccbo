@@ -24,6 +24,10 @@ venv/
 results/
 results_*/
 
+# Vendored external benchmark (35 MB: binaries, wandb runs, run logs).
+# Placed/cloned locally, not part of this project's source.
+third_party/
+
 # Paper build artefacts (keep .tex and final .pdf)
 paper/*.aux
 paper/*.log
