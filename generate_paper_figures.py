@@ -349,7 +349,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--benchmark', default='CompleteGraph',
                         choices=['CompleteGraph', 'SimplifiedCoralGraph',
-                                 'ConfoundedCluster'])
+                                 'ConfoundedCluster', 'Tier1Graph'])
     parser.add_argument('--seeds', default=10, type=int)
     parser.add_argument('--only', default=None,
                         choices=[None, 'dag', 'comparison', 'wrong_edge',

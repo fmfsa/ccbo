@@ -34,6 +34,7 @@ import numpy as np
 Y_STAR = {
     'CompleteGraph': -3.60,       # mu*({B,D}); see scripts/completegraph_arm_values.py
     'ConfoundedCluster': -4.50,   # mu*({A,B,C}); see scripts/confoundedcluster_arm_values.py
+    'Tier1Graph': -4.50,          # mu*({B,D,E}); see scripts/tier1graph_arm_values.py
 }
 
 _EPS = 1e-12

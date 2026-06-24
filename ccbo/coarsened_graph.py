@@ -157,8 +157,14 @@ class CoarsenedGraph(GraphStructure):
             for combo in itertools.combinations(M, r):
                 _add_combo(frozenset(combo))
 
-        # Always include every POMIS element as well (it is identifiable by
-        # definition, but may exceed max_intervention_size limit above).
+        # Also consider every POMIS element. NOTE: the same
+        # max_intervention_size budget applies via _add_combo — a POMIS element
+        # whose size exceeds the cap is intentionally dropped, not force-added.
+        # This is deliberate: under a single/limited-lever intervention budget
+        # the corresponding multi-cluster arm is simply out of budget, and it is
+        # exactly this cap that isolates the Tier-2 arm-deletion demonstration
+        # (cap=1 makes the optimum a singleton so its deletion is unrecoverable).
+        # If the cap is >= |M| the cap is inert and all POMIS elements are kept.
         for combo in self._pomis_sets:
             _add_combo(combo)
 

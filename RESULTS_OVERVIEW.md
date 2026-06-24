@@ -27,7 +27,7 @@ QCBO-finest **is the CBO algorithm at the identity partition** (Prop. 1): explor
 | Ecology (max) | {C,N,O},{D,T} | 9.27 | finest | 5.023 ± 0.036 | 0.099 ± 0.067 | 0.001 ± 0.001 |
 | | | | coarse | 4.983 ± 0.051 | 0.286 ± 0.083 | 0.020 ± 0.008 |
 
-> **Caveat:** GAP is improvement *relative to each method's initial incumbent*, and `y*` is an extreme/oracle reference (sometimes attained outside the searched domain — e.g. epidemiology's optimizer has L≈736) — read as *competitive ranking*, not an attainment fraction.
+> **Caveat:** GAP is improvement *relative to each method's initial incumbent* **plus a discovery-speed bonus** (it rewards early plateaus), and `y*` is an extreme/oracle reference (sometimes attained outside the searched domain — e.g. epidemiology's optimizer has L≈736) — read as *competitive ranking / speed*, **not** an attainment fraction or absolute-Y ranking. Sharp case: **Synthetic-2** coarse GAP 0.490 > finest 0.370 while coarse final Y −0.511 is *much worse* than finest −1.856 (coarse "wins GAP" by plateauing instantly). Hence the sample-efficiency point below is restricted to datasets with *comparable* final Y.
 >
 > **Sample-efficiency effect (new, from the corrected ES):** with the faithful CBO exploration set, finest spreads the 100-trial budget across many arms on high-dim datasets (Synthetic 7 arms, Ecology 31), so its GAP *drops*; coarse keeps few cluster-arms and **beats finest on GAP** for ToyGraph/Synthetic/Healthcare/Ecology at comparable final Y. Coarsening buys sample efficiency, not just robustness.
 

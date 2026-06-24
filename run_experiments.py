@@ -36,16 +36,19 @@ from ccbo.cbo.utils import compute_coverage, define_initial_data_CBO
 # Unified experiment protocol
 # ---------------------------------------------------------------------------
 # One protocol per benchmark, applied to EVERY method (BO, CBO, all CCBO
-# partitions). In particular `max_intervention_size` — the cap on how many
-# C-DAG cluster vertices may be jointly intervened on — is a property of the
-# benchmark, never of the method, so no method gets a larger search space
-# than another. ConfoundedCluster uses cap 1 because it serves only as the
-# Tier-2 invariance demonstration (paired correct-vs-misspecified comparisons
-# within the same partition); it carries no cross-method performance claim.
+# partitions). `max_intervention_size` — the cap on how many C-DAG *cluster*
+# vertices may be jointly intervened on — is a property of the benchmark, never
+# of the method. All three benchmarks here are run UNCAPPED (cap = |M|, i.e. 3):
+# the cap counts clusters, not variables, so a small cap would let a coarse
+# partition reach a joint arm the fine partition is forbidden — an unfair
+# cross-partition artifact. Uncapped, the coarse exploration set is a subset of
+# the fine one, so robustness is read off paired within-partition comparisons,
+# not a cross-partition final-Y "win".
 
 PROTOCOL = {
     'CompleteGraph':        {'max_intervention_size': 3},
-    'ConfoundedCluster':    {'max_intervention_size': 1},
+    'Tier1Graph':           {'max_intervention_size': 3},
+    'ConfoundedCluster':    {'max_intervention_size': 3},
 }
 
 
@@ -131,6 +134,19 @@ REPRESENTATIVE_COARSENINGS_CONFOUNDEDCLUSTER = [
 ]
 
 
+# Tier1Graph M = {B, D, E}; the lossless coarse partition merges {B, D}
+# (the optimum do(B,D,E) is the union of whole clusters, so coarsening is
+# lossless; the misspecified edge B->D is intra-cluster -> invisible).
+REPRESENTATIVE_COARSENINGS_TIER1GRAPH = [
+    # Finest (identity on M): each manipulable variable is its own cluster.
+    ([frozenset({'B'}), frozenset({'D'}), frozenset({'E'}), frozenset({'Y'})],
+     'QCBO-finest'),
+    # Lossless coarse: merge {B, D} (the intra-cluster edge B->D lives here).
+    ([frozenset({'B', 'D'}), frozenset({'E'}), frozenset({'Y'})],
+     'QCBO-{BD},{E}'),
+]
+
+
 def _get_representative_coarsenings(benchmark):
     if benchmark == 'CompleteGraph':
         return REPRESENTATIVE_COARSENINGS_COMPLETEGRAPH
@@ -138,6 +154,8 @@ def _get_representative_coarsenings(benchmark):
         return REPRESENTATIVE_COARSENINGS_SIMPLIFIEDCORALGRAPH
     elif benchmark == 'ConfoundedCluster':
         return REPRESENTATIVE_COARSENINGS_CONFOUNDEDCLUSTER
+    elif benchmark == 'Tier1Graph':
+        return REPRESENTATIVE_COARSENINGS_TIER1GRAPH
     else:
         return []
 
@@ -336,25 +354,45 @@ def run_wrong_edge_condition(benchmark, seeds, trials, output_dir,
                               num_interventions=10, type_cost=1,
                               initial_num_obs_samples=100):
     """
-    Two misspec types × two partitions × seeds.
+    Two misspecifications × two partitions × seeds.
 
-    CompleteGraph misspec types:
-      - 'correct': no misspecification
-      - 'NoBC': missing inter-cluster edge B→C (severe: removes B from all MIS
-                 under identity; invisible inside {B,C,D} cluster)
-      - 'NoCD': missing intra-cluster edge C→D (inside {B,C,D}; invisible there)
+    CompleteGraph (Tier-1, prior bias) — M = {B, D, E}; non-manip {A, C}:
+      - 'correct': no misspecification.
+      - 'NoBC': delete edge B→C (B manip → C non-manip). No arm is added or
+                removed (|ES| unchanged at both partitions); it only corrupts
+                the GP prior of the affected arms — a convergence-speed cost
+                that self-heals with interventional data.
+      - 'NoCD': delete edge C→D (C non-manip → D manip). Also prior-bias only;
+                at the coarse partition it is redundant at the quotient level
+                (C→E keeps the {C}→{D,E} cluster edge alive), so coarse is
+                exactly immune.
+      Partitions: finest {B}|{D}|{E} and coarse {B}|{D,E} (the only two valid
+      coarsenings of M; every partition keeping B,D together is a cyclic C-DAG).
 
-    Partitions:
-      - identity: each variable singleton
-      - {B,C,D},{E}: B→C and C→D are both internal
+    ConfoundedCluster (Tier-2, arm deletion) — see that branch below.
     """
-    if benchmark not in ('CompleteGraph', 'ConfoundedCluster'):
+    if benchmark not in ('CompleteGraph', 'Tier1Graph', 'ConfoundedCluster'):
         print(f"Wrong-edge condition not implemented for {benchmark}")
         return {}
 
     graph, obs, full_obs = _load_graph(benchmark, initial_num_obs_samples)
 
-    if benchmark == 'CompleteGraph':
+    if benchmark == 'Tier1Graph':
+        # Tier-1 (prior bias) demo: M = {B, D, E}; the lossless coarse
+        # partition merges {B, D}. NoBC deletes the edge B->C (C a non-manip
+        # mediator) — no arm is added/removed (|ES| unchanged), it only biases
+        # the prior mean of every B-containing arm (incl. the optimum, since
+        # C->Y is not cut), which self-heals. The coarse partition is immune by
+        # redundancy: D->C keeps the {B,D}->C cluster edge alive.
+        finest = [frozenset({'B'}), frozenset({'D'}), frozenset({'E'}), frozenset({'Y'})]
+        coarser = [frozenset({'B', 'D'}), frozenset({'E'}), frozenset({'Y'})]
+        conditions = [
+            (finest,  'finest',     'Tier1Graph',       'correct'),
+            (finest,  'finest',     'Tier1Graph_NoBC',  'NoBC'),
+            (coarser, '{BD},{E}',   'Tier1Graph',       'correct'),
+            (coarser, '{BD},{E}',   'Tier1Graph_NoBC',  'NoBC'),
+        ]
+    elif benchmark == 'CompleteGraph':
         # Manipulable-only partitions for CompleteGraph (M = {B, D, E})
         finest = [frozenset({'B'}), frozenset({'D'}), frozenset({'E'}), frozenset({'Y'})]
         coarser = [frozenset({'B'}), frozenset({'D', 'E'}), frozenset({'Y'})]
@@ -599,7 +637,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Unified CCBO experiment runner')
     parser.add_argument('--benchmark', default='CompleteGraph',
-                        choices=['CompleteGraph', 'ConfoundedCluster'],
+                        choices=['CompleteGraph', 'Tier1Graph', 'ConfoundedCluster'],
                         help='Which benchmark to run')
     parser.add_argument('--condition', default='main',
                         choices=['main', 'wrong_edge', 'sweep'],

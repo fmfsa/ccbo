@@ -8,9 +8,10 @@ must be resolved before RCCBO results are reported anywhere.
 
 - **GACBO is not run as a head-to-head baseline.** Mukherjee 2024's RJ-MCMC
   sampler over DAGs has no faithful public implementation, and an idealized
-  enumeration handed the true graph would be an optimistic stand-in
-  (`ccbo/baselines/gacbo.py` is kept for reference but unused). We instead
-  compare on the CausalBO benchmark via its own scorer. The benchmark ships a
+  enumeration handed the true graph would be an optimistic stand-in (the former
+  `ccbo/baselines/gacbo.py` stub has been removed; see
+  `ccbo/baselines/__init__.py`). We instead compare on the CausalBO benchmark
+  via its own scorer. The benchmark ships a
   baseline literally named "CCBO" (unrelated to our method) — we renamed ours
   to **QCBO** to avoid the clash.
 

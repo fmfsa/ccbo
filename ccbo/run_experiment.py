@@ -38,6 +38,8 @@ def get_original_graph(experiment, observational_samples, true_obs=None):
         return SimplifiedCoralGraph(observational_samples, true_obs)
     elif experiment in ('ConfoundedCluster', 'ConfoundedCluster_WrongBC'):
         return ConfoundedCluster(observational_samples)
+    elif experiment in ('Tier1Graph', 'Tier1Graph_NoBC'):
+        return Tier1Graph(observational_samples)
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
 

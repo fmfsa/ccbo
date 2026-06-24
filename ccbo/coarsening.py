@@ -241,6 +241,10 @@ def get_hidden_confounders(graph_name):
         return [
             ('U', ['B', 'C']),
         ]
+    elif graph_name in ('Tier1Graph', 'Tier1Graph_NoBC'):
+        # No latent confounders: Tier1Graph is a plain DAG, so the NoBC
+        # misspecification only biases priors (Tier-1), never identifiability.
+        return []
     elif graph_name in _REGISTERED_GRAPHS:
         return [(lat, list(vs))
                 for lat, vs in _REGISTERED_GRAPHS[graph_name]['confounders']]
@@ -329,6 +333,33 @@ def get_dag_edges_from_sem(graph_name):
         nodes = ['A', 'B', 'C', 'Y']
         hidden_nodes = []
         manipulative_variables = ['A', 'B', 'C']
+
+    elif graph_name == 'Tier1Graph':
+        # Lossless-coarsening self-healing benchmark. C is a non-manipulable
+        # mediator with two parents B, D; the misspecification deletes B -> C.
+        dag_edges = [
+            ('B', 'C'), ('D', 'C'),
+            ('C', 'Y'), ('B', 'Y'), ('D', 'Y'), ('E', 'Y'),
+        ]
+        nodes = ['B', 'D', 'E', 'C', 'Y']
+        hidden_nodes = []
+        manipulative_variables = ['B', 'D', 'E']
+
+    elif graph_name == 'Tier1Graph_NoBC':
+        # Misspecified Tier1Graph: the edge B -> C removed. No arm changes
+        # identifiability (|ES| unchanged) — it only corrupts the prior mean of
+        # every B-containing arm (the C -> Y path is not cut by intervening on
+        # {B,D,E}), so even the optimal arm do(B,D,E) is mis-primed and then
+        # self-heals. Under the coarse partition {B,D}|{E} the cluster edge
+        # {B,D} -> C survives via D -> C (redundancy), so the C-DAG is
+        # byte-identical to Tier1Graph's and QCBO is provably unaffected.
+        dag_edges = [
+            ('D', 'C'),
+            ('C', 'Y'), ('B', 'Y'), ('D', 'Y'), ('E', 'Y'),
+        ]
+        nodes = ['B', 'D', 'E', 'C', 'Y']
+        hidden_nodes = []
+        manipulative_variables = ['B', 'D', 'E']
 
     elif graph_name in ('SimplifiedCoralGraph', 'SimplifiedCoralGraph_NoST'):
         # SEM from SimplifiedCoralGraph.py:

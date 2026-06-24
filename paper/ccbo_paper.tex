@@ -755,7 +755,14 @@ whose reported optimizer lies far outside the interventional ranges) --- so the
 absolute GAP is uniformly deflated across all methods; we therefore read GAP and
 PA-GAP as relative rankings, not attainment fractions, and locate \QCBO{}'s
 contribution in the robustness and price analyses rather than in benchmark GAP
-magnitudes.
+magnitudes. Moreover GAP is measured \emph{relative to each method's own initial
+incumbent} and carries a discovery-speed bonus, so it rewards fast early plateaus
+and is not an absolute-$Y$ ranking: a method with fewer arms can post a higher GAP
+at an equal or even \emph{worse} final $Y$. \emph{Synthetic-2} is the sharp case
+--- \QCBO{}-coarse scores GAP $0.49$ vs.\ finest's $0.37$ while its final
+$Y=-0.51$ is far worse than finest's $-1.86$ --- which is why the
+sample-efficiency reading of \S\ref{sec:main_results} is stated only where finest
+and coarse reach comparable final $Y$.
 
 \section{Conclusion}
 \label{sec:conclusion}
