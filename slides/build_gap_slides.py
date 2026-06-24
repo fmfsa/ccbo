@@ -1,4 +1,5 @@
-"""Build a 2-slide explainer for GAP and PA-GAP (python-pptx)."""
+"""Build the QCBO explainer deck: DAG->quotient + GAP/PA-GAP (python-pptx)."""
+import os
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
@@ -163,16 +164,17 @@ def build_slide(spec):
 
     # ---- RIGHT column: formula card + curve ----
     rx, rw = 6.75, 6.0
-    fy, fh = 2.07, 2.35
+    fy, fh = 2.07, spec.get('formula_h', 2.35)
     card(s, rx, fy, rw, fh, WHITE, line=BORDER, radius=0.06)
     textbox(s, rx + 0.34, fy + 0.22, rw - 0.68, 0.4,
             [[(spec['formula_head'], 14.5, accent, True, SANS)]])
-    textbox(s, rx + 0.34, fy + 0.70, rw - 0.68, 1.15, spec['formula'],
+    textbox(s, rx + 0.34, fy + 0.70, rw - 0.68, fh - 1.30, spec['formula'],
             space_after=6, line_spacing=1.0)
     textbox(s, rx + 0.34, fy + fh - 0.62, rw - 0.68, 0.6,
             [[(spec['legend'], 10.5, MUTED, False, SANS)]], line_spacing=1.04)
 
-    add_curve(s, rx + 0.05, 4.62, rw - 0.1, 2.05, spec['chart'], accent, tint)
+    chy = fy + fh + 0.2
+    add_curve(s, rx + 0.05, chy, rw - 0.1, 6.67 - chy, spec['chart'], accent, tint)
     textbox(s, rx + 0.05, 6.72, rw - 0.1, 0.55,
             [[(spec['caption'], 12, MUTED, False, SANS, 'italic')]],
             line_spacing=1.05)
@@ -199,7 +201,8 @@ SLIDE1 = {
         [("GAP   = ( R + speed ) / ( 1 + (T-1)/T )", 13.5, NAVY, True, MONO)],
     ],
     'legend': "y0 = starting best   ·   y_best = best found   ·   y* = best "
-              "possible (oracle)   ·   t* = trial best first reached   ·   T = total trials",
+              "possible (oracle)   ·   t* = trial the best was first reached   ·   "
+              "T = number of optimization trials (the budget)",
     'caption': "The curve = how far you've improved over time. GAP reads its final "
                "height (≈0.85) and how early it got there — a snapshot, not the path.",
 }
@@ -215,23 +218,140 @@ SLIDE2 = {
         [("Early counts more — ", 16, INK, True, SANS),
          ("each trial is weighted, with earlier progress worth more.", 16, INK, False, SANS)],
     ],
+    'formula_h': 2.72,
     'idea': "Two methods can reach the same final value but score differently: "
-            "the one that improves EARLY and holds it wins. PA-GAP = the "
-            "(early-weighted) area under the improvement curve.",
+            "the one that improves EARLY and holds it wins. Because early trials "
+            "weigh most, even a perfect run caps near 1/2 (its maximum is "
+            "(T+1)/(2T)) — so PA-GAP scores look smaller than GAP's 0–1.",
     'formula_head': "Formula  (higher = better)",
     'formula': [
-        [("R_t = clip( (y0 - best_t) / (y0 - y*),  0, 1)", 13, INK, False, MONO)],
-        [("w_t = (T - (t-1)) / T          (early-trial weight)", 12.5, INK, False, MONO)],
-        [("PA-GAP = (1/T) · Σ_t  R_t · w_t", 13.5, NAVY, True, MONO)],
+        [("R_t = clip( (y0 - best_t)/(y0 - y*), 0, 1)", 12, INK, False, MONO)],
+        [("w_t = (T - (t-1)) / T      (early weight)", 12, INK, False, MONO)],
+        [("PA-GAP = (1/T) · Σ_t  R_t · w_t", 12.5, NAVY, True, MONO)],
+        [("0  <=  PA-GAP  <=  (T+1)/(2T)  ~  0.5", 12, CORAL, True, MONO)],
     ],
-    'legend': "best_t = best-so-far at trial t   ·   R_t = how far you've improved "
-              "(0–1)   ·   w_t = weight that fades over the run   ·   T = total trials",
+    'legend': "best_t = best-so-far at trial t   ·   R_t = improvement so far "
+              "(0–1)   ·   T = number of optimization trials (the budget)",
     'caption': "PA-GAP adds up the shaded area under the whole curve (early trials "
                "weighted more) — it rewards the journey, not just the endpoint.",
 }
 
+# =============================================================================
+# DAG -> quotient slides
+# =============================================================================
+FIGDIR = "slides/figures"
+# pixel dims of the rendered PNGs (from slides/render_dag_pngs.py)
+DIMS = {
+    'ToyGraph_dag.png': (567, 888), 'ToyGraph_cdag.png': (567, 610),
+    'Synthetic_dag.png': (746, 1166), 'Synthetic_cdag.png': (746, 1166),
+    'Chain_dag.png': (746, 888), 'Chain_cdag.png': (567, 888),
+    'Healthcare_dag.png': (746, 1444), 'Healthcare_cdag.png': (567, 1444),
+    'Epidemiology_dag.png': (746, 1166), 'Epidemiology_cdag.png': (567, 1166),
+    'Ecology_dag.png': (1453, 1166), 'Ecology_cdag.png': (1100, 1444),
+    'Protein_dag.png': (1453, 1444), 'Protein_cdag.png': (1100, 1166),
+}
+# node-encoding colours (match the matplotlib figures)
+C_MANIP = RGBColor(0xE0, 0x76, 0x3A)
+C_OTHER = RGBColor(0x7F, 0xB2, 0xD4)
+C_TARGET = RGBColor(0xCD, 0xE0, 0x5A)
+C_CONF = RGBColor(0xB3, 0x20, 0x2C)
+
+
+def add_image_fit(slide, name, bx, by, bw, bh):
+    """Place an image scaled to fit inside (bx,by,bw,bh), centred, aspect kept."""
+    w, h = DIMS[name]; ar = w / h
+    if bw / bh > ar:
+        ih = bh; iw = bh * ar
+    else:
+        iw = bw; ih = bw / ar
+    ix = bx + (bw - iw) / 2; iy = by + (bh - ih) / 2
+    slide.shapes.add_picture(os.path.join(FIGDIR, name),
+                             Inches(ix), Inches(iy), width=Inches(iw), height=Inches(ih))
+
+
+def legend_row(s, y):
+    items = [('oval', C_MANIP, "manipulable"), ('oval', C_OTHER, "other variable"),
+             ('oval', C_TARGET, "target Y"), ('rrect', C_MANIP, "cluster (quotient)"),
+             ('dash', C_CONF, "latent confounder")]
+    x = 1.05
+    for kind, color, label in items:
+        if kind == 'oval':
+            sh = s.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(y), Inches(0.22), Inches(0.22))
+        elif kind == 'rrect':
+            sh = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y + 0.02), Inches(0.34), Inches(0.18))
+        else:
+            sh = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y + 0.09), Inches(0.30), Inches(0.045))
+        sh.fill.solid(); sh.fill.fore_color.rgb = color
+        sh.line.fill.background(); sh.shadow.inherit = False
+        wsw = 0.34 if kind == 'rrect' else (0.30 if kind == 'dash' else 0.22)
+        wlab = 0.14 + 0.082 * len(label)
+        textbox(s, x + wsw + 0.12, y - 0.05, wlab, 0.32,
+                [[(label, 11.5, INK, False, SANS)]], anchor=MSO_ANCHOR.MIDDLE)
+        x += wsw + 0.12 + wlab + 0.34
+
+
+def build_concept():
+    s = prs.slides.add_slide(BLANK)
+    bg = s.background.fill; bg.solid(); bg.fore_color.rgb = WHITE
+    textbox(s, 0.6, 0.42, 12.1, 0.8,
+            [[("What QCBO operates on: from DAG to quotient", 31, NAVY, True, SERIF)]])
+    textbox(s, 0.62, 1.22, 12.1, 0.7,
+            [[("QCBO groups the manipulable variables into clusters and reasons over the ", 16, MUTED, False, SANS),
+              ("quotient", 16, TEAL, True, SANS),
+              (" graph — the cluster-level causal graph — instead of the full DAG.", 16, MUTED, False, SANS)]],
+            line_spacing=1.08)
+    add_image_fit(s, 'Synthetic_dag.png', 0.9, 2.05, 4.1, 3.95)
+    textbox(s, 0.7, 6.02, 4.5, 0.4,
+            [[("Full causal DAG  (Synthetic / CompleteGraph)", 13, MUTED, False, SANS)]],
+            align=PP_ALIGN.CENTER)
+    textbox(s, 5.15, 3.05, 3.0, 0.8, [[("→", 44, TEAL, True, SANS)]],
+            align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+    textbox(s, 5.15, 3.95, 3.0, 0.5, [[("merge  {D, E}", 15, NAVY, True, SANS)]],
+            align=PP_ALIGN.CENTER)
+    add_image_fit(s, 'Synthetic_cdag.png', 8.3, 2.05, 4.1, 3.95)
+    textbox(s, 8.1, 6.02, 4.5, 0.4,
+            [[("Quotient C-DAG  (what QCBO uses)", 13, TEAL, True, SANS)]],
+            align=PP_ALIGN.CENTER)
+    legend_row(s, 6.72)
+
+
+def build_gallery(title, rows):
+    s = prs.slides.add_slide(BLANK)
+    bg = s.background.fill; bg.solid(); bg.fore_color.rgb = WHITE
+    textbox(s, 0.6, 0.42, 12.1, 0.8, [[(title, 28, NAVY, True, SERIF)]])
+    top, bot = 1.5, 7.15
+    rowh = (bot - top) / len(rows)
+    for i, (stem, name, part) in enumerate(rows):
+        ry = top + i * rowh
+        textbox(s, 0.55, ry, 2.55, rowh,
+                [[(name, 17, NAVY, True, SANS)], [(part, 12, MUTED, False, SANS)]],
+                anchor=MSO_ANCHOR.MIDDLE, space_after=3, line_spacing=1.05)
+        ih = rowh - 0.34
+        add_image_fit(s, f'{stem}_dag.png', 3.15, ry + 0.1, 3.5, ih)
+        textbox(s, 6.7, ry, 0.7, rowh, [[("→", 26, TEAL, True, SANS)]],
+                align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+        add_image_fit(s, f'{stem}_cdag.png', 7.5, ry + 0.1, 3.5, ih)
+    textbox(s, 0.6, 7.12, 12.1, 0.32,
+            [[("fine DAG  →  quotient C-DAG   (orange = manipulable, box = cluster, "
+               "dashed red = latent confounder)", 11, MUTED, False, SANS, 'italic')]],
+            align=PP_ALIGN.CENTER)
+
+
 build_slide(SLIDE1)
 build_slide(SLIDE2)
+build_concept()
+build_gallery("Benchmark structures and their quotients  (1 / 3)", [
+    ('ToyGraph',     "ToyGraph / Synth-2", "cluster {X, Z}"),
+    ('Chain',        "Chain-hard",         "cluster {Z, W}"),
+])
+build_gallery("Benchmark structures and their quotients  (2 / 3)", [
+    ('Epidemiology', "Epidemiology", "cluster {L, B}"),
+    ('Healthcare',   "Healthcare",   "cluster {Aspirin, Statin}"),
+])
+build_gallery("Benchmark structures and their quotients  (3 / 3)", [
+    ('Ecology', "Ecology", "clusters {C,N,O}, {D,T}"),
+    ('Protein', "Protein", "clusters {Akt,Mek}, {PKA,PKC}"),
+])
 
 # Speaker notes
 prs.slides[0].notes_slide.notes_text_frame.text = (
