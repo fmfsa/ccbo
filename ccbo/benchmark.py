@@ -232,7 +232,7 @@ def _coarse_partition(clusters):
 
 
 def make_coarsened_graph(dg, ds, obs, partition, max_intervention_size=1,
-                         num_mc_samples=2000):
+                         num_mc_samples=2000, assumed_graph_name=None):
     """CoarsenedGraph subclass compatible with the benchmark's BO_CBO/CBO.py.
 
     The benchmark CBO keys do-functions as ``compute_do_{"_".join(vars)}`` and
@@ -240,6 +240,13 @@ def make_coarsened_graph(dg, ds, obs, partition, max_intervention_size=1,
     Our base CoarsenedGraph concatenates names and lacks those methods, so we
     adapt here. Target evaluations delegate to the benchmark's DiscoveredGraph
     (the single-draw SEM objective every method is scored against).
+
+    ``assumed_graph_name`` overrides the structure used for the C-DAG /
+    exploration set / priors (defaults to ``ds``, the correct graph). Pass a
+    registered *misspecified* variant (e.g. ``ds + '_WrongX1X2'``) to run the
+    DAG-misspecification stress test; target evaluations still use the true
+    ``dg`` SEM, so trajectories under correct/misspecified structure are
+    directly comparable.
     """
     from ccbo.coarsened_graph import CoarsenedGraph
 
@@ -266,7 +273,8 @@ def make_coarsened_graph(dg, ds, obs, partition, max_intervention_size=1,
 
     return BenchmarkCoarsenedGraph(
         dg, partition, ds, obs, max_intervention_size=max_intervention_size,
-        num_mc_samples=num_mc_samples, assumed_graph_name=ds)
+        num_mc_samples=num_mc_samples,
+        assumed_graph_name=assumed_graph_name or ds)
 
 
 def _initial_interventional_data(dg, ES, num_interventions, task, seed):
@@ -298,7 +306,8 @@ def _initial_interventional_data(dg, ES, num_interventions, task, seed):
 
 def run_qcbo_benchmark(ds, coarse_clusters=None, seed=0, num_trials=40,
                        num_interventions=10, max_intervention_size=None,
-                       out_csv=None, method_label='QCBO'):
+                       out_csv=None, method_label='QCBO',
+                       assumed_graph_name=None):
     """Run QCBO (finest if coarse_clusters is None, else coarse) on a benchmark
     dataset through the benchmark's CBO loop; write a progress CSV.
 
@@ -329,7 +338,8 @@ def run_qcbo_benchmark(ds, coarse_clusters=None, seed=0, num_trials=40,
                  else _coarse_partition(coarse_clusters))
 
     cg = make_coarsened_graph(dg, ds, obs, partition,
-                              max_intervention_size=max_intervention_size)
+                              max_intervention_size=max_intervention_size,
+                              assumed_graph_name=assumed_graph_name)
     ES, _, manip_vars = cg.get_sets()
     ranges = dg.get_interventional_ranges()
     dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}
