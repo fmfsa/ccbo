@@ -33,6 +33,8 @@
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shapes}
 
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
@@ -434,6 +436,70 @@ not confounded by a price of coarsening --- and (iii) $\mathrm{corr}(X_1,X_2)
 \approx 0.70$, so the confounding is real. The full specification, coefficients,
 and oracle checks are in App.~\ref{app:scm}.
 
+\begin{figure*}[t]\centering
+\begin{tikzpicture}[>=Stealth,
+  obs/.style={circle,draw,minimum size=6.5mm,inner sep=0pt,font=\small},
+  man/.style={obs,fill=orange!25},
+  tgt/.style={obs,fill=yellow!55},
+  cl/.style={draw,dashed,rounded corners,inner sep=3.2mm},
+  bi/.style={<->,dashed,red!70!black}]
+  % ---- fine DAG ----
+  \node[man] (X1) at (0,2.4) {$X_1$};
+  \node[man] (X2) at (1.15,2.4) {$X_2$};
+  \node[man] (X3) at (2.3,2.4) {$X_3$};
+  \node[man] (X4) at (4.1,2.4) {$X_4$};
+  \node[man] (X5) at (5.25,2.4) {$X_5$};
+  \node[obs] (M2) at (0.5,1.1) {$M_2$};
+  \node[obs] (M1) at (2.3,1.1) {$M_1$};
+  \node[obs] (M3) at (4.1,1.1) {$M_3$};
+  \node[obs] (Z)  at (5.25,1.1) {$Z$};
+  \node[tgt] (Y)  at (2.7,-0.3) {$Y$};
+  \draw[->] (X3) -- (X2);
+  \draw[->] (X1) -- (M2); \draw[->] (X2) -- (M2); \draw[->] (X3) -- (M1);
+  \draw[->] (X4) -- (M3); \draw[->] (X5) -- (M3); \draw[->] (X5) -- (Z);
+  \draw[->] (X1) to[bend right=12] (Y); \draw[->] (X2) -- (Y); \draw[->] (X3) -- (Y);
+  \draw[->] (M1) -- (Y); \draw[->] (M2) -- (Y); \draw[->] (M3) -- (Y); \draw[->] (Z) -- (Y);
+  \draw[bi,bend left=28] (X1) to (X2);
+  \draw[bi,bend left=30] (X1) to (X5);
+  \begin{scope}[on background layer]
+    \node[cl,fit=(X1)(X2)(X3),label=above:{\small$C_1$}] {};
+    \node[cl,fit=(X4)(X5),label=above:{\small$C_2$}] {};
+  \end{scope}
+  \node at (2.6,-1.1) {\small (a) fine DAG with coarse partition};
+\end{tikzpicture}
+\hspace{1.4cm}
+\begin{tikzpicture}[>=Stealth,
+  obs/.style={circle,draw,minimum size=6.5mm,inner sep=0pt,font=\small},
+  man/.style={obs,fill=orange!25},
+  tgt/.style={obs,fill=yellow!55},
+  bi/.style={<->,dashed,red!70!black}]
+  % ---- quotient C-DAG ----
+  \node[man] (C1) at (0.6,2.4) {$C_1$};
+  \node[man] (C2) at (3.2,2.4) {$C_2$};
+  \node[obs] (M2) at (-0.1,1.1) {$M_2$};
+  \node[obs] (M1) at (1.3,1.1) {$M_1$};
+  \node[obs] (M3) at (2.8,1.1) {$M_3$};
+  \node[obs] (Z)  at (4.0,1.1) {$Z$};
+  \node[tgt] (Y)  at (1.9,-0.3) {$Y$};
+  \draw[->] (C1) -- (M1); \draw[->] (C1) -- (M2); \draw[->] (C1) to[bend right=14] (Y);
+  \draw[->] (C2) -- (M3); \draw[->] (C2) -- (Z);
+  \draw[->] (M1) -- (Y); \draw[->] (M2) -- (Y); \draw[->] (M3) -- (Y); \draw[->] (Z) -- (Y);
+  \draw[bi,bend left=22] (C1) to (C2);
+  \node at (1.9,-1.1) {\small (b) quotient C-DAG};
+\end{tikzpicture}
+\caption{\textbf{ClusterBench10.} Manipulable variables (orange) are partitioned into
+clusters $C_1=\{X_1,X_2,X_3\}$ and $C_2=\{X_4,X_5\}$; non-manipulable mediators and the
+target are atomic. Dashed red edges are latent confounding: $U_{12}$ gives
+$X_1\!\leftrightarrow\!X_2$ (\emph{intra}-$C_1$), $U_{15}$ gives $X_1\!\leftrightarrow\!X_5$
+(\emph{cross}-cluster). In the quotient (b) the intra-cluster confounding
+$X_1\!\leftrightarrow\!X_2$ disappears while the cross-cluster $X_1\!\leftrightarrow\!X_5$
+becomes $C_1\!\leftrightarrow\!C_2$. Hence the \emph{intra} bow (adding $X_1\!\to\!X_2$) is
+invisible to the quotient, whereas the \emph{inter} bow (adding $X_1\!\to\!X_5$) completes a
+cluster-level bow $C_1\!\to\!C_2$ alongside $C_1\!\leftrightarrow\!C_2$, rendering $\do(C_1)$
+non-identifiable and deleting it from the coarse exploration set.}
+\label{fig:clusterbench10}
+\end{figure*}
+
 \paragraph{The fair-comparison seam.}
 The methodological crux of a head-to-head under misspecification is that every
 method must optimize the \emph{same} objective; only the \emph{structure each
@@ -483,16 +549,14 @@ run (Prop.~\ref{prop:invariance}). The takeaway is that \QCBO{} attains robustne
   ($\Delta=0$); gating methods incur a permanent Tier-2 gap; \CBO{} a recoverable
   Tier-1 cost; \BO{} is invariant but worst in absolute $Y$.}
   \label{tab:headline}
-  % \input{tables/clusterbench10_headline}   % scripts/emit_misspec_table.py
-  \TODO{\texttt{\textbackslash input\{tables/clusterbench10\_headline\}} --- final 10-seed numbers}
+  \input{tables/clusterbench10_headline}
 \end{table}
 \begin{figure}[t]\centering
-  % \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
+  \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
   \caption{Best-so-far trajectories, correct (solid) vs misspecified (dashed), per
   method. \QCBO{}-coarse curves coincide; gating methods' dashed curves stay
   permanently above; \CBO{} recovers.}
   \label{fig:overlays}
-  \TODO{generate \texttt{figures/clusterbench10\_overlays}}
 \end{figure}
 
 \subsection{Which misspecifications are protected?}
@@ -519,16 +583,14 @@ protection holds iff the perturbed edge is invisible in the quotient.
   coarse partition, and measured $\Delta$ for \QCBO{}-coarse vs the field. The
   intra/inter bow rows are the headline contrast.}
   \label{tab:taxonomy}
-  % \input{tables/clusterbench10_taxonomy}
-  \TODO{\texttt{\textbackslash input\{tables/clusterbench10\_taxonomy\}}}
+  \input{tables/clusterbench10_taxonomy}
 \end{table}
 \begin{figure}[t]\centering
-  % \includegraphics[width=\linewidth]{figures/clusterbench10_dial}
+  \includegraphics[width=\linewidth]{figures/clusterbench10_dial}
   \caption{Degradation vs perturbation severity (left) and the inter-cluster-bow
   control (right). \QCBO{}-coarse is flat at $0$ on intra-cluster edits and jumps on
   the inter bow.}
   \label{fig:dial}
-  \TODO{generate \texttt{figures/clusterbench10\_dial}}
 \end{figure}
 
 \subsection{Coarsening also accelerates search}
@@ -709,8 +771,47 @@ is untouched (\CBO{}: adjacency vs SEM functions; \CEO{}: candidate-graph poster
 vs SEM class; CoCaBO: FCM functors), plus the byte-identity verification of the
 objective under every perturbation.}
 
+\section{Full head-to-head on the standardized benchmark}\label{app:headtohead}
+On the \emph{correct} DAG we score every method by the benchmark's own GAP and PA-GAP
+against its oracle optima (mean$\pm$s.e., 5 seeds, $T{=}100$). Tables~\ref{tab:headtohead-gap}
+and~\ref{tab:headtohead-pagap} give the full field; \QCBO{}-finest is full-knowledge
+\CBO{} (Prop.~\ref{prop:identity}), and \QCBO{}-coarse uses the domain partition. DCBO and
+model-based \CBO{} (MCBO) appear here but are excluded from the misspecification study of
+\S\ref{sec:exp} for the reasons in \S\ref{sec:limitations} (a dash denotes a method that does
+not run on that dataset). These numbers establish that \QCBO{} is competitive with the field
+\emph{before} any misspecification is introduced; the paper's contribution is what happens
+\emph{under} misspecification (\S\ref{sec:exp}) and the sample-efficiency trade
+(\S\ref{sec:exp-eff}).
+
+\begin{table}[t]\centering
+\caption{GAP@100 on the standardized \textsc{CausalBO} benchmark; best per column in bold.}
+\label{tab:headtohead-gap}
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Method} & ToyGraph & Synth-2 & Synthetic & Health. & Epidem. & Ecology \\
+\midrule
+\input{tables/benchmark_comparison}
+\end{tabular}
+\end{table}
+
+\begin{table}[t]\centering
+\caption{PA-GAP@100 on the standardized \textsc{CausalBO} benchmark; best per column in bold.}
+\label{tab:headtohead-pagap}
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Method} & ToyGraph & Synth-2 & Synthetic & Health. & Epidem. & Ecology \\
+\midrule
+\input{tables/benchmark_comparison_pagap}
+\end{tabular}
+\end{table}
+
 \section{Standardized benchmark: datasets and partitions}\label{app:datasets}
-\TODO{per-dataset DAG/C-DAG figures and chosen partitions.}
+\TODO{per-dataset DAG and C-DAG drawn in TikZ (same convention as
+Fig.~\ref{fig:clusterbench10}) and the chosen coarse partition for each of ToyGraph,
+Synthetic-2, Synthetic, Healthcare, Epidemiology, Ecology. (matplotlib PDFs currently exist
+under paper/figures/; to be redrawn in TikZ.)}
 
 \section{Full results}\label{app:fulltables}
 \TODO{all perturbations $\times$ both cap regimes (cap${=}1$ Tier-2 headline +
