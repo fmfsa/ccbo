@@ -34,6 +34,7 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{graphicx}
+\usepackage{adjustbox}  % max width=... shrinks oversized tables to fit (never enlarges)
 \usepackage{xcolor}
 \usepackage{enumitem}
 \usepackage{tikz}
@@ -546,14 +547,14 @@ $\Delta=0$: its trajectory is byte-for-byte identical to the correctly-specified
 run (Prop.~\ref{prop:invariance}). The takeaway is that \QCBO{} attains robustness
 \emph{without} discarding the causal prior the way \BO{} does.
 
-\begin{table}[t]\centering
+\begin{table*}[t]\centering
   \caption{Paired degradation $\Delta$ (misspecified $-$ correct) on ClusterBench10
   under the intra-cluster bow (mean$\pm$s.e.). \QCBO{}-coarse is byte-identical
   ($\Delta=0$); gating methods incur a permanent Tier-2 gap; \CBO{} a recoverable
   Tier-1 cost; \BO{} is invariant but worst in absolute $Y$.}
   \label{tab:headline}
-  \input{tables/clusterbench10_headline}
-\end{table}
+  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_headline}}
+\end{table*}
 \begin{figure}[t]\centering
   \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
   \caption{Best-so-far trajectories, correct (solid) vs misspecified (dashed), per
@@ -581,13 +582,13 @@ inter-cluster bow as the panel where \QCBO{}-coarse leaves zero. This is the exa
 empirical realization of the scope in Remark~\ref{rem:structural_robustness}:
 protection holds iff the perturbed edge is invisible in the quotient.
 
-\begin{table}[t]\centering
+\begin{table*}[t]\centering
   \caption{Conditions characterization: per perturbation, its locus relative to the
   coarse partition, and measured $\Delta$ for \QCBO{}-coarse vs the field. The
   intra/inter bow rows are the headline contrast.}
   \label{tab:taxonomy}
-  \input{tables/clusterbench10_taxonomy}
-\end{table}
+  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_taxonomy}}
+\end{table*}
 \begin{figure}[t]\centering
   \includegraphics[width=\linewidth]{figures/clusterbench10_dial}
   \caption{Degradation vs perturbation severity (left) and the inter-cluster-bow
@@ -611,28 +612,28 @@ rewards early plateaus, so the comparison is read only where final $Y$ is
 comparable; the contribution is a favourable resolution/efficiency trade whenever
 the optimum does not require splitting a cluster (Prop.~\ref{prop:price}).
 
-\begin{table}[t]\centering
+\begin{table*}[t]\centering
   \caption{Sample efficiency on the standardized \textsc{CausalBO} benchmark
   (final $Y$, GAP, PA-GAP; 5 seeds, $T{=}100$). \QCBO{}-finest is full-knowledge
   \CBO{}; \QCBO{}-coarse uses the domain partition.}
   \label{tab:efficiency}
   \small
-  \begin{tabular}{@{}llccc@{}}
+  \adjustbox{max width=\linewidth}{\begin{tabular}{@{}llccc@{}}
     \toprule
     \textbf{Dataset} & \textbf{Method} & \textbf{Final $Y$} & \textbf{GAP} & \textbf{PA-GAP} \\
     \midrule
     \input{tables/benchmark_gap}
-  \end{tabular}
-\end{table}
+  \end{tabular}}
+\end{table*}
 
 % =============================================================================
 \section{Related work}
 \label{sec:related}
-\begin{table}[t]\centering
+\begin{table*}[t]\centering
   \caption{Positioning of \QCBO{} against the nearest methods.}
   \label{tab:related}
   \small
-  \begin{tabular}{@{}llll@{}}
+  \adjustbox{max width=\linewidth}{\begin{tabular}{@{}llll@{}}
     \toprule
     \textbf{Method} & \textbf{What is learned} & \textbf{Structural prior} & \textbf{Search space} \\
     \midrule
@@ -644,8 +645,8 @@ the optimum does not require splitting a cluster (Prop.~\ref{prop:price}).
     \midrule
     \QCBO{} (ours) & nothing & partition + C-DAG & ID-gated cluster unions \\
     \bottomrule
-  \end{tabular}
-\end{table}
+  \end{tabular}}
+\end{table*}
 The survey of \citet{anonymous2026cbobench} organizes the \CBO{} landscape along
 design axes --- graph knowledge, intervention representation, surrogate, decision
 rule --- and its ``unknown causal structure'' family contains only methods that
@@ -790,24 +791,24 @@ not run on that dataset). These numbers establish that \QCBO{} is competitive wi
 \caption{GAP@100 on the standardized \textsc{CausalBO} benchmark; best per column in bold.}
 \label{tab:headtohead-gap}
 \small
-\begin{tabular}{@{}lcccccc@{}}
+\adjustbox{max width=\linewidth}{\begin{tabular}{@{}lcccccc@{}}
 \toprule
 \textbf{Method} & ToyGraph & Synth-2 & Synthetic & Health. & Epidem. & Ecology \\
 \midrule
 \input{tables/benchmark_comparison}
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 \begin{table}[t]\centering
 \caption{PA-GAP@100 on the standardized \textsc{CausalBO} benchmark; best per column in bold.}
 \label{tab:headtohead-pagap}
 \small
-\begin{tabular}{@{}lcccccc@{}}
+\adjustbox{max width=\linewidth}{\begin{tabular}{@{}lcccccc@{}}
 \toprule
 \textbf{Method} & ToyGraph & Synth-2 & Synthetic & Health. & Epidem. & Ecology \\
 \midrule
 \input{tables/benchmark_comparison_pagap}
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 \section{Standardized benchmark: datasets and partitions}\label{app:datasets}
