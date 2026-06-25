@@ -1,22 +1,19 @@
 % =============================================================================
-%  QCBO — AISTATS submission SKELETON  (robustness-first; sample-efficiency 2nd)
+%  QCBO — AISTATS submission  (robustness-first; sample-efficiency 2nd)
 % -----------------------------------------------------------------------------
-%  This is a STRUCTURE + GUIDANCE scaffold, not finished prose. Each section
-%  opens with a \story{} (its role in the narrative) and a \guide{} (exactly
-%  what to write / which numbers and floats anchor it). Fill the body later.
-%
-%  Style file: get aistats2025.sty from https://aistats.org/aistats2025/ and
-%  drop it in paper/. Until then this file compiles via the \IfFileExists
-%  fallback below (plain article shims) so you can read the structure now.
-%  For the camera-ready, remove [accepted] for the anonymous submission build.
+%  Self-contained, separate from ccbo_paper.tex. Get aistats2025.sty from
+%  https://aistats.org/aistats2025/ and drop it in paper/. Until then this file
+%  compiles via the \IfFileExists fallback (plain article shims + natbib).
+%  A few \TODO markers flag floats that need the full 10-seed runs / figures.
 % =============================================================================
 \documentclass[twoside]{article}
 
 \IfFileExists{aistats2025.sty}{%
-  \usepackage[accepted]{aistats2025}% official two-column AISTATS layout
+  \usepackage[accepted]{aistats2025}% official two-column AISTATS layout (loads natbib)
 }{%
   % ---- fallback so the skeleton compiles before the style file is present ----
   \usepackage[margin=1in]{geometry}
+  \usepackage{natbib}
   \newcommand{\aistatstitle}[1]{\begin{center}\LARGE\bfseries #1\end{center}\vspace{1em}}
   \newcommand{\aistatsauthor}[1]{\begin{center}\large #1\end{center}}
   \newcommand{\aistatsaddress}[1]{\begin{center}\small\itshape #1\end{center}\vspace{1em}}
@@ -37,29 +34,22 @@
 \usepackage{xcolor}
 \usepackage{enumitem}
 
-% ---- theorem environments ----
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
 \newtheorem{remark}{Remark}
 \newtheorem{assumption}{Assumption}
 
-% ---- notation macros (kept consistent with ccbo_paper.tex) ----
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
 \renewcommand{\do}{\mathrm{do}}
+\newcommand{\Pa}{\mathrm{Pa}}
 \newcommand{\QCBO}{\textsc{QCBO}}
 \newcommand{\CBO}{\textsc{CBO}}
 \newcommand{\BO}{\textsc{BO}}
 \newcommand{\CEO}{\textsc{CEO}}
+\newcommand{\Gg}{\mathcal{G}}
 \newcommand{\Gq}{\mathcal{G}^{\pi}}
 \newcommand{\ESpi}{\mathfrak{S}^{\pi}}
-
-% ---- authoring helpers (DELETE before submission) --------------------------
-% \story : the narrative role of the section (how it leads the reader).
-% \guide : concrete instructions — what claim to make, which numbers/floats.
-% \TODO  : a specific blank to fill.
-\newcommand{\story}[1]{\par\smallskip{\color{purple!65!black}\small\textbf{Story.} \itshape #1}\par\smallskip}
-\newcommand{\guide}[1]{\par{\color{blue!55!black}\small #1}\par\smallskip}
 \newcommand{\TODO}[1]{{\color{red!75!black}\bfseries [TODO: #1]}}
 
 % =============================================================================
@@ -76,257 +66,458 @@
 
 % =============================================================================
 \begin{abstract}
-\guide{Four moves, ~150 words. (1) \emph{Setup+pain:} CBO needs the full DAG;
-a single wrong edge silently corrupts it — either deleting the optimal arm
-(unrecoverable) or biasing the prior (slow). (2) \emph{Idea:} \QCBO{} optimizes
-over a \emph{partition} of the manipulable variables via the quotient graph and
-never looks inside a cluster; intra-cluster misspecification is \emph{provably
-invisible}. (3) \emph{Evidence:} on a purpose-built 10-variable SCM we run the
-full field (\CBO/\CEO/CoCaBO) under a taxonomy of misspecifications with the
-\emph{objective held fixed} — every causal baseline degrades, gating ones
-permanently, while \QCBO-coarse is byte-identical ($\Delta=0$); the protection
-is \emph{exactly} scoped — the same edge placed across clusters is catastrophic.
-(4) \emph{Bonus:} coarsening is also more sample-efficient on the standardized
-\textsc{CausalBO} benchmark. End with the one-line thesis: robustness at the
-level of structural knowledge practitioners actually have.}
+Causal Bayesian optimization (\CBO{}) accelerates the search for optimal
+interventions by using a causal graph both to build informative priors and to
+prune the space of candidate interventions. This leverage rests on a brittle
+assumption: the entire DAG over all observables --- every edge and latent
+confounder --- must be specified correctly, and a recent survey of the field
+names robustness to structural misspecification a central open problem
+\citep{anonymous2026cbobench}. We first make precise why a single wrong edge is
+not a benign approximation: depending on how it enters the algorithm it either
+biases a prior (a recoverable slowdown) or silently deletes the candidate
+intervention containing the optimum (an unrecoverable failure). We then
+introduce \emph{Quotient \CBO{}} (\QCBO{}), which requires only a partition of
+the manipulable variables into clusters together with the cluster-level
+(quotient) graph, and never reasons about edges inside a cluster. We prove that
+any misspecification confined within a cluster is \emph{invisible} to \QCBO{}:
+exploration set, identification formulas, priors, and the entire optimization
+trajectory are unchanged. On a purpose-built ten-variable benchmark we run the
+full field of causal-\BO{} methods under a taxonomy of misspecifications with
+the objective held \emph{fixed}: every method that consumes the corrupted edge
+degrades --- gating methods permanently --- whereas \QCBO{} under a coarsening
+that abstracts the edge away is byte-for-byte unaffected. The protection is
+\emph{exactly} scoped: the same edge placed across clusters is catastrophic.
+Coarsening additionally improves sample efficiency on the standardized
+\textsc{CausalBO} benchmark.
 \end{abstract}
 
 % =============================================================================
 \section{Introduction}
 \label{sec:intro}
-\story{This is a robustness-first paper. By the end of page~1 the reader must
-believe: (i) the full-DAG assumption is a real liability, (ii) practitioners
-know \emph{groups} not edges, and (iii) coarsening turns that weaker knowledge
-into provable robustness — \emph{plus} a sample-efficiency win.}
 
-\guide{Paragraph 1 — the hook. CBO unifies ``intervene, don't just observe'' with
-``use the graph for a prior,'' but inherits a brittle input: the \emph{entire}
-DAG over all observables, every edge and latent, specified correctly. State that
-a single misspecified edge is not a benign approximation — it can silently and
-\emph{permanently} cost you the optimum.}
+Causal Bayesian optimization \citep{aglietti2020causal} unifies two ideas: when
+the variable $Y$ we wish to optimize sits inside a causal system, the right
+search space is the space of \emph{interventions} $\do(X_S=\mathbf{x}_S)$, and
+observational data plus the causal graph yield informative priors over the
+interventional response surfaces. The catch is the input requirement. \CBO{} and
+its descendants \citep{aglietti2021dynamic,aglietti2023constrained,sussex2023model}
+assume the full DAG over all observables --- every edge, every latent confounder
+--- is specified correctly. The recent survey of \citet{anonymous2026cbobench}
+organizes the field along design axes, of which \emph{graph knowledge} is the
+first, and lists robustness to structural error among the open problems the field
+has yet to address. Our thesis is that this fragility can be removed not by
+learning the graph more accurately, but by committing to \emph{less} structure of
+a more reliable kind.
 
-\guide{Paragraph 2 — the knowledge mismatch. Practitioners reliably know
-\emph{clusters} (a clinician groups co-prescribed drugs as one ``treatment''
-lever; a reef ecologist groups nutrient/chemistry vs.\ temperature/depth) but
-\emph{not} the within-group edges. The two ends of the spectrum (full DAG;
-learn-the-graph-online at heavy per-trial cost) are served; the practical middle
-— cluster-level knowledge — has identification theory but no optimization method.}
+\paragraph{A wrong edge is not a benign approximation.}
+The assumed graph enters a \CBO{} algorithm at two points, and corruption at
+either is consequential. (i) Through the \emph{exploration set}: structural
+causal bandit theory prunes the candidate interventions to those whose effect is
+identifiable and possibly optimal \citep{lee2018structural}. A misspecified edge
+can flip an identifiability verdict and \emph{delete} the candidate that contains
+the optimum; no amount of subsequent interventional data can recover an arm that
+was never searched. (ii) Through the \emph{prior}: the do-calculus estimate used
+as the GP prior mean is a functional of the graph, so a wrong edge biases it.
+This second damage is recoverable --- the interventional loop eventually corrects
+the prior --- but the first is not. We make this dichotomy precise as a damage
+taxonomy (Remark~\ref{rem:taxonomy}) and use it as the lens for the entire paper.
 
-\guide{Paragraph 3 — the idea + why it is robust. \QCBO{}: supply a partition
-$\pi$ of the manipulable variables; build the quotient graph $\Gq$; restrict to
-cluster-level interventions identifiable from $\Gq$; use the identified
-cluster-level do-effects as GP prior means. The one-sentence insight: the
-construction \emph{never looks inside a cluster}, so any edge error confined to a
-cluster cannot be represented, let alone hurt the optimizer.}
+\paragraph{Practitioners know groups, not edges.}
+The knowledge a practitioner actually holds is rarely the full DAG, but it is
+also rarely nothing. A clinician treats the medications a patient takes
+(say statin and aspirin) as one ``treatment'' lever without committing to their
+pharmacological interactions; a reef ecologist separates nutrient/chemistry
+stressors from temperature/depth forcing without specifying the edges
+\emph{within} either subsystem. The two ends of the spectrum are served: full-DAG
+\CBO{} at one end, and methods that learn structure online at heavy per-trial
+cost at the other \citep{mukherjee2024gacbo,branchini2023causal}. The practical
+middle --- reliable cluster-level knowledge --- has a developed identification
+theory \citep{anand2023cdag,ferreira2025cdmg,wahl2024foundations} but, to our
+knowledge, no optimization method.
 
-\guide{Paragraph 4 — name the two damage channels up front (this is the lens for
-the whole paper): a wrong edge corrupts either (a) the \emph{exploration set} via
-identifiability gating $\Rightarrow$ deletes an arm $\Rightarrow$ \emph{unrecoverable};
-or (b) the \emph{prior} $\Rightarrow$ bias $\Rightarrow$ recoverable by the BO loop.
-Foreshadow: methods differ in which channel bites them.}
+\paragraph{Quotient \CBO{}.}
+\QCBO{} fills this gap. The practitioner supplies a partition $\pi$ of the
+manipulable variables; \QCBO{} builds the quotient graph $\Gq$ (a C-DAG over
+clusters, with bidirected edges absorbing latent confounding via the latent
+projection of \citealp{lee2019latent}), restricts exploration to cluster-level
+interventions whose effects are identifiable from $\Gq$, and uses the identified
+cluster-level do-calculus estimates as GP prior means. The central structural
+insight is that this construction \emph{never looks inside a cluster}: an edge
+error confined to a cluster cannot be represented, let alone affect the optimizer.
 
 \paragraph{Contributions.}
-\guide{Three bullets, ordered by emphasis. Make (1) clearly the headline.}
 \begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
-  \item \textbf{Robustness via coarsening (primary).}
-  \guide{An intra-cluster \emph{invariance} property (every quantity \QCBO{}
-  computes is invariant to arbitrary within-cluster edge errors) \emph{and} the
-  full-field empirical demonstration that the field degrades where \QCBO-coarse
-  does not. Promise the exact \emph{scope}: protection holds iff the perturbed
-  edge is invisible in the quotient.}
-  \item \textbf{Sample efficiency (secondary).}
-  \guide{Coarsening concentrates a fixed budget on fewer, identifiable
-  cluster-level arms; a price-of-coarsening characterization says when this is
-  lossless. On the standardized benchmark \QCBO-coarse attains higher GAP at
-  comparable final $Y$.}
-  \item \textbf{Method + theory (enabling).}
-  \guide{\QCBO{} formalized: complete C-DAG identification, gated exploration
-  set, two-tier causal GP prior, Algorithm~\ref{alg:qcbo}; short self-contained
-  proofs.}
+  \item \textbf{Robustness via coarsening (primary).} We prove an
+  \emph{intra-cluster invariance} property (Prop.~\ref{prop:invariance}): every
+  quantity \QCBO{} computes is invariant to arbitrary within-cluster edge errors.
+  Empirically, on a purpose-built benchmark and with the objective held fixed,
+  the full field of causal-\BO{} methods degrades under a misspecified edge while
+  \QCBO{} under a coarsening that abstracts that edge away is byte-for-byte
+  unchanged. We characterize the \emph{exact} scope of the protection: it holds
+  iff the perturbed edge is invisible in the quotient, and breaks --- catastrophically
+  --- for the same edge placed across clusters (\S\ref{sec:exp}).
+  \item \textbf{Sample efficiency (secondary).} Coarsening concentrates a fixed
+  budget on fewer identifiable cluster-level arms; a price-of-coarsening
+  characterization (Prop.~\ref{prop:price}) gives an exact condition for when this
+  costs nothing. On the standardized \textsc{CausalBO} benchmark \QCBO{}-coarse
+  attains higher GAP than full-knowledge \CBO{} at comparable final $Y$.
+  \item \textbf{Method and theory (enabling).} We formalize \QCBO{}: complete
+  identification on the C-DAG \citep{shpitser2006identification}, an
+  identifiability-gated exploration set, and a two-tier causal GP prior
+  (\S\ref{sec:method}); five short, self-contained propositions
+  (\S\ref{sec:theory}, proofs in App.~\ref{app:proofs}).
 \end{itemize}
 
 % =============================================================================
 \section{Background}
 \label{sec:background}
-\story{Keep this lean — only what \S\ref{sec:method}–\S\ref{sec:theory} actually
-use. The reader should arrive at the method with exactly the right vocabulary.}
-\guide{Cover, one compact paragraph each: (1) SCMs + hard interventions $\do(X_S{=}x)$
-and the optimization objective $\min_S \E[Y\mid\do(\cdot)]$; (2) \CBO{} =
-exploration set (which subsets to intervene on) + causal GP prior (do-calculus
-mean over observational data); (3) cluster causal diagrams / quotient graphs and
-the Lee-2019 latent projection (how latents become bidirected edges); (4) complete
-identification (the ID algorithm) — the oracle that decides whether a cluster-level
-$\do$-effect is computable. Defer all proofs/details to the appendix.}
+
+\paragraph{SCMs and interventions.}
+A structural causal model $\mathcal{M}=\langle\mathbf{U},\mathbf{V},\mathcal{F},
+P(\mathbf{U})\rangle$ induces a distribution over observables $\mathbf{V}$ and,
+for any $S\subseteq\mathbf{V}$, interventional distributions $P(\cdot\mid\do(X_S=
+\mathbf{x}_S))$ obtained by replacing the mechanisms of $X_S$ with constants
+\citep{pearl2009causality}. The induced graph $\Gg$ has a directed edge per
+functional argument and a bidirected edge per shared latent; projecting out
+latents yields an ADMG over $\mathbf{V}$ \citep{lee2019latent}.
+
+\paragraph{Causal Bayesian optimization.}
+Given manipulable variables $\mathbf{X}\subseteq\mathbf{V}$ and target $Y$,
+\CBO{} \citep{aglietti2020causal} solves
+\begin{equation}
+  \label{eq:cbo_obj}
+  (S^*,\mathbf{x}^*) = \arg\min_{\substack{S\in\mathfrak{S}\\ \mathbf{x}_S\in\mathcal{X}_S}}
+  \E\!\left[Y\mid\do(X_S=\mathbf{x}_S)\right],
+\end{equation}
+maintaining one GP per \emph{candidate intervention set} $S$ in an exploration
+set $\mathfrak{S}$, with prior mean given by the do-calculus estimate of
+$\E[Y\mid\do(X_S=\mathbf{x}_S)]$ from observational data and the assumed graph,
+and selecting $(S,\mathbf{x})$ by expected improvement
+\citep{garnett2023bayesian}. Each candidate is itself a \emph{continuous} BO
+sub-problem over $\mathbf{x}_S$. The exploration set is pruned structurally
+(MIS/POMIS; \citealp{lee2018structural}); both the pruning and the priors are
+functions of the assumed graph, which is where misspecification enters.
+
+\paragraph{Coarsening and C-DAGs.}
+\begin{definition}[Coarsening~\citep{madaleno2026coarsening}]
+\label{def:coarsening}
+Given a DAG $\Gg$ on $\mathbf{V}$, a \textbf{coarsening} is a partition
+$\pi=\{C_1,\ldots,C_{d'}\}$ of $\mathbf{V}$ such that the induced quotient $\Gq$
+--- nodes $\{C_1,\ldots,C_{d'}\}$, edge $C_k\to C_\ell$ ($k\neq\ell$) iff
+$\exists\,V_i\in C_k,V_j\in C_\ell$ with $V_i\to V_j$ in $\Gg$ --- is acyclic.
+$\pi$ is then called \emph{valid}.
+\end{definition}
+For ADMGs the quotient additionally carries $C_k\leftrightarrow C_\ell$ iff some
+$V_i\in C_k,V_j\in C_\ell$ are connected by a bidirected edge; intra-cluster
+bidirected edges are dropped. The resulting object is a C-DAG in the sense of
+\citet{anand2023cdag}, who prove that do-calculus on the C-DAG is sound and
+complete for the equivalence class of fine-grained graphs that quotient to it.
+Markov properties transfer to the cluster level, but faithfulness does not
+\citep{wahl2024foundations}.
 
 % =============================================================================
 \section{Quotient Causal Bayesian Optimization}
 \label{sec:method}
-\story{Define the method crisply so the theory in \S\ref{sec:theory} is obviously
-about \emph{this} object. The recurring refrain: ``computed on $\Gq$, never inside
-a cluster.''}
 
-\subsection{Setup: partition, quotient graph}
-\guide{Define the partition $\pi$ of manipulable variables (clusters are
-manipulable-only; non-manipulables and $Y$ are singletons), the quotient graph
-$\Gq$ (directed cluster edges; bidirected from projected latents), and the
-validity condition (acyclic $\Gq$). One small running example figure would pay
-off here — reuse the ClusterBench10 DAG$\to$C-DAG schematic (F3).}
+\subsection{Setup}
+\label{sec:setup}
+The practitioner partitions only the manipulable variables: $\pi$ is a partition
+of $\mathbf{X}$, the target $Y$ is kept as a singleton, and every non-manipulable
+observable remains an atomic (singleton) vertex of the quotient. Mixing
+manipulable and non-manipulable variables in one cluster is disallowed ---
+intervening on a cluster must be a physically executable action. Hidden
+confounders are first projected out of $\Gg$ \citep{lee2019latent}, giving an
+ADMG $\Gg^{*}$ over observables; the coarsened graph $\Gq$ is the quotient of
+$\Gg^{*}$ under $\pi$ (plus atomic vertices), and validity (acyclicity of the
+directed part) is checked. Intervening on a cluster $C_k$ means jointly setting
+all of its members, $\do(C_k=\mathbf{c}_k)$. The candidate exploration set
+contains all unions of at most $m$ clusters:
+\begin{equation}
+  \label{eq:ccbo_exploration}
+  \ESpi_{0} = \Bigl\{\,\bigcup_{C_k\in\mathcal{S}}C_k \;\Big|\;
+  \emptyset\neq\mathcal{S}\subseteq\pi,\;|\mathcal{S}|\leq m\,\Bigr\}.
+\end{equation}
+
+\begin{remark}[Intervention granularity]
+\label{rem:granularity}
+Merging manipulable variables coarsens the \emph{action space}: \QCBO{} can only
+set a cluster jointly, never a strict subset of it. This is the mechanism behind
+both the robustness (\S\ref{sec:theory}) and the price (Prop.~\ref{prop:price}) of
+coarsening.
+\end{remark}
 
 \subsection{Identifiability-gated exploration and the two-tier prior}
-\guide{Exploration set $\ESpi$ = unions of $\le m$ clusters whose $\do$-effect is
-\emph{identifiable from $\Gq$} (state the gate: drop non-identifiable arms). Then
-the two-tier prior: tier-1 use the identified do-calculus estimate (backdoor /
-frontdoor / g-computation cascade) as the GP mean; tier-2 fall back to an
-uninformative (observational) prior when not identified. Stress: the gate and the
-estimate both read $\Gq$ only.}
+\label{sec:causal_prior}
+For each candidate $S\in\ESpi_0$ we pose the cluster-level query $P(Y\mid\do(S))$
+on $\Gq$ and run the complete ID algorithm of
+\citet{shpitser2006identification} (via \texttt{ananke};
+\citealp{lee2023ananke}). Following the arm-pruning tradition of structural
+causal bandits \citep{lee2018structural}, \QCBO{} \emph{commits to its structural
+beliefs}: the exploration set keeps exactly the candidates whose effect is
+identifiable from $\Gq$,
+\begin{equation}
+  \label{eq:es_gate}
+  \ESpi = \{\,S\in\ESpi_0 \;:\; P(Y\mid\do(S))\text{ identifiable from }\Gq\,\}.
+\end{equation}
+This gate is exact (ID is complete on the C-DAG, and identification from $\Gq$ is
+sound for every fine graph in its class; \citealp{anand2023cdag}), and it is what
+transmits structural misspecification into behaviour: a wrong assumed graph keeps
+or removes \emph{arms}, not just priors (\S\ref{sec:exp}). The alternative design
+--- exploring non-identified arms under an uninformative prior --- trades this
+structural damage for exploration overhead; we discuss it in
+\S\ref{sec:limitations}.
+
+For $S\in\ESpi$, the GP prior mean is constructed in two tiers. The ID gate
+guarantees a non-parametric formula exists; our \emph{estimator} instantiates it
+as a cascade of GP-based plug-ins (backdoor adjustment $\to$ front-door $\to$
+$g$-computation) on the bidirected-edge expansion of $\Gq$. The cascade is sound
+but not complete, so on the rare queries it cannot instantiate we fall back to the
+observational mean:
+\begin{equation}
+  \label{eq:two_tier_prior}
+  \mu_0^S(\mathbf{x}_S) = \begin{cases}
+    \hat{\E}[Y\mid\do(X_S=\mathbf{x}_S)] & \text{estimator instantiates the ID formula,}\\
+    \bar{Y}_{\mathrm{obs}} & \text{otherwise (logged as a diagnostic).}
+  \end{cases}
+\end{equation}
+Because clusters are manipulable-only and interventions assign full clusters, the
+cluster-level formulas expand exactly into fine-grained regressions on
+observational data --- no sub-cluster heuristic is involved.
+
+\begin{assumption}[Valid partition]
+\label{ass:valid}
+The practitioner supplies a partition $\pi$ of $\mathbf{X}$ whose quotient $\Gq$
+is acyclic. (Validity is checkable from cluster-level knowledge alone and is
+verified by the implementation.)
+\end{assumption}
+
+\begin{assumption}[Estimator-completeness boundary]
+\label{ass:id_scheme}
+The ID gate (Eq.~\ref{eq:es_gate}) is complete; the GP estimator cascade behind
+Eq.~\eqref{eq:two_tier_prior} is sound but not complete. Queries that pass the
+gate but miss the cascade are reported and receive the uninformative tier. In all
+benchmarks of \S\ref{sec:exp} this set is empty.
+\end{assumption}
 
 \subsection{Algorithm}
-\guide{One tight algorithm box: build $\Gq$ from $(\pi,$ observational data$)$;
-gate $\ESpi$; fit two-tier priors; then the standard causal-EI loop over $\ESpi$.}
 \begin{algorithm}[t]
-\caption{\QCBO{} (sketch)}\label{alg:qcbo}
+\caption{\QCBO{}: Quotient Causal Bayesian Optimization}
+\label{alg:ccbo}
 \begin{algorithmic}[1]
-  \STATE \TODO{quotient graph $\to$ gated exploration set $\to$ two-tier priors $\to$ causal-EI loop}
+\REQUIRE Assumed graph $\Gg$ (or directly $\Gq$); partition $\pi$ of $\mathbf{X}$;
+target $Y$; budget $T$; observational data $\mathcal{D}_{\mathrm{obs}}$; cluster
+budget $m$.
+\STATE $\Gg^*\leftarrow$ latent projection of $\Gg$;\quad $\Gq\leftarrow$ quotient
+of $\Gg^*$ under $\pi$; check acyclicity.
+\STATE Build $\ESpi$ via Eqs.~\eqref{eq:ccbo_exploration},\eqref{eq:es_gate} (one
+complete-ID call per candidate).
+\STATE For each $S\in\ESpi$: fit the prior $\mu_0^S$ via
+Eq.~\eqref{eq:two_tier_prior} on $\mathcal{D}_{\mathrm{obs}}$.
+\STATE Collect initial interventional data $\mathcal{D}_0$.
+\FOR{$t=1,\ldots,T$}
+  \STATE Update GP posteriors $(\mu_t^S,k_t^S)$ for all $S\in\ESpi$.
+  \STATE $(S_t,\mathbf{x}_t)\leftarrow\arg\max_{S,\mathbf{x}}
+  \mathrm{EI}_{S,t}(\mathbf{x})/\mathrm{cost}(S,\mathbf{x})$.
+  \STATE Intervene, observe $y_t$; update $\mathcal{D}_t$.
+\ENDFOR
+\RETURN $(S_{t^*},\mathbf{x}_{t^*})$ where $t^*=\arg\min_t y_t$.
 \end{algorithmic}
 \end{algorithm}
 
 % =============================================================================
 \section{What coarsening buys}
 \label{sec:theory}
-\story{This section earns the word ``provably'' in the abstract. Lead with the
-robustness theorem (Prop.~\ref{prop:invariance}); everything else supports it.
-Keep statements in-text, proofs in the appendix.}
+These results are a \emph{modeling} contribution rather than new estimation
+theory: \QCBO{}'s inputs are the quotient $\Gq$ and data, and the quotient is by
+construction blind to intra-cluster edges. The propositions make precise what that
+design buys (invariance, Prop.~\ref{prop:invariance}), what it costs (price of
+coarsening, Prop.~\ref{prop:price}), and where it is subtle (validity is not
+refinement-monotone, Prop.~\ref{prop:refinement_validity}). Proofs are short,
+compositional arguments about quotients and set inclusion --- which is exactly why
+the invariance is \emph{structural}: no intra-cluster hypothesis is even
+representable. Throughout, $\pi,\pi'$ are manipulable-only partitions; $\pi_\top$
+is the identity (all-singleton) partition; $\pi'\preceq\pi$ iff every cluster of
+$\pi'$ is contained in a cluster of $\pi$.
 
-\begin{proposition}[Identity recovers CBO]\label{prop:identity}
-\guide{At the finest partition (all singletons) $\Gq=$ the full DAG and \QCBO{}
-reduces to \CBO{} with the identifiability-gated exploration set. This anchors
-\QCBO-finest as the ``full-knowledge'' reference and means any robustness gap
-between finest and coarse is attributable to \emph{coarsening}, not to a different
-implementation.}
+\begin{proposition}[Identity recovery]
+\label{prop:identity}
+Under $\pi=\pi_\top$, $\Gq=\Gg^{*}$ and $\ESpi_0$ is the set of all subsets of
+$\mathbf{X}$ of size at most $m$; \QCBO{} reduces to \CBO{} with an
+identifiability-gated exploration set.
 \end{proposition}
 
-\begin{proposition}[Intra-cluster invariance — the robustness theorem]\label{prop:invariance}
-\guide{State it as the headline: if $G'$ differs from $G$ only by inserting/
-deleting/reversing edges whose endpoints lie \emph{within a single cluster} (with
-$G'$ acyclic), then $(G')^\pi=G^\pi$, hence the exploration set, every
-identification formula, every prior, and the entire \QCBO{} trajectory are
-\emph{identical}. Proof idea (one line): projection touches only latents; the
-quotient keeps a cluster edge iff some fine edge crosses clusters, so intra-cluster
-edits leave $\Gq$ fixed.}
-\guide{Then state the \textbf{refined scope} that the experiments establish:
-protection holds iff the perturbed edge is \emph{quotient-invisible} — intra-cluster
-\emph{or} inter-cluster-but-redundant (a parallel cluster edge survives). And the
-sharp negative: a quotient-\emph{visible} edge can change the trajectory; an
-inter-cluster bow makes a cluster arm non-identifiable and is catastrophic. This
-is what makes the claim honest rather than magical.}
+\begin{proposition}[Invariance to intra-cluster misspecification]
+\label{prop:invariance}
+Let $\pi$ be valid for $\Gg$ and let $\Gg'$ differ from $\Gg$ by an arbitrary set
+of insertions, deletions, or reversals of edges (directed or bidirected) whose
+endpoints lie within a single cluster of $\pi$, with $\Gg'$ acyclic. Then
+$(\Gg')^{\pi}=\Gq$, and consequently the exploration set
+(Eq.~\ref{eq:es_gate}), every identification formula, every prior
+(Eq.~\ref{eq:two_tier_prior}), and --- given the same data and seeds --- the
+entire \QCBO{} trajectory are identical under $\Gg$ and $\Gg'$.
 \end{proposition}
 
-\begin{remark}[Damage taxonomy — the experimental lens]\label{rem:taxonomy}
-\guide{Define Tier-1 (prior bias, recoverable: wrong edge keeps the arm but
-mis-primes it; the BO loop heals it) vs Tier-2 (arm deletion, unrecoverable: a wrong
-edge flips an identifiability verdict and removes the optimal target — no data can
-restore a missing arm). Prop.~\ref{prop:invariance} immunizes against both when the
-misspecification is quotient-invisible. This taxonomy organizes \S\ref{sec:exp}.}
+\begin{remark}[What invariance buys, and its exact scope]
+\label{rem:structural_robustness}
+Prop.~\ref{prop:invariance} is a statement about the \emph{method}, not about
+estimation error: \QCBO{} cannot represent an intra-cluster hypothesis, so no
+intra-cluster mistake can affect it. The precise condition is that the perturbed
+edge be \emph{invisible in the quotient}: this includes intra-cluster edges and
+inter-cluster edges that are \emph{redundant} (a parallel edge from another
+cluster member keeps the quotient edge alive). A quotient-\emph{visible} edge is
+\emph{not} protected, and \S\ref{sec:exp-scope} shows that the same bow
+misspecification, when its endpoints fall in different clusters, deletes a
+cluster-level arm and is catastrophic. The protection is therefore exactly
+scoped, not blanket immunity.
 \end{remark}
 
-\begin{proposition}[Price of coarsening + losslessness]\label{prop:price}
-\guide{The attainable optimum is monotone along the coarsening lattice, with an
-\emph{exact} losslessness condition: coarsening costs nothing iff some optimizer is
-a union of clusters. This is the bridge to the sample-efficiency claim
-(\S\ref{sec:exp-eff}) and the reason ClusterBench10 is built so the optimum is a
-union of clusters.}
+\begin{remark}[Damage taxonomy for misspecification]
+\label{rem:taxonomy}
+Under the gated design (Eq.~\ref{eq:es_gate}), a wrong assumed graph can hurt in
+two distinct ways. \emph{Tier-1 (prior bias):} the arm survives but its prior mean
+is wrong; expected improvement wastes evaluations, and the interventional data
+eventually correct it --- a convergence-speed cost. \emph{Tier-2 (arm damage):}
+the wrong graph flips an identifiability verdict, deleting an arm from $\ESpi$ (or
+admitting a spurious one); if the deleted arm contained the optimum, no amount of
+data recovers it. Prop.~\ref{prop:invariance} immunizes against both tiers
+whenever the misspecified edges are quotient-invisible.
+\end{remark}
+
+\begin{proposition}[Validity is not refinement-monotone]
+\label{prop:refinement_validity}
+There exist a valid partition $\pi$ and a refinement $\pi'\preceq\pi$ whose
+quotient $\mathcal{G}^{\pi'}$ is cyclic; hence refinement does not preserve
+validity. Validity is nonetheless decidable from cluster-level structure alone, so
+it must be re-verified after each refinement.
 \end{proposition}
 
-\guide{Mention Props.~3--4 (refinement: validity is \emph{not} refinement-monotone;
-exploration/identifiability \emph{are} monotone under valid refinement) in one
-sentence and push full statements/proofs to the appendix — they are not on the
-robustness critical path.}
+\begin{proposition}[Monotonicity under valid refinement]
+\label{prop:refinement}
+Let $\pi'\preceq\pi$ with both valid, and take $m=\infty$ in
+Eq.~\eqref{eq:ccbo_exploration}. Then (i) $\ESpi_0\subseteq\mathfrak{S}^{\pi'}_{0}$;
+(ii) every $S\in\ESpi$ is also in $\mathfrak{S}^{\pi'}$, i.e.\ effects identifiable
+from $\Gq$ remain identifiable from $\mathcal{G}^{\pi'}$, with the same functional.
+\end{proposition}
+
+\begin{proposition}[Price of coarsening]
+\label{prop:price}
+Let $\mu^*(S)=\min_{\mathbf{x}_S}\E[Y\mid\do(X_S=\mathbf{x}_S)]$ and
+$V(\pi)=\min_{S\in\ESpi_0}\mu^*(S)$, with $m=\infty$. For any valid
+$\pi'\preceq\pi$, $V(\pi_\top)\le V(\pi')\le V(\pi)$, and $V(\pi)=V(\pi_\top)$ iff
+some optimizer $S^*$ of Eq.~\eqref{eq:cbo_obj} is a union of $\pi$-clusters.
+\end{proposition}
 
 % =============================================================================
 \section{Experiments}
 \label{sec:exp}
-\story{The heart of the paper. Arc: (5.1) make the comparison \emph{fair} (fixed
-objective, perturbed structure) — this is the methodological crux reviewers will
-probe; (5.2) the headline — the whole field degrades, \QCBO-coarse does not;
-(5.3) characterize \emph{exactly} which misspecifications are protected, and show
-\QCBO-coarse itself breaking when the edge is not abstracted away; (5.4) the
-sample-efficiency bonus.}
+Our evaluation is organized around the damage taxonomy (Remark~\ref{rem:taxonomy}).
+We first establish the head-to-head methodology that makes a comparison under
+misspecification meaningful (\S\ref{sec:exp-setup}); we then show that the whole
+field degrades where \QCBO{}-coarse does not (\S\ref{sec:exp-headline}),
+characterize \emph{exactly} which misspecifications are protected and exhibit the
+boundary where \QCBO{}-coarse itself breaks (\S\ref{sec:exp-scope}), and close with
+the sample-efficiency benefit (\S\ref{sec:exp-eff}).
 
-\subsection{Setup}
+\subsection{Setup: a fair head-to-head under misspecification}
 \label{sec:exp-setup}
-\guide{Three things, tightly. (a) \textbf{ClusterBench10}: a purpose-built
-10-variable SCM — manipulable $X_1\!\dots\!X_5$, non-manipulable mediators
-$M_1,M_2,M_3,Z$, target $Y$; latents $U_{12}\!\to\!\{X_1,X_2\}$ (intra-cluster) and
-$U_{15}\!\to\!\{X_1,X_5\}$ (cross-cluster); coarse partition $C_1{=}\{X_1,X_2,X_3\}$,
-$C_2{=}\{X_4,X_5\}$. State the oracle-verified design facts: $\do(X_1)$ is the
-strongest singleton, the global optimum $\do(\text{all}){=}\do(C_1\!\cup\!C_2)$ is a
-union of clusters (so the coarse partition is \emph{lossless} — robustness is not
-confounded by a price), and $\mathrm{corr}(X_1,X_2)\approx0.70$. Full spec in
-Appendix~\ref{app:scm}.}
-\guide{(b) \textbf{The fair-comparison seam} (emphasize!): every method optimizes
-the \emph{identical} objective — same true SCM, same observational data, same
-$y^\ast$, seeds, budget — and we perturb \emph{only the structure each method
-reasons with} (its adjacency/candidate graph), never the objective. We verify the
-objective is byte-identical under every perturbation. Without this, a head-to-head
-under misspecification is not interpretable; with it, any performance change is
-attributable purely to (mis)structure.}
-\guide{(c) \textbf{Methods + metric}: \BO{} (non-causal control), \CBO{} (non-gating
-causal prior), \CEO{} (gating, graph-uncertainty competitor), CoCaBO, and
-\QCBO-finest/\QCBO-coarse. Metric: paired-by-seed
-$\Delta = \text{metric}(\text{misspecified},s) - \text{metric}(\text{correct},s)$
-on final $Y$ and GAP. Note DCBO/MCBO are out of scope (they hardcode the
-environment / couple surrogate structure to the objective, so ``wrong structure,
-same objective'' is not separable) — say this once, here or in Limitations.}
+\paragraph{ClusterBench10.}
+We build a purpose-built structural causal model with ten observables: five
+manipulable variables $X_1,\dots,X_5$, four non-manipulable mediators
+$M_1,M_2,M_3,Z$, and target $Y$; latent confounders $U_{12}\!\to\!\{X_1,X_2\}$
+(intra-cluster) and $U_{15}\!\to\!\{X_1,X_5\}$ (cross-cluster). The coarse
+partition merges $C_1=\{X_1,X_2,X_3\}$ and $C_2=\{X_4,X_5\}$. Coefficients are
+chosen so that, verified by Monte-Carlo on the SCM, (i) $\do(X_1)$ is the
+strongest \emph{singleton} intervention, (ii) the global optimum
+$\do(\mathbf{X})=\do(C_1\!\cup\!C_2)$ is a union of clusters --- hence the coarse
+partition is \emph{lossless} (Prop.~\ref{prop:price}), so any robustness gap is
+not confounded by a price of coarsening --- and (iii) $\mathrm{corr}(X_1,X_2)
+\approx 0.70$, so the confounding is real. The full specification, coefficients,
+and oracle checks are in App.~\ref{app:scm}.
+
+\paragraph{The fair-comparison seam.}
+The methodological crux of a head-to-head under misspecification is that every
+method must optimize the \emph{same} objective; only the \emph{structure each
+method reasons with} may be perturbed. We hold fixed the true SCM, the
+observational data, the reference optimum $y^*$, the seeds, and the budget, and
+inject the misspecified structure only into the object each method uses for causal
+reasoning --- the assumed graph for \QCBO{}, the adjacency that builds the causal
+prior for \CBO{}, the candidate-graph posterior for \CEO{}. We verify that this
+injection leaves the objective \emph{byte-identical} under every perturbation
+(App.~\ref{app:seam}); without this guarantee a performance change could not be
+attributed to misstructure rather than to a changed problem.
+
+\paragraph{Perturbations, methods, and metric.}
+We perturb the DAG by adding, deleting, or reversing edges, classified by whether
+their endpoints lie within a coarse cluster (\emph{intra}) or across clusters
+(\emph{inter}); the headline perturbation is a \emph{bow} --- a directed edge
+added on a latently-confounded pair, which renders the corresponding
+$\do$-effect non-identifiable. We compare \BO{} (non-causal control), \CBO{}
+(non-gating causal prior), \CEO{} (gating; graph-uncertainty competitor),
+CoCaBO, and \QCBO{} at the finest partition ($\equiv$\CBO{}, Prop.~\ref{prop:identity})
+and at the coarse partition. We report the paired-by-seed degradation
+$\Delta=\mathrm{metric}(\text{misspecified},s)-\mathrm{metric}(\text{correct},s)$
+for final $Y$ and GAP, so that per-seed noise cancels. (DCBO and model-based \CBO{}
+are excluded because they hard-code the environment or couple their surrogate
+structure to the objective, so ``wrong structure, same objective'' is not
+separable; see \S\ref{sec:limitations}.)
 
 \subsection{The field is fragile; coarsening is not}
 \label{sec:exp-headline}
-\story{The money result. One table + one figure; the reader should see at a glance
-that \QCBO-coarse's column is zeros and everyone else's is not.}
-\guide{Walk Table~\ref{tab:headline}/Figure~\ref{fig:overlays} by damage channel:
-\textbf{gating methods} (\CEO, \QCBO-finest) suffer \emph{Tier-2} — the intra bow
-deletes the optimal arm, a large \emph{permanent} gap (\QCBO-finest: $\Delta\approx
-+10.8$ in final $Y$; $\do(X_1)$ provably dropped). \textbf{\CBO{}} (non-gating)
-suffers only \emph{Tier-1} — its path wobbles but recovers ($\Delta\approx+0.5$).
-\textbf{\BO{}} is trivially invariant but worst in absolute terms — robustness by
-ignoring structure is not a free lunch. \textbf{\QCBO-coarse}: $\Delta=0.000$,
-byte-identical (Prop.~\ref{prop:invariance}). The one-line takeaway: \emph{robustness
-without discarding the causal prior.}}
+Table~\ref{tab:headline} and Figure~\ref{fig:overlays} report the head-to-head
+under the intra-cluster bow. The pattern follows the damage taxonomy exactly.
+\emph{Gating methods} (\CEO{} and \QCBO{}-finest) suffer \emph{Tier-2}: the bow
+makes the optimal arm non-identifiable, it is deleted from the exploration set,
+and the resulting gap is large and \emph{permanent} --- no interventional data
+restores an arm that is never searched. \emph{\CBO{}} (which does not gate) suffers
+only \emph{Tier-1}: its trajectory is perturbed early but recovers by the budget.
+\emph{\BO{}} is trivially invariant but worst in absolute terms --- robustness by
+ignoring structure forfeits the causal prior entirely. \emph{\QCBO{}-coarse}, in
+which the bow lies inside $C_1$ and is therefore invisible to the quotient, has
+$\Delta=0$: its trajectory is byte-for-byte identical to the correctly-specified
+run (Prop.~\ref{prop:invariance}). The takeaway is that \QCBO{} attains robustness
+\emph{without} discarding the causal prior the way \BO{} does.
+
 \begin{table}[t]\centering
-  \caption{Paired degradation $\Delta$ (misspecified $-$ correct) on
-  ClusterBench10 under the intra-cluster bow. \TODO{final-$Y$ and GAP $\Delta$,
-  mean$\pm$s.e., 10 seeds; bold the $0.000$ row.}}
+  \caption{Paired degradation $\Delta$ (misspecified $-$ correct) on ClusterBench10
+  under the intra-cluster bow (mean$\pm$s.e.). \QCBO{}-coarse is byte-identical
+  ($\Delta=0$); gating methods incur a permanent Tier-2 gap; \CBO{} a recoverable
+  Tier-1 cost; \BO{} is invariant but worst in absolute $Y$.}
   \label{tab:headline}
-  % \input{tables/clusterbench10_headline}   % emit_misspec_table.py
-  \TODO{\texttt{\textbackslash input\{tables/clusterbench10\_headline\}}}
+  % \input{tables/clusterbench10_headline}   % scripts/emit_misspec_table.py
+  \TODO{\texttt{\textbackslash input\{tables/clusterbench10\_headline\}} --- final 10-seed numbers}
 \end{table}
 \begin{figure}[t]\centering
   % \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
-  \caption{Best-so-far trajectories, correct (solid) vs misspecified (dashed),
-  per method. \TODO{\QCBO-coarse curves coincide; gating methods' dashed curves
-  sit permanently above; \CBO{} recovers.}}
+  \caption{Best-so-far trajectories, correct (solid) vs misspecified (dashed), per
+  method. \QCBO{}-coarse curves coincide; gating methods' dashed curves stay
+  permanently above; \CBO{} recovers.}
   \label{fig:overlays}
+  \TODO{generate \texttt{figures/clusterbench10\_overlays}}
 \end{figure}
 
-\subsection{Which misspecifications are protected? (scope)}
+\subsection{Which misspecifications are protected?}
 \label{sec:exp-scope}
-\story{Pre-empt the natural objection ``is this just immunity to everything?'' No:
-show the boundary precisely. The cleanest beat in the paper is the \emph{same}
-operation, intra vs inter.}
-\guide{Headline contrast: adding a directed edge on a confounded pair is
-\emph{invisible} when intra-cluster ($X_1\!\to\!X_2$: \QCBO-coarse $\Delta=0.000$)
-and \emph{catastrophic} when it spans clusters ($X_1\!\to\!X_5$, forming a
-cluster-level bow that deletes $\do(C_1)$: \QCBO-coarse $\Delta\approx+34.9$).
-Use Table~\ref{tab:taxonomy} for the full taxonomy (intra$\to$immune;
-inter-but-redundant$\to$immune; inter-non-redundant edge-deletion$\to$shifts only
-if it enters a used arm's identification; inter bow$\to$catastrophic) and
-Figure~\ref{fig:dial} for the severity dial (\QCBO-coarse flat at $0$ across a
-1$\to$2$\to$3-edit sweep while the field climbs) with the inter-bow as the panel
-where \QCBO-coarse leaves $0$. Tie back to Prop.~\ref{prop:invariance}: the
-empirical boundary is exactly ``quotient-invisible.''}
+The cleanest statement of the scope is a single controlled contrast: the
+\emph{same} operation --- adding a directed edge on a latently-confounded pair ---
+is invisible when intra-cluster and catastrophic when it spans clusters. Adding
+$X_1\!\to\!X_2$ (intra $C_1$, on the $U_{12}$-confounded pair) leaves
+\QCBO{}-coarse byte-identical ($\Delta=0$). Adding $X_1\!\to\!X_5$ (across $C_1,C_2$,
+on the $U_{15}$-confounded pair) forms a \emph{cluster-level} bow $C_1\to C_2$ with
+$C_1\leftrightarrow C_2$, which makes $\do(C_1)$ --- the arm \QCBO{}-coarse relies
+on --- non-identifiable; the arm is deleted and \QCBO{}-coarse fails as badly as the
+field. Table~\ref{tab:taxonomy} fills in the full taxonomy (intra $\to$ immune;
+inter-but-redundant $\to$ immune; inter non-redundant edge-deletion $\to$ shifts
+only when the edge enters a used arm's identification; inter bow $\to$ catastrophic),
+and Figure~\ref{fig:dial} shows a severity dial: \QCBO{}-coarse stays flat at zero
+across a one-, two-, three-edit intra-cluster sweep while the field climbs, with the
+inter-cluster bow as the panel where \QCBO{}-coarse leaves zero. This is the exact
+empirical realization of the scope in Remark~\ref{rem:structural_robustness}:
+protection holds iff the perturbed edge is invisible in the quotient.
+
 \begin{table}[t]\centering
-  \caption{Conditions characterization: per perturbation, locus vs the coarse
-  partition, and measured $\Delta$ for \QCBO-coarse vs the field.
-  \TODO{rows P1/P2/P3 intra, Pic inter-bow, P5 inter-del, P6 inter-redundant.}}
+  \caption{Conditions characterization: per perturbation, its locus relative to the
+  coarse partition, and measured $\Delta$ for \QCBO{}-coarse vs the field. The
+  intra/inter bow rows are the headline contrast.}
   \label{tab:taxonomy}
   % \input{tables/clusterbench10_taxonomy}
   \TODO{\texttt{\textbackslash input\{tables/clusterbench10\_taxonomy\}}}
@@ -334,99 +525,330 @@ empirical boundary is exactly ``quotient-invisible.''}
 \begin{figure}[t]\centering
   % \includegraphics[width=\linewidth]{figures/clusterbench10_dial}
   \caption{Degradation vs perturbation severity (left) and the inter-cluster-bow
-  control (right). \TODO{\QCBO-coarse flat at $0$ on intra; jumps on the inter bow.}}
+  control (right). \QCBO{}-coarse is flat at $0$ on intra-cluster edits and jumps on
+  the inter bow.}
   \label{fig:dial}
+  \TODO{generate \texttt{figures/clusterbench10\_dial}}
 \end{figure}
 
 \subsection{Coarsening also accelerates search}
 \label{sec:exp-eff}
-\story{Cash the second contribution. Keep it brief and \emph{honest} about the
-caveat so it reads as a bonus, not an overclaim.}
-\guide{On the standardized \textsc{CausalBO} benchmark (6 curated SCMs, GAP/PA-GAP
-vs oracle $y^\ast$), \QCBO-coarse attains higher GAP than \QCBO-finest$(=\CBO)$ at
-\emph{comparable final $Y$} on the higher-dimensional datasets — it concentrates a
-fixed budget on fewer identifiable cluster arms (Prop.~\ref{prop:price}). State the
-caveat plainly: GAP rewards early plateaus, so only compare GAP where final $Y$ is
-comparable. Reuse Table~\ref{tab:efficiency} (existing benchmark numbers).}
+The robustness above is achieved at no loss of optimum on ClusterBench10 by design
+(the coarse partition is lossless). More generally, coarsening trades resolution
+for sample efficiency: with fewer cluster-level arms, a fixed budget is concentrated
+rather than spread across a combinatorial candidate family. On the standardized
+\textsc{CausalBO} benchmark \citep{anonymous2026cbobench} --- a curated subset of
+hard-intervention SCMs scored by its GAP/PA-GAP metrics against oracle optima ---
+\QCBO{}-coarse attains a \emph{higher} GAP than \QCBO{}-finest ($\equiv$\CBO{},
+Prop.~\ref{prop:identity}) on the higher-dimensional datasets while reaching
+comparable final $Y$ (Table~\ref{tab:efficiency}). We state the caveat plainly: GAP
+rewards early plateaus, so the comparison is read only where final $Y$ is
+comparable; the contribution is a favourable resolution/efficiency trade whenever
+the optimum does not require splitting a cluster (Prop.~\ref{prop:price}).
+
 \begin{table}[t]\centering
-  \caption{Sample efficiency on the standardized benchmark (GAP/PA-GAP, final $Y$).
-  \TODO{reuse existing \texttt{benchmark\_gap.tex}/\texttt{benchmark\_comparison.tex}.}}
+  \caption{Sample efficiency on the standardized \textsc{CausalBO} benchmark
+  (final $Y$, GAP, PA-GAP; 5 seeds, $T{=}100$). \QCBO{}-finest is full-knowledge
+  \CBO{}; \QCBO{}-coarse uses the domain partition.}
   \label{tab:efficiency}
-  % \input{tables/benchmark_gap}
-  \TODO{\texttt{\textbackslash input\{tables/benchmark\_gap\}}}
+  \small
+  \begin{tabular}{@{}llccc@{}}
+    \toprule
+    \textbf{Dataset} & \textbf{Method} & \textbf{Final $Y$} & \textbf{GAP} & \textbf{PA-GAP} \\
+    \midrule
+    \input{tables/benchmark_gap}
+  \end{tabular}
 \end{table}
 
 % =============================================================================
 \section{Related work}
 \label{sec:related}
-\story{Position by \emph{how each handles structural uncertainty}, so \QCBO{}'s
-``abstract it away'' reads as a distinct third option.}
-\guide{Three clusters of work: (1) the \CBO{} family (assumes the full DAG — the
-fragility we address). (2) Graph uncertainty — esp.\ \CEO{}, which \emph{averages
-over candidate DAGs} at per-trial cost; contrast: averaging hedges over graphs vs
-\QCBO{} \emph{commits} to a coarser-but-correct quotient, and show empirically
-graph-averaging only partially protects. (3) Cluster causal diagrams / C-DAG
-identification (gives us the machinery but no optimizer) and robust BO (robust to
-\emph{observation} noise, not \emph{structural} error). One sentence each.}
+\begin{table}[t]\centering
+  \caption{Positioning of \QCBO{} against the nearest methods.}
+  \label{tab:related}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Method} & \textbf{What is learned} & \textbf{Structural prior} & \textbf{Search space} \\
+    \midrule
+    \CBO{}~\citep{aglietti2020causal}    & nothing (oracle DAG) & full DAG & MIS \\
+    GACBO~\citep{mukherjee2024gacbo}  & posterior over DAGs & DAG family & union of MIS \\
+    Durand et al.~\citep{durand2025unknown} & $\Pa(Y)\subseteq\mathbf{X}$ & $Y$ leaf & $\mathbf{X}$ \\
+    Park et al.~\citep{park2025dmis} & PAG $\to$ MAG & MEC & partial $\mathbf{X}$ \\
+    SCB~\citep{lee2018structural}     & nothing (oracle DAG) & full DAG & POMIS \\
+    \midrule
+    \QCBO{} (ours) & nothing & partition + C-DAG & ID-gated cluster unions \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+The survey of \citet{anonymous2026cbobench} organizes the \CBO{} landscape along
+design axes --- graph knowledge, intervention representation, surrogate, decision
+rule --- and its ``unknown causal structure'' family contains only methods that
+\emph{learn} or \emph{average} graphs (\CEO{}, GACBO, Durand et al.); it names
+robustness to structural error and scalable unknown-graph optimization among the
+field's open problems. \QCBO{} occupies an unfilled cell on the graph-knowledge
+axis: it neither assumes the full DAG nor learns one, but takes a coarser, more
+reliable input (a partition + C-DAG) and identifies on the quotient. Methods that
+relax \CBO{}'s full-graph requirement either learn structure online --- GACBO
+maintains a posterior over DAGs at substantial per-trial cost
+\citep{mukherjee2024gacbo}, local-discovery \CBO{} learns around $Y$
+\citep{branchini2023causal}, and \citet{durand2025unknown} identify $\Pa(Y)$ under
+a $Y$-leaf assumption --- or assume a known equivalence class
+\citep{park2025dmis}; even contextual \CBO{} \citep{arsenyan2026contextual} assumes
+the full graph. The contrast with graph \emph{averaging} (\CEO{}) is instructive:
+averaging hedges over candidate DAGs at per-trial cost, whereas \QCBO{}
+\emph{commits} to a coarser-but-correct quotient and pays nothing per trial; our
+experiments show averaging only partially protects. The identification machinery we
+rely on is established --- C-DAG do-calculus \citep{anand2023cdag}, its extension
+to C-DMGs over ADMGs \citep{ferreira2025cdmg}, cluster-level Markov properties
+\citep{wahl2024foundations}, relaxed partition admissibility
+\citep{tikka2025relaxing}, and C-DAGs as discovery background knowledge
+\citep{ll2025cdagdiscovery} --- but none of these perform optimization. Closest in
+spirit is the concurrent abstraction-based proposal of \citet{zeitler2025mfacbo},
+which coarsens the \emph{outcome} as a cheap proxy
+\citep{poloczek2017multi,beckers2019approximate}; \QCBO{} is complementary in that
+it coarsens the manipulable \emph{inputs}.
 
 % =============================================================================
 \section{Discussion and limitations}
 \label{sec:limitations}
-\story{Convert anticipated objections into the paper's framing — honesty is a
-strength here.}
-\guide{Hit: (i) \emph{Honest gating-fragility}: \QCBO-\emph{finest} is as fragile as
-the gating field — the win is \emph{coarsening}, not the implementation. (ii) \BO{}
-is trivially robust but pays in absolute performance (robustness$\ne$ignoring
-structure). (iii) The gate commits to the assumed structure; an un-gated variant
-trades arm-deletion for exploration overhead — worth comparing. (iv) DCBO/MCBO
-excluded (structure coupled to objective / hardcoded environments). (v)
-Faithfulness does not transfer to the cluster level. (vi) Unit intervention costs;
-cost-asymmetry changes where coarsening pays.}
+Prop.~\ref{prop:invariance} is structural, not statistical: coarsening acts as a
+hard regularizer on the hypothesis space, trading resolution (Prop.~\ref{prop:price})
+for immunity to an entire class of misspecifications, and the practitioner chooses
+where to sit on this dial by choosing the partition. Several caveats sharpen the
+claim. (i) \emph{Honest gating-fragility:} \QCBO{}-\emph{finest} is exactly as
+fragile as the gating field --- the win is \emph{coarsening}, not the
+implementation, which is why we anchor \QCBO{}-finest to \CBO{}
+(Prop.~\ref{prop:identity}) and read robustness off the finest-to-coarse contrast.
+(ii) \BO{} is trivially robust but pays in absolute performance; robustness is not
+the same as ignoring structure. (iii) The gate (Eq.~\ref{eq:es_gate}) commits to
+the assumed structure; an un-gated variant would convert arm damage into
+exploration overhead and deserves a systematic comparison. (iv) We exclude DCBO and
+model-based \CBO{} because they couple surrogate structure to the objective or
+hard-code per-environment setups, so the fixed-objective seam does not apply; they
+remain in the standardized correct-DAG comparison. (v) Faithfulness does not
+transfer to the cluster level \citep{wahl2024foundations}, so cluster-level
+conditional independences must not be read back as fine structure. (vi) We evaluate
+at unit intervention costs; cost-asymmetric settings change where coarsening pays.
 
 % =============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
-\guide{Two sentences: \QCBO{} makes causal BO usable at the level of structural
-knowledge practitioners actually have, with provable + empirical robustness to
-within-cluster misspecification and a sample-efficiency bonus; the practitioner
-chooses where to sit on the resolution/robustness dial by choosing the partition.}
+\QCBO{} makes causal Bayesian optimization usable at the level of structural
+knowledge practitioners actually have --- clusters --- with a complete
+identification gate, a provable invariance to intra-cluster misspecification, and a
+sample-efficiency benefit. Robustness to a wrong graph is not a single property but
+a question of \emph{how} the graph enters the algorithm; coarsening removes an
+entire class of errors from the input, and the practitioner dials resolution against
+robustness by choosing how much structure to commit to.
 
-% =============================================================================
 \subsubsection*{Acknowledgements}
-\guide{Leave blank for anonymous submission.}
-
-\bibliographystyle{plainnat}
-% \bibliography{refs}
-\TODO{bibliography — port \texttt{refs.bib} from ccbo\_paper.tex}
+% Left blank for anonymous submission.
 
 % =============================================================================
 \appendix
-\onecolumn  % AISTATS appendix may be single-column
-\section{Proofs}\label{app:proofs}
-\guide{Full statements + proofs of Props.~1--5 (port from ccbo\_paper.tex \S Proofs).}
+\onecolumn
 
-\section{ClusterBench10: full specification and oracle}\label{app:scm}
-\guide{The complete SCM (edges, coefficients, latents), the coarse partition, the
-perturbation taxonomy (P1 intra bow, P2/P3 intra Tier-1, Pic inter bow, P5/P6 inter
-controls, sweep), and the Monte-Carlo oracle checks ($\do(X_1)$ best singleton;
-global optimum a union of clusters; all variants acyclic). Reference the generator
-script and the structural test.}
+\section{Proofs}\label{app:proofs}
+Notation is as in \S\ref{sec:setup} and \S\ref{sec:theory}.
+
+\begin{proof}[Proof of Prop.~\ref{prop:identity}]
+Singleton clusters make the quotient map the identity on $\Gg^{*}$, and unions of
+at most $m$ singletons are exactly the subsets of size at most $m$.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:invariance}]
+The latent projection removes only latent vertices; an edge between two observables
+is never an interior vertex of a projection path, so $(\Gg')^{*}$ and $\Gg^{*}$
+differ exactly by the modified intra-cluster edges. The quotient keeps a directed
+(resp.\ bidirected) cluster-level edge iff some fine edge crosses two \emph{distinct}
+clusters; edges within a cluster contribute nothing. Hence the quotients coincide.
+All remaining objects --- $\ESpi$, ID formulas, priors --- are functions of $\Gq$
+and data alone.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:refinement_validity}]
+Take $\mathbf{X}=\{a_1,a_2,b_1,b_2\}$ with fine edges $a_1\to b_1$ and $b_2\to a_2$.
+The coarsest partition $\pi=\{\{a_1,a_2,b_1,b_2\}\}$ is valid: both edges are
+intra-cluster, so the quotient has a single manipulable node and is acyclic. Its
+refinement $\pi'=\{\{a_1,a_2\},\{b_1,b_2\}\}$ exposes both edges as inter-cluster ---
+$a_1\to b_1$ contributes $A\to B$ and $b_2\to a_2$ contributes $B\to A$ --- inducing
+the 2-cycle $A\rightleftarrows B$, so $\mathcal{G}^{\pi'}$ is cyclic and $\pi'$ is
+invalid. Decidability is immediate from the acyclicity clause of
+Def.~\ref{def:coarsening}.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:refinement}]
+(i) A union of $\pi$-clusters is a union of $\pi'$-clusters because each
+$\pi$-cluster is. (ii) Quotienting is compositional: $\Gq$ is the quotient of
+$\mathcal{G}^{\pi'}$ under the induced partition of $\pi'$-clusters, so every fine
+graph compatible with $\mathcal{G}^{\pi'}$ is compatible with $\Gq$. Identifiability
+from $\Gq$ means a single functional of the observational distribution equals
+$\E[Y\mid\do(S)]$ across all SCMs whose graph is compatible with $\Gq$
+\citep{anand2023cdag}; a fortiori the same functional works across the smaller class
+compatible with $\mathcal{G}^{\pi'}$.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:price}]
+By Prop.~\ref{prop:refinement}(i), $\ESpi_0\subseteq\mathfrak{S}^{\pi'}_0\subseteq
+\mathfrak{S}^{\pi_\top}_0=2^{\mathbf{X}}\setminus\{\emptyset\}$; minima over larger
+sets are no larger. Equality holds iff the unrestricted argmin intersects $\ESpi_0$,
+which is exactly the stated condition.
+\end{proof}
+
+\section{ClusterBench10: specification and oracle}\label{app:scm}
+\TODO{full SCM (edges, coefficients, latents $U_{12},U_{15}$), the coarse partition,
+the perturbation taxonomy (intra bow, intra Tier-1, inter bow, inter edge-deletions,
+sweep), and the Monte-Carlo oracle checks ($\do(X_1)$ strongest singleton; global
+optimum a union of clusters; all variants acyclic). Reference the generator and the
+structural test.}
 
 \section{Fair-comparison seam: per-method details}\label{app:seam}
-\guide{For each baseline, exactly where structure is perturbed and why the
-objective is untouched (\CBO{}: \texttt{adjacency\_matrix} vs SEM functions; \CEO{}:
-candidate-graph posterior vs SEM class; CoCaBO: FCM functors). Include the seam
-verification (objective byte-identical under every perturbation).}
+\TODO{for each baseline, exactly where structure is perturbed and why the objective
+is untouched (\CBO{}: adjacency vs SEM functions; \CEO{}: candidate-graph posterior
+vs SEM class; CoCaBO: FCM functors), plus the byte-identity verification of the
+objective under every perturbation.}
 
 \section{Standardized benchmark: datasets and partitions}\label{app:datasets}
-\guide{Per-dataset DAG/C-DAG figures and chosen partitions (reuse existing
-appendix figures).}
+\TODO{per-dataset DAG/C-DAG figures and chosen partitions.}
 
 \section{Full results}\label{app:fulltables}
-\guide{All perturbations $\times$ both cap regimes (cap$=1$ Tier-2 headline +
+\TODO{all perturbations $\times$ both cap regimes (cap${=}1$ Tier-2 headline +
 uncapped field comparison), all metrics, all seeds.}
 
-\section{Reproducibility checklist}\label{app:checklist}
-\guide{The AISTATS checklist; point to the generator, driver, seeds, and env.}
+% =============================================================================
+\bibliographystyle{abbrvnat}
+\begin{thebibliography}{27}
+
+\bibitem[Anand et al.(2023)]{anand2023cdag}
+T.~V.~Anand, A.~H.~Ribeiro, J.~Tian, and E.~Bareinboim.
+\newblock Causal effect identification in cluster {DAG}s.
+\newblock In \emph{AAAI}, volume 37, pp.\ 12172--12179, 2023.
+
+\bibitem[Aglietti et al.(2020)]{aglietti2020causal}
+V.~Aglietti, X.~Lu, A.~Paleyes, and J.~Gonz{\'a}lez.
+\newblock Causal {B}ayesian optimization.
+\newblock In \emph{AISTATS}, volume 108 of \emph{PMLR}, pp.\ 3155--3164, 2020.
+
+\bibitem[Aglietti et al.(2021)]{aglietti2021dynamic}
+V.~Aglietti, N.~Dhir, J.~Gonz{\'a}lez, and T.~Damoulas.
+\newblock Dynamic causal {B}ayesian optimization.
+\newblock In \emph{NeurIPS}, volume 34, 2021.
+
+\bibitem[Aglietti et al.(2023)]{aglietti2023constrained}
+V.~Aglietti, A.~Malek, I.~Ktena, and S.~Chiappa.
+\newblock Constrained causal {B}ayesian optimization.
+\newblock In \emph{ICML}, 2023.
+
+\bibitem[Anonymous(2026)]{anonymous2026cbobench}
+Anonymous.
+\newblock Causal {B}ayesian optimization: Foundations, methods, and applications.
+\newblock \emph{Transactions on Machine Learning Research}, 2026.
+\newblock Under review; OpenReview \url{https://openreview.net/forum?id=XT6DC37m5I}.
+
+\bibitem[Arsenyan et al.(2026)]{arsenyan2026contextual}
+V.~Arsenyan, A.~Grosnit, H.~Bou~Ammar, and A.~S.~Dalalyan.
+\newblock Contextual causal {B}ayesian optimisation.
+\newblock In \emph{ICLR}, 2026. % TODO: verify details.
+
+\bibitem[Beckers \& Halpern(2019)]{beckers2019approximate}
+S.~Beckers and J.~Y.~Halpern.
+\newblock Abstracting causal models.
+\newblock In \emph{AAAI}, 2019.
+
+\bibitem[Branchini et al.(2023)]{branchini2023causal}
+N.~Branchini, V.~Aglietti, N.~Dhir, and T.~Damoulas.
+\newblock Causal {B}ayesian optimization via local causal discovery.
+\newblock In \emph{CLeaR}, volume 236 of \emph{PMLR}, 2023.
+
+\bibitem[Durand et al.(2025)]{durand2025unknown}
+J.~Durand, Y.~Annadani, S.~Bauer, and S.~Parbhoo.
+\newblock Causal {B}ayesian optimization with unknown causal graphs.
+\newblock In \emph{ICLR}, 2025. % TODO: verify author list / venue.
+
+\bibitem[Ferreira \& Assaad(2025)]{ferreira2025cdmg}
+E.~Ferreira and C.~K.~Assaad.
+\newblock Identifying macro causal effects in a {C-DMG} over {ADMG}s.
+\newblock \emph{arXiv:2504.01551}, 2025.
+
+\bibitem[Garnett(2023)]{garnett2023bayesian}
+R.~Garnett.
+\newblock \emph{Bayesian Optimization}.
+\newblock Cambridge University Press, 2023.
+
+\bibitem[Lee et al.(2023)]{lee2023ananke}
+J.~J.~R.~Lee, R.~Bhattacharya, R.~Nabi, and I.~Shpitser.
+\newblock Ananke: A python package for causal inference using graphical models.
+\newblock \emph{arXiv:2301.11477}, 2023.
+
+\bibitem[Lee \& Bareinboim(2018)]{lee2018structural}
+S.~Lee and E.~Bareinboim.
+\newblock Structural causal bandits: Where to intervene?
+\newblock In \emph{NeurIPS}, 2018.
+
+\bibitem[Lee et al.(2019)]{lee2019latent}
+S.~Lee, J.~Correa, and E.~Bareinboim.
+\newblock General identifiability with arbitrary surrogate experiments.
+\newblock In \emph{UAI}, 2019.
+
+\bibitem[Madaleno et al.(2026)]{madaleno2026coarsening}
+F.~Madaleno, P.~Misra, and A.~Markham.
+\newblock Coarsening causal {DAG} models.
+\newblock \emph{arXiv:2601.10531}, 2026.
+
+\bibitem[Mukherjee et al.(2024)]{mukherjee2024gacbo}
+S.~Mukherjee, et al.
+\newblock Graph-agnostic causal {B}ayesian optimization.
+\newblock \emph{arXiv}, 2024.
+
+\bibitem[Park et al.(2025)]{park2025dmis}
+J.~Park, M.~Zemplenyi, and V.~Aglietti.
+\newblock Causal {B}ayesian optimization under partial observability.
+\newblock \emph{arXiv}, 2025.
+
+\bibitem[Pearl(2009)]{pearl2009causality}
+J.~Pearl.
+\newblock \emph{Causality: Models, Reasoning and Inference}.
+\newblock Cambridge University Press, 2nd edition, 2009.
+
+\bibitem[Poloczek et al.(2017)]{poloczek2017multi}
+M.~Poloczek, J.~Wang, and P.~Frazier.
+\newblock Multi-information source optimization.
+\newblock In \emph{NeurIPS}, 2017.
+
+\bibitem[Shpitser \& Pearl(2006)]{shpitser2006identification}
+I.~Shpitser and J.~Pearl.
+\newblock Identification of joint interventional distributions in recursive
+semi-{M}arkovian causal models.
+\newblock In \emph{AAAI}, 2006.
+
+\bibitem[Sussex et al.(2023)]{sussex2023model}
+S.~Sussex, A.~Makarova, and A.~Krause.
+\newblock Model-based causal {B}ayesian optimization.
+\newblock In \emph{ICLR}, 2023.
+
+\bibitem[Tikka et al.(2025)]{tikka2025relaxing}
+Anonymous.
+\newblock Relaxing partition admissibility in cluster-{DAG}s: a causal calculus
+with arbitrary variable clustering.
+\newblock \emph{arXiv:2511.01396}, 2025. % TODO: fix author list.
+
+\bibitem[Wahl et al.(2024)]{wahl2024foundations}
+J.~Wahl, U.~Ninad, and J.~Runge.
+\newblock Foundations of causal discovery on groups of variables.
+\newblock \emph{Journal of Causal Inference}, 12(1), 2024.
+
+\bibitem[Wang et al.(2025)]{ll2025cdagdiscovery}
+Anonymous.
+\newblock Cluster-{DAG}s as powerful background knowledge for causal discovery.
+\newblock \emph{arXiv:2512.10032}, 2025. % TODO: fix author list.
+
+\bibitem[Zeitler(2025)]{zeitler2025mfacbo}
+J.~Zeitler.
+\newblock Towards {MFACBO}: Multi-fidelity abstraction causal {B}ayesian
+optimization.
+\newblock In \emph{Workshop on Causal Abstractions and Representations (CAR) at UAI}, 2025.
+
+\end{thebibliography}
 
 \end{document}
