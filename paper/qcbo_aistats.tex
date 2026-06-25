@@ -1,10 +1,13 @@
 % =============================================================================
 %  QCBO — AISTATS submission  (robustness-first; sample-efficiency 2nd)
 % -----------------------------------------------------------------------------
-%  Self-contained, separate from ccbo_paper.tex. Get aistats2025.sty from
-%  https://aistats.org/aistats2025/ and drop it in paper/. Until then this file
-%  compiles via the \IfFileExists fallback (plain article shims + natbib).
-%  A few \TODO markers flag floats that need the full 10-seed runs / figures.
+%  Main document. Compile with pdfLaTeX; the bibliography is INLINE (no BibTeX).
+%  Style files aistats2025.sty + fancyhdr.sty sit alongside this file; the
+%  \IfFileExists block below is only a fallback if they are ever absent.
+%  For the ANONYMOUS submission build, drop [accepted] from \usepackage[...]{aistats2025}.
+%  Intentional open items: (i) the three appendix \TODO blocks (full ClusterBench10
+%  spec, per-method injection seam, full result tables); (ii) Tables 1-2 / Figs 1-2
+%  in Sec. 5 use PRELIMINARY misspec data pending the full multi-seed run.
 % =============================================================================
 \documentclass[twoside]{article}
 
