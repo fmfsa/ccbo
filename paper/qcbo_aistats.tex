@@ -808,10 +808,15 @@ not run on that dataset). These numbers establish that \QCBO{} is competitive wi
 \end{table}
 
 \section{Standardized benchmark: datasets and partitions}\label{app:datasets}
-\TODO{per-dataset DAG and C-DAG drawn in TikZ (same convention as
-Fig.~\ref{fig:clusterbench10}) and the chosen coarse partition for each of ToyGraph,
-Synthetic-2, Synthetic, Healthcare, Epidemiology, Ecology. (matplotlib PDFs currently exist
-under paper/figures/; to be redrawn in TikZ.)}
+Figures~\ref{fig:dag-toyGraph}--\ref{fig:dag-ecology} show, for each standardized dataset,
+the fine DAG with its coarse partition (left) and the quotient C-DAG (right), in the same
+convention as Fig.~\ref{fig:clusterbench10} (manipulable variables orange, target yellow,
+dashed red latent confounding, dashed boxes the manipulable clusters). The coarse clusters
+are: ToyGraph and Synthetic-2 $\{X,Z\}$; Synthetic $\{B\}$, $\{D,E\}$; Healthcare
+$\{\text{Aspirin},\text{Statin}\}$; Epidemiology $\{L,B\}$; Ecology $\{C,N,O\}$, $\{D,T\}$.
+(For Ecology, $\{D,T\}$ has no directed path to $Y$, so it is a degenerate cluster --- a
+property of the fitted SCM, not the coarsening.)
+\input{figures/standardized_dags}
 
 \section{Full results}\label{app:fulltables}
 \TODO{all perturbations $\times$ both cap regimes (cap${=}1$ Tier-2 headline +
