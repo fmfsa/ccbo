@@ -1,22 +1,35 @@
-"""Generate the ClusterBench10 benchmark dataset (linear-Gaussian SCM).
+"""Generate the ClusterBench10 benchmark dataset (NON-LINEAR SCM).
 
 Writes the CausalBO_Benchmark-format files for the misspecification stress test
 into ``third_party/CausalBO_Benchmark/`` and runs oracle pre-checks. Structure
 (edges/partition) comes from ``ccbo.clusterbench10``; numeric coefficients live
-here because they are tuned to satisfy the oracle constraints:
+here because they are tuned to satisfy the oracle constraints.
 
-  (C1) do(X1) is the strongest *singleton* arm  (so the bow deletes the best
-       singleton at the finest partition -> Tier-2, unrecoverable);
-  (C2) the global optimum (uncapped) is do(all manipulables) = do(C1 u C2),
-       a *union of clusters* -> the coarse partition is LOSSLESS (Prop. 5);
-  (C3) the observational data exhibits corr(X1,X2) ~ 0.7 via the latent U12,
-       so the bow X1->X2 + X1<->X2 is a genuine confounded misspecification.
+Why non-linear (2026-06-26).  An earlier linear-Gaussian version put the optimum
+at a *box vertex*, which unstructured BO reaches in ~2 evaluations -- so uncapped
+there was no gap between methods (everyone solves it trivially).  We make the
+target ``Y`` a **quadratic bowl** in its parents,
 
-The objective every method optimises is DiscoveredGraph's noise-free SEM
-(linear, deterministic). The latent U12 enters only the *observational data*
-(via this script's own sampler) and the *structure* (declared as a confounder
-for QCBO / parsed from latent_variables); it is zero in the noise-free objective
--- exactly as the benchmark treats its own latents.
+    Y = Y_INTERCEPT + sum_p  YA[p] * (parent_p - YC[p])**2 ,
+
+which has an *interior* optimum.  The design is tuned so that:
+
+  (C1) ``do(X1)`` is the strongest *singleton* arm (so the intra-C1 bow, which
+       makes ``do(X1)`` non-identifiable, deletes the best singleton at the
+       finest partition -> a real per-arm hit for the gating method);
+  (C2) the global optimum (uncapped) is ``do(C1) = do(X1,X2,X3)`` -- a *union of
+       clusters* -> the coarse partition is LOSSLESS (Prop. 5).  ``C2`` (X4,X5)
+       is neutral-to-mildly-harmful (its Y terms are minimised at X4=X5=0), so a
+       method that intervenes on the whole 5-D box (plain BO) wastes two
+       dimensions, while QCBO-coarse intervenes on the 3-D ``do(C1)`` arm only;
+  (C3) ``corr(X1,X2) ~ 0.7`` via the latent ``U12`` (so the bow X1->X2 with
+       X1<->X2 is a genuine confounded misspecification).
+
+The objective every method optimises is DiscoveredGraph's noise-free SEM (the
+``quadratic`` relationship type added to baselines/BO_CBO/graph.py is
+deterministic in the objective path).  Latents enter only the *observational
+data* (this script's sampler) and the declared *structure*; they are zero in the
+noise-free objective -- exactly as the benchmark treats its own latents.
 
 Run:  PYTHONPATH=. python scripts/generate_clusterbench10.py
 """
@@ -30,6 +43,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import yaml
+from scipy.optimize import minimize
 
 from ccbo import clusterbench10 as cb
 from ccbo import benchmark as bench
@@ -40,22 +54,25 @@ N_OBS = 500
 SEED = 0
 
 # ---------------------------------------------------------------------------
-# SCM coefficients (linear; all positive so the optimum sets levers to the
-# lower range endpoint). See module docstring for the oracle constraints.
+# SCM coefficients.  Mediators / intra edges are LINEAR; the target Y is a
+# QUADRATIC BOWL in its parents (interior optimum).  See module docstring.
 # ---------------------------------------------------------------------------
-# Directed-edge coefficients (parent -> child).
-COEF = {
-    ("X3", "X2"): 0.3,          # intra-C1 (Tier-1 target)
+# Linear structural coefficients (parent -> child) for every edge except into Y.
+LIN_COEF = {
+    ("X3", "X2"): 0.3,                                   # intra-C1 (P2/P3 target)
     ("X1", "M2"): 1.0, ("X2", "M2"): 1.0, ("X3", "M1"): 1.0,
     ("X4", "M3"): 1.0, ("X5", "M3"): 1.0, ("X5", "Z"): 1.0,
-    ("X1", "Y"): 3.5, ("X2", "Y"): 1.5, ("X3", "Y"): 0.5,
-    ("M1", "Y"): 1.0, ("M2", "Y"): 1.0, ("M3", "Y"): 1.0, ("Z", "Y"): 1.0,
 }
+# Y = Y_INTERCEPT + sum_p YA[p] * (parent_p - YC[p])**2  over Y's parents.
+YA = {"X1": 3.0, "X2": 1.5, "X3": 1.0, "M1": 0.5, "M2": 0.8, "M3": 0.3, "Z": 0.3}
+YC = {"X1": 2.0, "X2": 1.0, "X3": 1.0, "M1": 1.0, "M2": 3.0, "M3": 0.0, "Z": 0.0}
+Y_INTERCEPT = 0.0
+
 # Exogenous Gaussian noise std per node (observational sampler only).
 NOISE_STD = {n: 0.7 for n in cb.NODES}
-ROOT_STD = {"X1": 0.7, "X3": 1.0, "X5": 1.0}  # roots' own spread (obs only)
-# Latent-confounder spreads (U12 -> {X1,X2}; U15 -> {X1,X5}); see cb.CONFOUNDERS.
-LATENT_STD = {"U12": 1.6, "U15": 1.0}
+NOISE_STD["Y"] = 1.0
+ROOT_STD = {"X1": 0.7, "X3": 1.0, "X5": 1.0, "X4": 1.0}  # roots' own spread (obs)
+LATENT_STD = {"U12": 1.6, "U15": 1.0}                     # U12->{X1,X2}; U15->{X1,X5}
 
 
 def _var_latents():
@@ -95,8 +112,17 @@ def _parents(edges):
     return p
 
 
+def _y_value(parent_vals):
+    """Noise-free quadratic-bowl Y from a dict of its parent values."""
+    y = Y_INTERCEPT
+    for p, a in YA.items():
+        y = y + a * (parent_vals[p] - YC[p]) ** 2
+    return y
+
+
 def sample_observational(n, seed):
-    """Forward-sample the true SCM (linear + shared latent confounders) -> DataFrame."""
+    """Forward-sample the true SCM (linear mediators + quadratic Y + shared
+    latent confounders) -> DataFrame."""
     rng = np.random.RandomState(seed)
     order = _causal_order(cb.TRUE_EDGES)
     parents = _parents(cb.TRUE_EDGES)
@@ -105,23 +131,38 @@ def sample_observational(n, seed):
     var_latents = _var_latents()
     vals = {}
     for node in order:
-        mean = np.zeros(n)
-        for p in parents[node]:
-            mean = mean + COEF[(p, node)] * vals[p]
-        for lat in var_latents.get(node, []):
-            mean = mean + latents[lat]              # shared latent confounding
+        if node == "Y":
+            mean = _y_value({p: vals[p] for p in parents[node]})
+        else:
+            mean = np.zeros(n)
+            for p in parents[node]:
+                mean = mean + LIN_COEF[(p, node)] * vals[p]
+            for lat in var_latents.get(node, []):
+                mean = mean + latents[lat]               # shared latent confounding
         std = ROOT_STD.get(node, NOISE_STD[node])
         vals[node] = mean + rng.normal(0, std, n)
     return pd.DataFrame({n_: vals[n_] for n_ in cb.NODES})
 
 
 def build_sem_equations(order, parents):
-    """sem_equations.json: linear nodes; roots are deps=[] (deterministic 0 when
-    free in the objective); X1/X2 carry latent_variables=['U12'] so parse_dag
-    registers the X1<->X2 confounder for QCBO."""
+    """sem_equations.json: linear mediators; Y is ``quadratic`` (interior
+    optimum).  X1/X2 carry latent_variables=['U12'] so parse_dag registers the
+    X1<->X2 confounder for QCBO."""
     var_latents = _var_latents()
     variables = {}
     for node in cb.NODES:
+        if node == "Y":
+            rp = {"noise_std": float(NOISE_STD[node]),
+                  "centers": {p: float(YC[p]) for p in parents[node]}}
+            variables[node] = {
+                "type": "endogenous",
+                "dependencies": list(parents[node]),
+                "intercept": float(Y_INTERCEPT),
+                "coefficients": {p: float(YA[p]) for p in parents[node]},
+                "relationship_type": "quadratic",
+                "relationship_params": rp,
+            }
+            continue
         rp = {"noise_std": float(NOISE_STD[node])}
         if node in var_latents:
             rp["latent_variables"] = list(var_latents[node])
@@ -129,7 +170,7 @@ def build_sem_equations(order, parents):
             "type": "endogenous",
             "dependencies": list(parents[node]),
             "intercept": 0.0,
-            "coefficients": {p: float(COEF[(p, node)]) for p in parents[node]},
+            "coefficients": {p: float(LIN_COEF[(p, node)]) for p in parents[node]},
             "relationship_type": "linear",
             "relationship_params": rp,
         }
@@ -137,11 +178,12 @@ def build_sem_equations(order, parents):
 
 
 def build_model_results(order):
-    """model_results.pkl: node_names, adjacency_matrix[child,parent], causal_order."""
+    """model_results.pkl: node_names, adjacency_matrix[child,parent] (edge
+    PRESENCE -- CBO's fit_all_models only tests != 0), causal_order."""
     idx = {n: i for i, n in enumerate(cb.NODES)}
     A = np.zeros((len(cb.NODES), len(cb.NODES)))
-    for (u, v), c in COEF.items():
-        A[idx[v], idx[u]] = c
+    for (u, v) in cb.TRUE_EDGES:
+        A[idx[v], idx[u]] = 1.0
     return {"node_names": list(cb.NODES), "adjacency_matrix": A,
             "causal_order": list(order)}
 
@@ -239,64 +281,79 @@ def main():
     graph, obs_samples, _ = setup_optimization_from_discovery(
         model_results, sem_eq, df, "Y", config, feat)
 
-    # ---- Oracle pre-checks: deterministic noise-free objective per arm ----
+    # ---- Oracle pre-checks: continuous interior optimum per arm ----
     ranges = {v: (feat[v]["min"], feat[v]["max"]) for v in cb.MANIPULATIVE}
 
-    def eval_corner(arm, signs):
+    def best_over_box(arm, n_starts=12):
+        """Minimise the noise-free objective over the arm's interventional box."""
         idx_map = {v: i for i, v in enumerate(arm)}
         tfn, _ = graph.intervention_function(idx_map)
-        x = np.array([[ranges[v][0] if s < 0 else ranges[v][1]
-                       for v, s in zip(arm, signs)]])
-        return float(tfn(x)[0, 0])
+        lo = np.array([ranges[v][0] for v in arm])
+        hi = np.array([ranges[v][1] for v in arm])
 
-    def best_over_corners(arm):
-        best = np.inf
-        for signs in itertools.product((-1, 1), repeat=len(arm)):
-            best = min(best, eval_corner(arm, signs))
-        return best
+        def f(x):
+            return float(tfn(x.reshape(1, -1))[0, 0])
 
-    singletons = {(v,): best_over_corners([v]) for v in cb.MANIPULATIVE}
-    print("\nsingleton arm optima (lower=better):")
+        rng = np.random.RandomState(0)
+        best, best_x = np.inf, None
+        for _ in range(n_starts):
+            x0 = lo + rng.rand(len(arm)) * (hi - lo)
+            res = minimize(f, x0, bounds=list(zip(lo, hi)), method="L-BFGS-B")
+            if res.fun < best:
+                best, best_x = float(res.fun), res.x
+        return best, best_x
+
+    baseline = best_over_box(["X1"])[0]  # placeholder; recompute baseline below
+    # True "do nothing" baseline = objective at the natural (zero-intervention) point.
+    tfn0, _ = graph.intervention_function({"X1": 0})
+    # evaluate Y with X1 at its mean (~0) -> approximates the no-intervention Y.
+    base_y = float(tfn0(np.array([[feat["X1"]["mean"]]]))[0, 0])
+
+    singletons = {(v,): best_over_box([v])[0] for v in cb.MANIPULATIVE}
+    print(f"\nbaseline (no-intervention) Y ~ {base_y:.3f}")
+    print("singleton arm optima (lower=better):")
     for s, val in sorted(singletons.items(), key=lambda kv: kv[1]):
-        print(f"  do({s[0]:<3s}) = {val:8.3f}")
+        print(f"  do({s[0]:<3s}) = {val:8.3f}   (reduction {base_y - val:6.3f})")
     best_singleton = min(singletons, key=singletons.get)
 
     all_arm = list(cb.MANIPULATIVE)
-    v_all = best_over_corners(all_arm)
-    v_c1 = best_over_corners(["X1", "X2", "X3"])
-    print(f"\n  do(C1=X1,X2,X3) = {v_c1:8.3f}")
-    print(f"  do(all=C1uC2)   = {v_all:8.3f}  (global optimum candidate)")
+    v_c1, x_c1 = best_over_box(["X1", "X2", "X3"])
+    v_all, _ = best_over_box(all_arm)
+    print(f"\n  do(C1=X1,X2,X3) = {v_c1:8.3f}  at X1,X2,X3={np.round(x_c1, 2)}")
+    print(f"  do(all=C1uC2)   = {v_all:8.3f}")
 
-    # Check the global optimum over ALL subsets is a union of clusters.
+    # Global optimum over ALL subsets; smallest-cardinality argmin (ties -> smaller).
     global_best, global_arm = np.inf, None
     for r in range(1, len(all_arm) + 1):
         for arm in itertools.combinations(all_arm, r):
-            val = best_over_corners(list(arm))
-            if val < global_best - 1e-9:
+            val = best_over_box(list(arm))[0]
+            if val < global_best - 1e-6:
                 global_best, global_arm = val, arm
     clusters = [set(c) for c in cb.COARSE_CLUSTERS]
-    is_union = set(global_arm) == set().union(*[c for c in clusters
-                                                if c <= set(global_arm)]) and all(
-        (set(global_arm) & c in (set(), c)) for c in clusters)
+    is_union = all((set(global_arm) & c in (set(), c)) for c in clusters)
     print(f"\n  global optimum: do{global_arm} = {global_best:.3f}; "
           f"union-of-clusters={is_union}")
+
+    # Interior-optimum check: the best C1 point should be strictly inside the box.
+    interior = all(ranges[v][0] + 1e-3 < x_c1[i] < ranges[v][1] - 1e-3
+                   for i, v in enumerate(["X1", "X2", "X3"]))
 
     print("\n=== ORACLE CHECKS ===")
     ok1 = best_singleton == ("X1",)
     ok2 = is_union
+    ok3 = interior
     print(f"  (C1) best singleton is do(X1): {ok1}  [{best_singleton}]")
-    print(f"  (C2) global optimum is union of clusters: {ok2}")
-    if not (ok1 and ok2):
-        print("  -> TUNE COEFFICIENTS and re-run.")
+    print(f"  (C2) global optimum is union of clusters: {ok2}  [do{global_arm}]")
+    print(f"  (C3) do(C1) optimum is INTERIOR (non-vertex): {ok3}  [{np.round(x_c1, 2)}]")
+    if not (ok1 and ok2 and ok3):
+        print("  -> TUNE COEFFICIENTS (YA / YC) and re-run.")
         sys.exit(1)
 
-    # theoretical_best y*: best Y over random interventional samples (matches
-    # the benchmark's own convention) + the oracle global optimum.
     ystar = float(global_best)
     with open(paths["ybest"], "w") as f:
         json.dump({"dataset": DATASET, "target": "Y", "task": TASK,
                    "global_best_value": ystar,
-                   "note": "deterministic oracle over arm corners"}, f, indent=2)
+                   "note": "continuous oracle over the interventional box"}, f, indent=2)
     print(f"\nwrote theoretical_best y*={ystar:.4f}")
 
     generate_interventional_pkls(graph, config, feat)

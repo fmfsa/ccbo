@@ -96,16 +96,128 @@ def _cbo_runner():
     return run
 
 
+def _bo_runner():
+    """Non-causal BO over the full manipulable set (the benchmark's own BO arm:
+    bo_vars = manipulative_variables). BO ignores the DAG entirely
+    (Causal_prior=False), so it is *invariant* to every structural perturbation:
+    Delta == 0 by construction -- robustness by discarding structure, at the
+    price of the worst absolute Y. We run it once per seed and reuse that
+    trajectory for every perturbation id (writing a per-pid CSV so the plotting
+    script finds it).
+    """
+    _cache: dict = {}
+
+    def run(pid, seed, cap, trials, ninit):
+        csv = os.path.join(RUNDIR, f"BO_{pid}_seed{seed}.csv")
+        os.makedirs(os.path.dirname(csv), exist_ok=True)
+        if seed not in _cache:
+            from baselines.BO_CBO.BO import NonCausal_BO
+            np.random.seed(seed)
+            graph, obs, functions, config = misspec_inject.build_cbo_graph(
+                DS, seed, "P0")
+            manip = list(config["intervention"])
+            task = config["task"]
+            ranges = graph.get_interventional_ranges()
+            dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}
+            costs = graph.get_cost_structure(1)
+            # Single joint arm over all manipulable variables.
+            dxl, dyl, bx, oy, _ = benchmark._initial_interventional_data(
+                graph, [manip], ninit, task, seed)
+            run_csv = os.path.join(RUNDIR, f"BO_P0_seed{seed}.csv")
+            NonCausal_BO(trials, graph, dict_ranges, dxl[0], dyl[0], costs,
+                         obs, functions, bx, oy, manip, Causal_prior=False,
+                         task=task, csv_log_file=run_csv)
+            _cache[seed] = pd.read_csv(run_csv)["current_optimal"].tolist()
+        traj = _cache[seed]
+        if not os.path.exists(csv):
+            pd.DataFrame({"trial_number": list(range(len(traj))),
+                          "current_optimal": traj}).to_csv(csv, index=False)
+        return traj
+    return run
+
+
 METHODS = {
+    "BO": _bo_runner(),
+    "CBO": _cbo_runner(),
     "QCBO-finest": _qcbo_runner(None),
     "QCBO-coarse": _qcbo_runner([list(c) for c in cb.COARSE_CLUSTERS]),
-    "CBO": _cbo_runner(),
-    # "CEO": ..., "CoCaBO": ...   # added next via misspec_inject
+    # CEO / CoCaBO are out of scope (related-work discussion only); the field is
+    # BO (non-causal control), CBO (non-gating causal prior), and QCBO x2.
 }
 
 
 def _sem(v):
     return float(np.std(v, ddof=1) / np.sqrt(len(v))) if len(v) > 1 else 0.0
+
+
+def aggregate(traj, methods, pids, pmeta, ystar, task, args):
+    """Score paired Delta vs P0 per (method, perturbation), print the table and
+    the QCBO-coarse premise checks, and return the results dict. Shared by the
+    serial driver and the parallel driver (run_misspec_parallel.py)."""
+    out = {"dataset": DS, "y_star": ystar, "task": task, "cap": args.cap,
+           "trials": args.trials, "seeds": args.seeds, "methods": {}}
+    print(f"\n{'='*78}\nClusterBench10 misspecification  (cap={args.cap}, "
+          f"T={args.trials}, {args.seeds} seeds, y*={ystar:.2f})\n{'='*78}")
+    hdr = f"{'method':12s} {'pert':4s} {'locus':16s} {'protected':9s} " \
+          f"{'finalY':>9s} {'dFinalY':>9s} {'dGAP':>8s} {'byte-id':>7s}"
+    print(hdr)
+    for m in methods:
+        out["methods"][m] = {}
+        base = {s: traj[m]["P0"][s] for s in traj[m]["P0"]}
+        for pid in pids:
+            finals, dfin, dgap, ident = [], [], [], []
+            g20s, g50s, g100s = [], [], []   # absolute GAP@T (sample-efficiency)
+            for s in range(args.seeds):
+                if s not in traj[m][pid] or s not in base:
+                    continue
+                t, t0 = traj[m][pid][s], base[s]
+                g, _, fin = score(t, ystar, task, args.trials)
+                g0, _, fin0 = score(t0, ystar, task, args.trials)
+                finals.append(fin); dfin.append(fin - fin0); dgap.append(g - g0)
+                ident.append(t == t0)
+                g20s.append(score(t, ystar, task, min(20, args.trials))[0])
+                g50s.append(score(t, ystar, task, min(50, args.trials))[0])
+                g100s.append(g)
+            if not finals:
+                continue
+            meta = pmeta.get(pid, {})
+            byte_id = all(ident)
+            out["methods"][m][pid] = {
+                "locus": meta.get("locus"), "protected": meta.get("protected"),
+                "finalY": [float(np.mean(finals)), _sem(finals)],
+                "dFinalY": [float(np.mean(dfin)), _sem(dfin)],
+                "dGAP": [float(np.mean(dgap)), _sem(dgap)],
+                # Absolute GAP@T (correct DAG = sample efficiency; misspec = robustness).
+                "GAP20": [float(np.mean(g20s)), _sem(g20s)],
+                "GAP50": [float(np.mean(g50s)), _sem(g50s)],
+                "GAP100": [float(np.mean(g100s)), _sem(g100s)],
+                "byte_identical_to_P0": byte_id}
+            print(f"{m:12s} {pid:4s} {str(meta.get('locus')):16s} "
+                  f"{str(meta.get('protected')):9s} "
+                  f"{np.mean(finals):+9.3f} {np.mean(dfin):+9.3f} "
+                  f"{np.mean(dgap):+8.3f} {str(byte_id):>7s}")
+
+    # --- Premise checks on real trajectories (Prop. 2 guarantee for coarse) ---
+    print(f"\n{'-'*78}\nPREMISE CHECKS  (QCBO-coarse)")
+    coarse = out["methods"].get("QCBO-coarse", {})
+    failures = []
+    for pid, cell in coarse.items():
+        if pid == "P0":
+            continue
+        prot, bid = cell["protected"], cell["byte_identical_to_P0"]
+        if prot:
+            status = "OK" if bid else "VIOLATION"
+            if not bid:
+                failures.append(pid)
+            print(f"  [protected]  {pid:4s} ({cell['locus']:16s}) "
+                  f"byte-identical={bid!s:5s}  [{status}]  <- Prop.2 guarantee")
+        else:
+            print(f"  [inter ctrl] {pid:4s} ({cell['locus']:16s}) "
+                  f"trajectory-differs={(not bid)!s:5s}  (informational; "
+                  f"quotient-visible but not guaranteed to shift the path)")
+    if failures:
+        print(f"\n  !! Prop.2 VIOLATION on protected perturbations: {failures}")
+    return out
 
 
 def main():
@@ -140,66 +252,7 @@ def main():
                     traceback.print_exc()
 
     # Paired Delta vs P0 (per seed) for final Y and GAP.
-    out = {"dataset": DS, "y_star": ystar, "task": task, "cap": args.cap,
-           "trials": args.trials, "seeds": args.seeds, "methods": {}}
-    print(f"\n{'='*78}\nClusterBench10 misspecification  (cap={args.cap}, "
-          f"T={args.trials}, {args.seeds} seeds, y*={ystar:.2f})\n{'='*78}")
-    hdr = f"{'method':12s} {'pert':4s} {'locus':16s} {'protected':9s} " \
-          f"{'finalY':>9s} {'dFinalY':>9s} {'dGAP':>8s} {'byte-id':>7s}"
-    print(hdr)
-    for m in methods:
-        out["methods"][m] = {}
-        base = {s: traj[m]["P0"][s] for s in traj[m]["P0"]}
-        for pid in pids:
-            finals, dfin, dgap, ident = [], [], [], []
-            for s in range(args.seeds):
-                if s not in traj[m][pid] or s not in base:
-                    continue
-                t, t0 = traj[m][pid][s], base[s]
-                g, _, fin = score(t, ystar, task, args.trials)
-                g0, _, fin0 = score(t0, ystar, task, args.trials)
-                finals.append(fin); dfin.append(fin - fin0); dgap.append(g - g0)
-                ident.append(t == t0)
-            if not finals:
-                continue
-            meta = pmeta.get(pid, {})
-            byte_id = all(ident)
-            out["methods"][m][pid] = {
-                "locus": meta.get("locus"), "protected": meta.get("protected"),
-                "finalY": [float(np.mean(finals)), _sem(finals)],
-                "dFinalY": [float(np.mean(dfin)), _sem(dfin)],
-                "dGAP": [float(np.mean(dgap)), _sem(dgap)],
-                "byte_identical_to_P0": byte_id}
-            print(f"{m:12s} {pid:4s} {str(meta.get('locus')):16s} "
-                  f"{str(meta.get('protected')):9s} "
-                  f"{np.mean(finals):+9.3f} {np.mean(dfin):+9.3f} "
-                  f"{np.mean(dgap):+8.3f} {str(byte_id):>7s}")
-
-    # --- Premise checks on real trajectories ---
-    # Protected (quotient-invisible) perturbations MUST be byte-identical: this
-    # is the Prop. 2 guarantee and is asserted. Inter-cluster perturbations are
-    # only quotient-VISIBLE -- they change the C-DAG but a trajectory shift is
-    # not guaranteed (it occurs only if the changed edge enters a *used* arm's
-    # identification), so we report them rather than assert.
-    print(f"\n{'-'*78}\nPREMISE CHECKS  (QCBO-coarse)")
-    coarse = out["methods"].get("QCBO-coarse", {})
-    failures = []
-    for pid, cell in coarse.items():
-        if pid == "P0":
-            continue
-        prot, bid = cell["protected"], cell["byte_identical_to_P0"]
-        if prot:
-            status = "OK" if bid else "VIOLATION"
-            if not bid:
-                failures.append(pid)
-            print(f"  [protected]  {pid:4s} ({cell['locus']:16s}) "
-                  f"byte-identical={bid!s:5s}  [{status}]  <- Prop.2 guarantee")
-        else:
-            print(f"  [inter ctrl] {pid:4s} ({cell['locus']:16s}) "
-                  f"trajectory-differs={(not bid)!s:5s}  (informational; "
-                  f"quotient-visible but not guaranteed to shift the path)")
-    if failures:
-        print(f"\n  !! Prop.2 VIOLATION on protected perturbations: {failures}")
+    out = aggregate(traj, methods, pids, pmeta, ystar, task, args)
 
     os.makedirs(OUTDIR, exist_ok=True)
     outpath = os.path.join(OUTDIR, "clusterbench10_misspec.json")

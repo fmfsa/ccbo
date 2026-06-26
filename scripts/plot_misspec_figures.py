@@ -25,9 +25,9 @@ from ccbo import benchmark
 JSON = "results/clusterbench10_misspec.json"
 RUNDIR = os.path.join(benchmark.BENCH_ROOT, "results", "_misspec")
 OUTDIR = "paper/figures"
-METHOD_ORDER = ["BO", "CBO", "CEO", "CoCaBO", "QCBO-finest", "QCBO-coarse"]
-COLORS = {"BO": "#888888", "CBO": "#1f77b4", "CEO": "#2ca02c",
-          "CoCaBO": "#9467bd", "QCBO-finest": "#ff7f0e", "QCBO-coarse": "#d62728"}
+METHOD_ORDER = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
+COLORS = {"BO": "#888888", "CBO": "#1f77b4",
+          "QCBO-finest": "#ff7f0e", "QCBO-coarse": "#d62728"}
 
 
 def _mean_traj(label, pid):
@@ -72,22 +72,22 @@ def fig_dial(data, methods):
         for pid, k in sev:
             cell = data["methods"][m].get(pid)
             if cell is not None:
-                xs.append(k); ys.append(cell["dFinalY"][0])
+                xs.append(k); ys.append(cell["dGAP"][0])
         if xs:
             axL.plot(xs, ys, marker="o", color=COLORS.get(m), label=m)
     axL.axhline(0, color="k", lw=0.6, ls=":")
-    axL.set_xlabel("number of intra-cluster edits"); axL.set_ylabel(r"$\Delta$ Final $Y$")
+    axL.set_xlabel("number of intra-cluster edits"); axL.set_ylabel(r"$\Delta$GAP@100")
     axL.set_title("Intra-cluster severity"); axL.set_xticks([0, 1, 2, 3])
     axL.legend(fontsize=7, frameon=False)
 
-    vals = [data["methods"][m]["Pic"]["dFinalY"][0] for m in methods
+    vals = [data["methods"][m]["Pic"]["dGAP"][0] for m in methods
             if "Pic" in data["methods"][m]]
     labs = [m for m in methods if "Pic" in data["methods"][m]]
     axR.bar(range(len(labs)), vals, color=[COLORS.get(m) for m in labs])
     axR.axhline(0, color="k", lw=0.6)
     axR.set_xticks(range(len(labs)))
     axR.set_xticklabels([m.replace("QCBO-", "Q-") for m in labs], rotation=30, fontsize=7)
-    axR.set_ylabel(r"$\Delta$ Final $Y$"); axR.set_title("Inter-cluster bow (Pic)")
+    axR.set_ylabel(r"$\Delta$GAP@100"); axR.set_title("Inter-cluster bow (Pic)")
     fig.tight_layout()
     out = os.path.join(OUTDIR, "clusterbench10_dial.pdf")
     fig.savefig(out); plt.close(fig)

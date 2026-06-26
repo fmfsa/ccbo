@@ -379,14 +379,19 @@ scoped, not blanket immunity.
 
 \begin{remark}[Damage taxonomy for misspecification]
 \label{rem:taxonomy}
-Under the gated design (Eq.~\ref{eq:es_gate}), a wrong assumed graph can hurt in
-two distinct ways. \emph{Tier-1 (prior bias):} the arm survives but its prior mean
-is wrong; expected improvement wastes evaluations, and the interventional data
-eventually correct it --- a convergence-speed cost. \emph{Tier-2 (arm damage):}
-the wrong graph flips an identifiability verdict, deleting an arm from $\ESpi$ (or
-admitting a spurious one); if the deleted arm contained the optimum, no amount of
-data recovers it. Prop.~\ref{prop:invariance} immunizes against both tiers
-whenever the misspecified edges are quotient-invisible.
+A wrong assumed graph reaches the optimizer through its \emph{derived causal-effect
+estimators}, in two ways. \emph{Tier-1 (prior bias):} for any arm whose identifying
+estimand references the misspecified edge, the do-calculus estimate used as the GP prior
+mean is biased --- even though the intervention is reachable and the \emph{true} effect is
+unchanged; expected improvement then wastes evaluations until the interventional data
+correct it, a convergence-speed cost. \emph{Tier-2 (arm damage):} under the gated design
+(Eq.~\ref{eq:es_gate}) the wrong graph can flip an identifiability verdict and delete an arm
+from $\ESpi$ (or admit a spurious one). Deleting the optimal \emph{singleton} is permanently
+unrecoverable only when the intervention budget forbids the larger identifiable arm that
+reaches the same optimum; absent such a budget, the optimizer must fall back to that arm at a
+\emph{sample-efficiency} cost. Coarsening immunizes against both tiers whenever the
+misspecified edges are quotient-invisible (Prop.~\ref{prop:invariance}): the quotient never
+references the edge, so no estimator it forms is biased and no gate it applies is flipped.
 \end{remark}
 
 \begin{proposition}[Validity is not refinement-monotone]
@@ -511,7 +516,7 @@ method reasons with} may be perturbed. We hold fixed the true SCM, the
 observational data, the reference optimum $y^*$, the seeds, and the budget, and
 inject the misspecified structure only into the object each method uses for causal
 reasoning --- the assumed graph for \QCBO{}, the adjacency that builds the causal
-prior for \CBO{}, the candidate-graph posterior for \CEO{}. We verify that this
+prior for \CBO{}. We verify that this
 injection leaves the objective \emph{byte-identical} under every perturbation
 (App.~\ref{app:seam}); without this guarantee a performance change could not be
 attributed to misstructure rather than to a changed problem.
@@ -522,9 +527,11 @@ their endpoints lie within a coarse cluster (\emph{intra}) or across clusters
 (\emph{inter}); the headline perturbation is a \emph{bow} --- a directed edge
 added on a latently-confounded pair, which renders the corresponding
 $\do$-effect non-identifiable. We compare \BO{} (non-causal control), \CBO{}
-(non-gating causal prior), \CEO{} (gating; graph-uncertainty competitor),
-CoCaBO, and \QCBO{} at the finest partition ($\equiv$\CBO{}, Prop.~\ref{prop:identity})
-and at the coarse partition. We report the paired-by-seed degradation
+(the benchmark's \emph{non-gating} causal prior), and \QCBO{} at the finest partition
+(the identifiability-gated, do-calculus \CBO{} of Prop.~\ref{prop:identity}) and at
+the coarse partition. Comparing the gating finest \QCBO{} against the non-gating \CBO{}
+isolates the two damage channels --- exploration-set gating versus prior bias. We report
+the paired-by-seed degradation
 $\Delta=\mathrm{metric}(\text{misspecified},s)-\mathrm{metric}(\text{correct},s)$
 for final $Y$ and GAP, so that per-seed noise cancels. (DCBO and model-based \CBO{}
 are excluded because they hard-code the environment or couple their surrogate
@@ -763,17 +770,95 @@ which is exactly the stated condition.
 \end{proof}
 
 \section{ClusterBench10: specification and oracle}\label{app:scm}
-\TODO{full SCM (edges, coefficients, latents $U_{12},U_{15}$), the coarse partition,
-the perturbation taxonomy (intra bow, intra Tier-1, inter bow, inter edge-deletions,
-sweep), and the Monte-Carlo oracle checks ($\do(X_1)$ strongest singleton; global
-optimum a union of clusters; all variants acyclic). Reference the generator and the
-structural test.}
+
+\paragraph{Variables and partition.}
+ClusterBench10 has five manipulable variables $\mathbf{X}=\{X_1,\dots,X_5\}$, four
+non-manipulable mediators $\{M_1,M_2,M_3,Z\}$, and the target $Y$, plus two latent
+confounders $U_{12}\!\to\!\{X_1,X_2\}$ and $U_{15}\!\to\!\{X_1,X_5\}$ (bidirected
+$X_1\!\leftrightarrow\!X_2$ and $X_1\!\leftrightarrow\!X_5$ in the projected ADMG).
+The coarse partition is $\pi=\{C_1,C_2\}\cup\text{singletons}$ with
+$C_1=\{X_1,X_2,X_3\}$, $C_2=\{X_4,X_5\}$; all non-manipulable atoms and $Y$ are
+singletons. The finest partition $\pi_\top$ (all singletons) recovers \CBO{}
+(Prop.~\ref{prop:identity}).
+
+\paragraph{Structural equations.}
+Roots $X_1,X_3,X_4,X_5$ carry only exogenous noise (and their latents); the remaining
+mechanisms are
+\[
+\begin{array}{llll}
+X_2 = 0.3\,X_3, & M_1 = X_3, & M_2 = X_1+X_2, & M_3 = X_4+X_5,\quad Z = X_5,
+\end{array}
+\]
+all linear, and the target is a \emph{quadratic bowl} in its parents,
+\[
+Y \;=\; \sum_{p\in\mathrm{pa}(Y)} a_p\,(p-c_p)^2,\qquad
+\mathrm{pa}(Y)=\{X_1,X_2,X_3,M_1,M_2,M_3,Z\},
+\]
+with curvatures $a=(3.0,1.5,1.0,0.5,0.8,0.3,0.3)$ and centres
+$c=(2,1,1,1,3,0,0)$ over $(X_1,X_2,X_3,M_1,M_2,M_3,Z)$. The quadratic form places the
+optimum at an \emph{interior} point (not a box vertex), so unstructured \BO{} cannot
+solve it in a constant number of evaluations; this is what makes the sample-efficiency
+comparison non-degenerate. The latent confounders enter only the observational
+sampler and the declared structure --- the noise-free objective every method optimises
+is the deterministic SEM above, identical across all methods and perturbations
+(App.~\ref{app:seam}).
+
+\paragraph{Monte-Carlo oracle (verified at build time).}
+The generator's oracle minimises the noise-free objective over each intervention arm's
+box and confirms: (C1) $\do(X_1)$ is the strongest \emph{singleton} arm (it lowers $Y$
+from the no-intervention value $\approx 23.7$ to $\approx 3.6$, a reduction of $20.0$,
+versus $8.1$ for $\do(X_2)$ and $5.6$ for $\do(X_3)$), so deleting it at the finest
+partition is a genuine loss; (C2) the global optimum over all subsets is
+$\do(C_1)=\do(X_1,X_2,X_3)$ at $(X_1,X_2,X_3)=(2,1,1)$ with $Y^\star=0$ --- a
+\emph{union of clusters}, so the coarse partition is lossless (Prop.~\ref{prop:price});
+$C_2$ is neutral-to-harmful (its $Y$-terms are minimised at $X_4=X_5=0$), so a method
+that intervenes on the full $5$-dimensional box wastes two dimensions; (C3) the optimum
+is interior; and the observational sample has $\mathrm{corr}(X_1,X_2)=0.70$ via $U_{12}$,
+making the bow a genuine confounded misspecification. All perturbed graphs below are
+acyclic. The build script is \texttt{scripts/generate\_clusterbench10.py} and the
+structural premises are asserted in \texttt{ccbo/tests/test\_clusterbench10\_structure.py}.
+
+\paragraph{Perturbation taxonomy.}
+Each perturbation adds/deletes/reverses one or more edges, classified by whether its
+endpoints lie within a coarse cluster (\emph{intra}) or across clusters (\emph{inter}),
+and by whether it is \emph{quotient-invisible} (intra, or inter-but-redundant). The
+headline contrast is \textbf{P1} (add $X_1\!\to\!X_2$, an intra-$C_1$ bow on the
+$X_1\!\leftrightarrow\!X_2$ confounded pair --- makes $\do(X_1)$ non-identifiable at the
+finest partition) versus \textbf{Pic} (add $X_1\!\to\!X_5$, the same operation across
+clusters --- forms a cluster-level bow $C_1\!\to\!C_2$ alongside
+$C_1\!\leftrightarrow\!C_2$, deleting $\do(C_1)$ at the coarse level). The remaining
+perturbations are P2 (delete $X_3\!\to\!X_2$) and P3 (reverse it), both intra-$C_1$
+prior-bias controls; P5 (delete the sole inter edge $X_3\!\to\!M_1$) and P6 (delete the
+\emph{redundant} inter edge $X_1\!\to\!M_2$, with $X_2\!\to\!M_2$ surviving so the
+quotient is unchanged); and a severity sweep S1--S3 of $1,2,3$ simultaneous intra-$C_1$
+edits. \QCBO{}-coarse is provably byte-identical on every quotient-invisible
+perturbation (P1, P2, P3, P6, S1--S3) and is \emph{not} protected on Pic and P5.
 
 \section{Fair-comparison seam: per-method details}\label{app:seam}
-\TODO{for each baseline, exactly where structure is perturbed and why the objective
-is untouched (\CBO{}: adjacency vs SEM functions; \CEO{}: candidate-graph posterior
-vs SEM class; CoCaBO: FCM functors), plus the byte-identity verification of the
-objective under every perturbation.}
+The invariant is that every method optimises the \emph{same} objective --- the true
+SCM's noise-free \texttt{intervention\_function} --- and only the \emph{structure each
+method reasons with} is perturbed. We realise this per method as follows.
+
+\textbf{\QCBO{} (finest and coarse).} The objective is read from the original graph's
+SEM, while the structure is supplied separately through the assumed graph name
+(\texttt{CoarsenedGraph(\ldots, assumed\_graph\_name=variant)}). Swapping the assumed
+graph changes the quotient, the exploration set, the identification formulas, and the
+prior, but never the SEM that generates outcomes.
+
+\textbf{\CBO{} and \BO{} (benchmark baselines).} The benchmark objective is built from
+the \texttt{sem\_equations} (dependencies $+$ coefficients $+$ the quadratic target),
+which is \emph{independent} of the binary \texttt{adjacency\_matrix} that drives the
+causal prior in \texttt{fit\_all\_models}. We therefore perturb \texttt{adjacency\_matrix}
+post-construction and leave the SEM untouched (\texttt{scripts/misspec\_inject.py}).
+\BO{} is non-causal (\texttt{Causal\_prior=False}): it reads no structure at all, so it
+is invariant to every perturbation by construction (we run it once and report
+$\Delta=0$), at the price of the weakest absolute performance.
+
+\textbf{Byte-identity verification.} The guard \texttt{seam\_ok} evaluates the objective
+on every singleton arm at random points under the true (P0) versus each perturbed
+adjacency and asserts the outcomes match to machine precision. It passes for all
+perturbations P1--P6 and S1--S3: feeding a method a wrong DAG changes only its causal
+reasoning, never the problem it is solving.
 
 \section{Full head-to-head on the standardized benchmark}\label{app:headtohead}
 On the \emph{correct} DAG we score every method by the benchmark's own GAP and PA-GAP
@@ -817,14 +902,28 @@ the fine DAG with its coarse partition (left) and the quotient C-DAG (right), in
 convention as Fig.~\ref{fig:clusterbench10} (manipulable variables orange, target yellow,
 dashed red latent confounding, dashed boxes the manipulable clusters). The coarse clusters
 are: ToyGraph and Synthetic-2 $\{X,Z\}$; Synthetic $\{B\}$, $\{D,E\}$; Healthcare
-$\{\text{Aspirin},\text{Statin}\}$; Epidemiology $\{L,B\}$; Ecology $\{C,N,O\}$, $\{D,T\}$.
+$\{\text{Aspirin},\text{Statin}\}$; Epidemiology
+$\{L,B\}$\footnote{We follow the released \textsc{CausalBO} benchmark configuration,
+which declares $L$ and $B$ manipulable for Epidemiology; the survey's prose describes the
+original CEO model as intervening on $T$ and $R$. Our results use the released
+configuration, and the figure reflects what we ran.}; Ecology $\{C,N,O\}$, $\{D,T\}$.
 (For Ecology, $\{D,T\}$ has no directed path to $Y$, so it is a degenerate cluster --- a
 property of the fitted SCM, not the coarsening.)
 \input{figures/standardized_dags}
 
 \section{Full results}\label{app:fulltables}
-\TODO{all perturbations $\times$ both cap regimes (cap${=}1$ Tier-2 headline +
-uncapped field comparison), all metrics, all seeds.}
+Table~\ref{tab:fulltables} reports, for every method and every perturbation, the absolute
+$\mathrm{GAP}$ at budgets $20/50/100$ and the paired degradation $\Delta\mathrm{GAP}@100$
+and $\Delta\text{Final }Y$ (misspecified $-$ correct), uncapped (all-subsets exploration),
+mean$\pm$s.e.\ over $10$ seeds at $T{=}100$.
+\begin{table}[t]\centering
+\caption{ClusterBench10: full per-method, per-perturbation results (uncapped,
+all-subsets exploration; $10$ seeds, $T{=}100$). $\mathrm{GAP}\in[0,1]$, higher is more
+sample-efficient; $\Delta$ columns are paired degradations versus the correct DAG, and
+\textbf{b-id} marks byte-identical trajectories.}
+\label{tab:fulltables}
+\small\adjustbox{max width=\linewidth}{\input{tables/clusterbench10_fulltable}}
+\end{table}
 
 % =============================================================================
 \bibliographystyle{abbrvnat}
