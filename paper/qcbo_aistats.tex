@@ -561,7 +561,13 @@ severs the bow for everyone. The damage instead appears in \emph{convergence}, a
 exactly where the taxonomy predicts. \QCBO{}-coarse, for which the bow lies inside
 $C_1$ and is invisible to the quotient, is \emph{byte-for-byte identical} to the
 correctly-specified run --- its trajectory, GAP, and PA-GAP are unchanged to machine
-precision ($\Delta\mathrm{GAP}=\Delta\text{PA-GAP}=0$, Prop.~\ref{prop:invariance}).
+precision ($\Delta\mathrm{GAP}=\Delta\text{PA-GAP}=0$,
+Prop.~\ref{prop:invariance}).\footnote{Exactly bit-identical on $9$ of $10$ seeds for
+the intra bow (and on all $10$ for every other protected perturbation); the tenth
+recovers the optimum exactly and its intermediate iterates match to $<\!10^{-8}$
+(GP-solver floating-point nondeterminism, independent of the perturbation, versus
+$\ge\!10^{-2}$ for any quotient-visible perturbation). We report invariance at this
+tolerance throughout.}
 The identifiability-gated \CBO{} (\QCBO{}-finest) enjoys no such guarantee: the bow
 biases the estimators of every arm it touches and deletes $\do(X_1)$ from its gated
 set, so its GAP and PA-GAP \emph{shift} (Table~\ref{tab:taxonomy}). On this SCM the

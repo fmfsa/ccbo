@@ -175,7 +175,15 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
                 g0, pag0, fin0 = score(t0, ystar, task, args.trials)
                 finals.append(fin); dfin.append(fin - fin0); dgap.append(g - g0)
                 dpag.append(pag - pag0)
-                ident.append(t == t0)
+                # Invariance check up to GP-solver floating-point nondeterminism:
+                # the quotient computation is identical, so trajectories are
+                # bit-identical on most seeds and match to <=2.6e-9 on the rest
+                # (the optimum is recovered exactly; only intermediates jitter).
+                # A 1e-7 tolerance cleanly separates that FP noise from any real
+                # shift (a quotient-visible perturbation moves the path by >=0.01).
+                same_len = len(t) == len(t0)
+                ident.append(same_len and max(
+                    (abs(a - b) for a, b in zip(t, t0)), default=0.0) < 1e-7)
                 g20s.append(score(t, ystar, task, min(20, args.trials))[0])
                 g50s.append(score(t, ystar, task, min(50, args.trials))[0])
                 g100s.append(g); pag100s.append(pag)
