@@ -72,22 +72,22 @@ def fig_dial(data, methods):
         for pid, k in sev:
             cell = data["methods"][m].get(pid)
             if cell is not None:
-                xs.append(k); ys.append(cell["dGAP"][0])
+                xs.append(k); ys.append(cell["dPAGAP"][0])
         if xs:
             axL.plot(xs, ys, marker="o", color=COLORS.get(m), label=m)
     axL.axhline(0, color="k", lw=0.6, ls=":")
-    axL.set_xlabel("number of intra-cluster edits"); axL.set_ylabel(r"$\Delta$GAP@100")
+    axL.set_xlabel("number of intra-cluster edits"); axL.set_ylabel(r"$\Delta$PA-GAP")
     axL.set_title("Intra-cluster severity"); axL.set_xticks([0, 1, 2, 3])
     axL.legend(fontsize=7, frameon=False)
 
-    vals = [data["methods"][m]["Pic"]["dGAP"][0] for m in methods
+    vals = [data["methods"][m]["Pic"]["dPAGAP"][0] for m in methods
             if "Pic" in data["methods"][m]]
     labs = [m for m in methods if "Pic" in data["methods"][m]]
     axR.bar(range(len(labs)), vals, color=[COLORS.get(m) for m in labs])
     axR.axhline(0, color="k", lw=0.6)
     axR.set_xticks(range(len(labs)))
     axR.set_xticklabels([m.replace("QCBO-", "Q-") for m in labs], rotation=30, fontsize=7)
-    axR.set_ylabel(r"$\Delta$GAP@100"); axR.set_title("Inter-cluster bow (Pic)")
+    axR.set_ylabel(r"$\Delta$PA-GAP"); axR.set_title("Inter-cluster bow (Pic)")
     fig.tight_layout()
     out = os.path.join(OUTDIR, "clusterbench10_dial.pdf")
     fig.savefig(out); plt.close(fig)
