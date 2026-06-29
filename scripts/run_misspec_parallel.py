@@ -46,9 +46,22 @@ OUTDIR = drv.OUTDIR
 
 
 def run_unit(method, pid, seed, cap, trials, ninit):
-    """One (method, perturbation, seed) run; returns its best-so-far trajectory."""
+    """One (method, perturbation, seed) run; returns its best-so-far trajectory.
+
+    Resumable: if a complete per-run CSV already exists (>= trials points), it is
+    reused instead of recomputed, so a relaunch only fills the missing units.
+    """
     cb.register_variants()  # each worker registers the perturbation variants
     t0 = time.time()
+    csv = os.path.join(RUNDIR, f"{method}_{pid}_seed{seed}.csv")
+    if os.path.exists(csv):
+        try:
+            traj = pd.read_csv(csv)["current_optimal"].tolist()
+            if len(traj) >= trials:
+                return dict(method=method, pid=pid, seed=seed, ok=True, traj=traj,
+                            secs=0.0, resumed=True)
+        except Exception:
+            pass
     try:
         traj = drv.METHODS[method](pid, seed, cap, trials, ninit)
         return dict(method=method, pid=pid, seed=seed, ok=True, traj=traj,

@@ -1,20 +1,21 @@
 """Emit the ClusterBench10 misspecification LaTeX tables from the driver JSON.
 
-Reads results/clusterbench10_misspec.json (produced by run_misspec_parallel.py /
-run_misspec_fullfield.py) and writes three self-contained tabulars into
+Reads results/clusterbench10_misspec.json and writes three tabulars into
 paper/tables/:
 
-  clusterbench10_headline.tex  -- T1: the head-to-head. Per method, sample
-                                  efficiency under the CORRECT DAG (absolute
-                                  GAP@50, GAP@100) and robustness under the intra
-                                  bow P1 (dGAP@100, byte-identity).
-  clusterbench10_taxonomy.tex  -- T2: per-perturbation dGAP@100 for every method
-                                  (the conditions characterization).
-  clusterbench10_fulltable.tex -- appendix: every method x perturbation, all GAP
-                                  budgets + paired deltas.
+  clusterbench10_headline.tex  -- T1 (sample efficiency, CORRECT DAG): per method,
+                                  absolute Final Y and GAP@{20,50,100}. Non-causal
+                                  BO is far worse; the causal methods exploit the
+                                  prior.
+  clusterbench10_taxonomy.tex  -- T2 (invariance under misspecification): per
+                                  perturbation, the paired dGAP@100 and dPA-GAP@100
+                                  for QCBO-finest vs QCBO-coarse. Coarse is exactly
+                                  0 on quotient-invisible perturbations (byte-id);
+                                  finest is not -- a misspecified edge perturbs its
+                                  GAP/PA-GAP even when the final value converges.
+  clusterbench10_fulltable.tex -- appendix: every method x perturbation, all metrics.
 
-GAP is in [0,1], higher = faster convergence (more sample-efficient). dGAP =
-GAP(misspecified) - GAP(correct); 0 = unaffected, negative = hurt.
+GAP/PA-GAP in [0,1], higher = faster convergence. Final Y: lower = better (y*=0).
 
 Run:  PYTHONPATH=. python scripts/emit_misspec_table.py
 """
@@ -25,10 +26,8 @@ import json
 IN = "results/clusterbench10_misspec.json"
 OUTDIR = "paper/tables"
 
-# Field: BO (non-causal), CBO (benchmark non-gating), QCBO-finest (gating
-# do-calculus CBO, Prop. 1), QCBO-coarse. CEO/CoCaBO are out of scope.
 METHOD_ORDER = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
-PERT_ORDER = ["P1", "P2", "P3", "Pic", "P5", "P6", "S1", "S2", "S3"]
+PERT_ORDER = ["P1", "P2", "P3", "S1", "S2", "S3", "P6", "P5", "Pic"]
 PERT_LABEL = {
     "P1": r"add $X_1\!\to\!X_2$ (bow)", "P2": r"del $X_3\!\to\!X_2$",
     "P3": r"rev $X_3\!\to\!X_2$", "Pic": r"add $X_1\!\to\!X_5$ (bow)",
@@ -40,13 +39,12 @@ MLABEL = {"QCBO-finest": r"\QCBO-finest", "QCBO-coarse": r"\QCBO-coarse",
           "BO": r"\BO", "CBO": r"\CBO"}
 
 
-def _ms(pair, fmt="%+.2f"):
+def _ms(pair, fmt="%+.3f"):
     m, s = pair
-    return (fmt % m) + r"{\scriptstyle\,\pm\,}" + ("%.2f" % s)
+    return (fmt % m) + r"{\scriptstyle\,\pm\,}" + ("%.3f" % s)
 
 
 def _mp(pair, fmt="%.2f"):
-    """mean$\\pm$sem, unsigned (for absolute GAP)."""
     m, s = pair
     return (fmt % m) + r"{\scriptstyle\,\pm\,}" + ("%.2f" % s)
 
@@ -56,51 +54,52 @@ def _present(data):
 
 
 def emit_headline(data):
+    """T1: sample efficiency on the correct DAG (P0)."""
     methods = _present(data)
     lines = [r"\begin{tabular}{@{}lcccc@{}}", r"\toprule",
-             r"\textbf{Method} & \textbf{GAP@50} & \textbf{GAP@100} & "
-             r"$\Delta$\textbf{GAP@100} & \textbf{byte-id.} \\",
-             r"\multicolumn{1}{c}{} & \multicolumn{2}{c}{\footnotesize correct DAG"
-             r" ($\uparrow$ efficient)} & \multicolumn{1}{c}{\footnotesize bow P1}"
-             r" & \\",
+             r"\textbf{Method} & \textbf{Final $Y$} & \textbf{GAP@20} & "
+             r"\textbf{GAP@50} & \textbf{GAP@100} \\",
+             r"\multicolumn{1}{c}{} & {\footnotesize $\downarrow$, $y^\star{=}0$} & "
+             r"\multicolumn{3}{c}{\footnotesize $\uparrow$ more sample-efficient} \\",
              r"\midrule"]
     for m in methods:
-        c = data["methods"][m]
-        p0, p1 = c.get("P0"), c.get("P1")
-        if p0 is None or p1 is None:
+        p0 = data["methods"][m].get("P0")
+        if p0 is None:
             continue
-        bid = r"\checkmark" if p1["byte_identical_to_P0"] else "--"
-        g50, g100 = _mp(p0["GAP50"]), _mp(p0["GAP100"])
-        dg = _ms(p1["dGAP"], fmt="%+.3f")
-        if m == "QCBO-coarse":
-            row = (r"\textbf{" + MLABEL[m] + r"} & $" + g50 + r"$ & $" + g100
-                   + r"$ & $\mathbf{" + dg + r"}$ & " + bid)
-        else:
-            row = f"{MLABEL.get(m, m)} & ${g50}$ & ${g100}$ & ${dg}$ & {bid}"
-        lines.append(row + r" \\")
+        fy = _mp(p0["finalY"], fmt="%.3f")
+        g20, g50, g100 = _mp(p0["GAP20"]), _mp(p0["GAP50"]), _mp(p0["GAP100"])
+        name = (r"\textbf{" + MLABEL[m] + r"}") if m == "QCBO-coarse" else MLABEL.get(m, m)
+        lines.append(f"{name} & ${fy}$ & ${g20}$ & ${g50}$ & ${g100}$ \\\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 
 def emit_taxonomy(data):
-    methods = _present(data)
-    col = "l l " + " ".join(["c"] * len(methods))
-    head = (r"\textbf{Perturbation} & \textbf{Locus} & "
-            + " & ".join(r"\textbf{%s}" % m.replace("QCBO-", r"Q-") for m in methods)
-            + r" \\")
-    lines = [r"\begin{tabular}{@{}" + col + r"@{}}", r"\toprule", head,
-             r"\multicolumn{2}{c}{} & \multicolumn{%d}{c}{\footnotesize "
-             r"$\Delta$GAP@100 (0 = unaffected)} \\" % len(methods), r"\midrule"]
+    """T2: paired dGAP@100 and dPA-GAP@100 for finest vs coarse per perturbation."""
+    pair_methods = [m for m in ("QCBO-finest", "QCBO-coarse") if m in data["methods"]]
+    lines = [r"\begin{tabular}{@{}ll cc cc@{}}", r"\toprule",
+             r"\textbf{Perturbation} & \textbf{Locus} & "
+             r"\multicolumn{2}{c}{\textbf{\QCBO-finest}} & "
+             r"\multicolumn{2}{c}{\textbf{\QCBO-coarse}} \\",
+             r"\cmidrule(lr){3-4}\cmidrule(lr){5-6}",
+             r" & & $\Delta$GAP & $\Delta$PA-GAP & $\Delta$GAP & $\Delta$PA-GAP \\",
+             r"\midrule"]
     for pid in PERT_ORDER:
-        ref = next((data["methods"][m][pid] for m in methods
+        ref = next((data["methods"][m][pid] for m in pair_methods
                     if pid in data["methods"][m]), None)
         if ref is None:
             continue
         locus = LOCUS_TEX.get(ref.get("locus"), ref.get("locus", ""))
         cells = []
-        for m in methods:
+        for m in pair_methods:
             c = data["methods"][m].get(pid)
-            cells.append(("$" + _ms(c["dGAP"], fmt="%+.3f") + "$") if c else "--")
+            if c is None:
+                cells += ["--", "--"]
+            elif c.get("byte_identical_to_P0"):
+                cells += [r"$\mathbf{0}$", r"$\mathbf{0}$"]   # exact byte-identity
+            else:
+                cells += ["$" + _ms(c["dGAP"]) + "$",
+                          "$" + _ms(c.get("dPAGAP", [0.0, 0.0])) + "$"]
         lines.append(f"{PERT_LABEL.get(pid, pid)} & {locus} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
@@ -109,10 +108,10 @@ def emit_taxonomy(data):
 def emit_fulltable(data):
     methods = _present(data)
     perts = ["P0"] + PERT_ORDER
-    lines = [r"\begin{tabular}{@{}ll ccc cc c@{}}", r"\toprule",
+    lines = [r"\begin{tabular}{@{}ll ccc c cc c@{}}", r"\toprule",
              r"\textbf{Method} & \textbf{Pert.} & \textbf{GAP@20} & \textbf{GAP@50} "
-             r"& \textbf{GAP@100} & $\Delta$\textbf{GAP@100} & $\Delta$\textbf{Final}$Y$"
-             r" & \textbf{b-id} \\", r"\midrule"]
+             r"& \textbf{GAP@100} & \textbf{PA-GAP} & $\Delta$\textbf{GAP} & "
+             r"$\Delta$\textbf{PA-GAP} & \textbf{b-id} \\", r"\midrule"]
     for m in methods:
         first = True
         for pid in perts:
@@ -122,11 +121,12 @@ def emit_fulltable(data):
             name = MLABEL.get(m, m) if first else ""
             first = False
             bid = r"\checkmark" if c["byte_identical_to_P0"] else "--"
-            dg = "--" if pid == "P0" else "$" + _ms(c["dGAP"], fmt="%+.3f") + "$"
-            df = "--" if pid == "P0" else "$" + _ms(c["dFinalY"]) + "$"
+            dg = "--" if pid == "P0" else "$" + _ms(c["dGAP"]) + "$"
+            dp = "--" if pid == "P0" else "$" + _ms(c.get("dPAGAP", [0.0, 0.0])) + "$"
             lines.append(
                 f"{name} & {pid} & ${_mp(c['GAP20'])}$ & ${_mp(c['GAP50'])}$ & "
-                f"${_mp(c['GAP100'])}$ & {dg} & {df} & {bid} \\\\")
+                f"${_mp(c['GAP100'])}$ & ${_mp(c.get('PAGAP100', [0.0, 0.0]))}$ & "
+                f"{dg} & {dp} & {bid} \\\\")
         lines.append(r"\midrule")
     lines[-1] = r"\bottomrule"
     lines.append(r"\end{tabular}")

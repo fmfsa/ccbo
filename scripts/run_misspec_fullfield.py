@@ -165,19 +165,20 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
         out["methods"][m] = {}
         base = {s: traj[m]["P0"][s] for s in traj[m]["P0"]}
         for pid in pids:
-            finals, dfin, dgap, ident = [], [], [], []
-            g20s, g50s, g100s = [], [], []   # absolute GAP@T (sample-efficiency)
+            finals, dfin, dgap, dpag, ident = [], [], [], [], []
+            g20s, g50s, g100s, pag100s = [], [], [], []  # absolute GAP@T / PA-GAP
             for s in range(args.seeds):
                 if s not in traj[m][pid] or s not in base:
                     continue
                 t, t0 = traj[m][pid][s], base[s]
-                g, _, fin = score(t, ystar, task, args.trials)
-                g0, _, fin0 = score(t0, ystar, task, args.trials)
+                g, pag, fin = score(t, ystar, task, args.trials)
+                g0, pag0, fin0 = score(t0, ystar, task, args.trials)
                 finals.append(fin); dfin.append(fin - fin0); dgap.append(g - g0)
+                dpag.append(pag - pag0)
                 ident.append(t == t0)
                 g20s.append(score(t, ystar, task, min(20, args.trials))[0])
                 g50s.append(score(t, ystar, task, min(50, args.trials))[0])
-                g100s.append(g)
+                g100s.append(g); pag100s.append(pag)
             if not finals:
                 continue
             meta = pmeta.get(pid, {})
@@ -187,10 +188,12 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
                 "finalY": [float(np.mean(finals)), _sem(finals)],
                 "dFinalY": [float(np.mean(dfin)), _sem(dfin)],
                 "dGAP": [float(np.mean(dgap)), _sem(dgap)],
-                # Absolute GAP@T (correct DAG = sample efficiency; misspec = robustness).
+                "dPAGAP": [float(np.mean(dpag)), _sem(dpag)],
+                # Absolute GAP/PA-GAP@T (correct DAG = sample efficiency).
                 "GAP20": [float(np.mean(g20s)), _sem(g20s)],
                 "GAP50": [float(np.mean(g50s)), _sem(g50s)],
                 "GAP100": [float(np.mean(g100s)), _sem(g100s)],
+                "PAGAP100": [float(np.mean(pag100s)), _sem(pag100s)],
                 "byte_identical_to_P0": byte_id}
             print(f"{m:12s} {pid:4s} {str(meta.get('locus')):16s} "
                   f"{str(meta.get('protected')):9s} "

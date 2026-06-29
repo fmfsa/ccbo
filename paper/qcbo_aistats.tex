@@ -87,14 +87,16 @@ the manipulable variables into clusters together with the cluster-level
 (quotient) graph, and never reasons about edges inside a cluster. We prove that
 any misspecification confined within a cluster is \emph{invisible} to \QCBO{}:
 exploration set, identification formulas, priors, and the entire optimization
-trajectory are unchanged. On a purpose-built ten-variable benchmark we run the
-full field of causal-\BO{} methods under a taxonomy of misspecifications with
-the objective held \emph{fixed}: every method that consumes the corrupted edge
-degrades --- gating methods permanently --- whereas \QCBO{} under a coarsening
-that abstracts the edge away is byte-for-byte unaffected. The protection is
-\emph{exactly} scoped: the same edge placed across clusters is catastrophic.
-Coarsening additionally improves sample efficiency on the standardized
-\textsc{CausalBO} benchmark.
+trajectory --- and therefore GAP and PA-GAP --- are unchanged. This is a
+\emph{guarantee} no full-DAG method can offer, because its identifying estimators
+are functionals of the very edges in question. On a purpose-built ten-variable
+benchmark, with the objective held \emph{fixed}, a within-cluster edge error
+leaves \QCBO{}-coarse byte-for-byte invariant ($\Delta\mathrm{GAP}=
+\Delta\text{PA-GAP}=0$) while it perturbs the convergence of an
+identifiability-gated \CBO{} --- the bias reaches whatever it cannot abstract
+away. The protection is \emph{exactly} scoped: the same edge placed across
+clusters breaks it. Coarsening additionally concentrates the intervention budget,
+improving sample efficiency over both full-DAG \CBO{} and structure-free \BO{}.
 \end{abstract}
 
 % =============================================================================
@@ -116,17 +118,20 @@ learning the graph more accurately, but by committing to \emph{less} structure o
 a more reliable kind.
 
 \paragraph{A wrong edge is not a benign approximation.}
-The assumed graph enters a \CBO{} algorithm at two points, and corruption at
-either is consequential. (i) Through the \emph{exploration set}: structural
-causal bandit theory prunes the candidate interventions to those whose effect is
-identifiable and possibly optimal \citep{lee2018structural}. A misspecified edge
-can flip an identifiability verdict and \emph{delete} the candidate that contains
-the optimum; no amount of subsequent interventional data can recover an arm that
-was never searched. (ii) Through the \emph{prior}: the do-calculus estimate used
-as the GP prior mean is a functional of the graph, so a wrong edge biases it.
-This second damage is recoverable --- the interventional loop eventually corrects
-the prior --- but the first is not. We make this dichotomy precise as a damage
-taxonomy (Remark~\ref{rem:taxonomy}) and use it as the lens for the entire paper.
+The assumed graph enters a \CBO{} algorithm only through its \emph{derived
+causal-effect estimators}, and corrupting those is consequential in two ways.
+(i) Through the \emph{prior}: the do-calculus estimate used as the GP prior mean
+is a functional of the graph, so a wrong edge biases it even when the intervention
+is reachable and the true effect is unchanged --- a convergence-speed cost paid in
+GAP and PA-GAP. (ii) Through the \emph{exploration set}: structural causal bandit
+theory prunes candidates to those whose effect is identifiable
+\citep{lee2018structural}, and a misspecified edge can flip a verdict and
+\emph{delete} the candidate containing the optimum --- unrecoverable when the
+intervention budget forbids the larger arm that reaches the same optimum. Either
+way the damage is a functional of the wrong edge, so the thesis of this paper is
+simple: an estimator that \emph{cannot see} an edge cannot be damaged by it. We
+make the dichotomy precise as a damage taxonomy (Remark~\ref{rem:taxonomy}) and
+use it as the lens for the paper.
 
 \paragraph{Practitioners know groups, not edges.}
 The knowledge a practitioner actually holds is rarely the full DAG, but it is
@@ -155,13 +160,15 @@ error confined to a cluster cannot be represented, let alone affect the optimize
 \begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
   \item \textbf{Robustness via coarsening (primary).} We prove an
   \emph{intra-cluster invariance} property (Prop.~\ref{prop:invariance}): every
-  quantity \QCBO{} computes is invariant to arbitrary within-cluster edge errors.
-  Empirically, on a purpose-built benchmark and with the objective held fixed,
-  the full field of causal-\BO{} methods degrades under a misspecified edge while
-  \QCBO{} under a coarsening that abstracts that edge away is byte-for-byte
-  unchanged. We characterize the \emph{exact} scope of the protection: it holds
-  iff the perturbed edge is invisible in the quotient, and breaks --- catastrophically
-  --- for the same edge placed across clusters (\S\ref{sec:exp}).
+  quantity \QCBO{} computes --- and hence its entire trajectory, GAP, and PA-GAP ---
+  is invariant to arbitrary within-cluster edge errors. This is a \emph{guarantee}
+  the full-DAG methods lack: their identifying estimators are functionals of the
+  misspecified edge, so a within-cluster error reaches them. Empirically, with the
+  objective held fixed, such an error leaves \QCBO{}-coarse byte-identical
+  ($\Delta\mathrm{GAP}=\Delta\text{PA-GAP}=0$) while it perturbs the convergence of
+  the identifiability-gated \CBO{}. We characterize the \emph{exact} scope: the
+  protection holds iff the perturbed edge is invisible in the quotient, and breaks
+  for the same edge placed across clusters (\S\ref{sec:exp}).
   \item \textbf{Sample efficiency (secondary).} Coarsening concentrates a fixed
   budget on fewer identifiable cluster-level arms; a price-of-coarsening
   characterization (Prop.~\ref{prop:price}) gives an exact condition for when this
@@ -423,8 +430,9 @@ some optimizer $S^*$ of Eq.~\eqref{eq:cbo_obj} is a union of $\pi$-clusters.
 \label{sec:exp}
 Our evaluation is organized around the damage taxonomy (Remark~\ref{rem:taxonomy}).
 We first establish the head-to-head methodology that makes a comparison under
-misspecification meaningful (\S\ref{sec:exp-setup}); we then show that the whole
-field degrades where \QCBO{}-coarse does not (\S\ref{sec:exp-headline}),
+misspecification meaningful (\S\ref{sec:exp-setup}); we then show that a
+within-cluster error perturbs the convergence (GAP, PA-GAP) of the gated full-DAG
+method while leaving \QCBO{}-coarse byte-identical (\S\ref{sec:exp-headline}),
 characterize \emph{exactly} which misspecifications are protected and exhibit the
 boundary where \QCBO{}-coarse itself breaks (\S\ref{sec:exp-scope}), and close with
 the sample-efficiency benefit (\S\ref{sec:exp-eff}).
@@ -533,40 +541,53 @@ the coarse partition. Comparing the gating finest \QCBO{} against the non-gating
 isolates the two damage channels --- exploration-set gating versus prior bias. We report
 the paired-by-seed degradation
 $\Delta=\mathrm{metric}(\text{misspecified},s)-\mathrm{metric}(\text{correct},s)$
-for final $Y$ and GAP, so that per-seed noise cancels. (DCBO and model-based \CBO{}
+for final $Y$, GAP, and PA-GAP, so that per-seed noise cancels. (DCBO and model-based \CBO{}
 are excluded because they hard-code the environment or couple their surrogate
 structure to the objective, so ``wrong structure, same objective'' is not
 separable; see \S\ref{sec:limitations}.)
 
-\subsection{The field is fragile; coarsening is not}
+\subsection{Coarsening guarantees an unchanged trajectory}
 \label{sec:exp-headline}
-Table~\ref{tab:headline} and Figure~\ref{fig:overlays} report the head-to-head
-under the intra-cluster bow. The pattern follows the damage taxonomy exactly.
-\emph{Gating methods} (\CEO{} and \QCBO{}-finest) suffer \emph{Tier-2}: the bow
-makes the optimal arm non-identifiable, it is deleted from the exploration set,
-and the resulting gap is large and \emph{permanent} --- no interventional data
-restores an arm that is never searched. \emph{\CBO{}} (which does not gate) suffers
-only \emph{Tier-1}: its trajectory is perturbed early but recovers by the budget.
-\emph{\BO{}} is trivially invariant but worst in absolute terms --- robustness by
-ignoring structure forfeits the causal prior entirely. \emph{\QCBO{}-coarse}, in
-which the bow lies inside $C_1$ and is therefore invisible to the quotient, has
-$\Delta=0$: its trajectory is byte-for-byte identical to the correctly-specified
-run (Prop.~\ref{prop:invariance}). The takeaway is that \QCBO{} attains robustness
-\emph{without} discarding the causal prior the way \BO{} does.
+We first fix the \emph{correct} DAG and read off sample efficiency
+(Table~\ref{tab:headline}): the causal methods exploit the observational prior to
+converge within a handful of interventions, while non-causal \BO{}, which must learn
+the ten-dimensional response from scratch, is far slower and worst in absolute $Y$.
+Structure helps, and discarding it the way \BO{} does is expensive.
+
+We then add the intra-cluster bow (add $X_1\!\to\!X_2$ on the $U_{12}$-confounded
+pair) with the objective held fixed. Uncapped, no method's \emph{final} value is
+damaged: the optimum $\do(C_1)$ intervenes on the whole confounded cluster and so
+severs the bow for everyone. The damage instead appears in \emph{convergence}, and
+exactly where the taxonomy predicts. \QCBO{}-coarse, for which the bow lies inside
+$C_1$ and is invisible to the quotient, is \emph{byte-for-byte identical} to the
+correctly-specified run --- its trajectory, GAP, and PA-GAP are unchanged to machine
+precision ($\Delta\mathrm{GAP}=\Delta\text{PA-GAP}=0$, Prop.~\ref{prop:invariance}).
+The identifiability-gated \CBO{} (\QCBO{}-finest) enjoys no such guarantee: the bow
+biases the estimators of every arm it touches and deletes $\do(X_1)$ from its gated
+set, so its GAP and PA-GAP \emph{shift} (Table~\ref{tab:taxonomy}). On this SCM the
+shift even helps --- the deleted arm was a tempting suboptimum --- but its sign is not
+something a practitioner could know in advance, and \emph{that} is the liability a
+guarantee removes. (\CBO{}'s benchmark implementation does not gate and builds its
+prior by direct regression on the intervened variables, so on the optimal arm it too
+is unperturbed: a second, implementation-specific route to invariance, distinct from
+the one coarsening provides by construction.) The contribution is thus a
+\emph{guarantee}: a within-cluster modelling error provably cannot change a single
+intervention \QCBO{}-coarse makes, whereas the full-DAG estimators are functionals of
+the very edges one is least sure about.
 
 \begin{table*}[t]\centering
-  \caption{Paired degradation $\Delta$ (misspecified $-$ correct) on ClusterBench10
-  under the intra-cluster bow (mean$\pm$s.e.). \QCBO{}-coarse is byte-identical
-  ($\Delta=0$); gating methods incur a permanent Tier-2 gap; \CBO{} a recoverable
-  Tier-1 cost; \BO{} is invariant but worst in absolute $Y$.}
+  \caption{Sample efficiency on ClusterBench10 under the \emph{correct} DAG
+  (mean$\pm$s.e., $10$ seeds, $T{=}100$, uncapped). Non-causal \BO{} is far worse in
+  absolute $Y$ and in GAP; the causal methods converge fast from the observational
+  prior, and the coarse partition concentrates the budget on the fewest arms.}
   \label{tab:headline}
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_headline}}
 \end{table*}
 \begin{figure}[t]\centering
   \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
-  \caption{Best-so-far trajectories, correct (solid) vs misspecified (dashed), per
-  method. \QCBO{}-coarse curves coincide; gating methods' dashed curves stay
-  permanently above; \CBO{} recovers.}
+  \caption{Best-so-far trajectories, correct (solid) vs intra-cluster bow (dashed),
+  per method. \QCBO{}-coarse's two curves coincide \emph{exactly} (byte-identical);
+  \BO{} is slowest; the gating \CBO{}'s two curves separate but both converge.}
   \label{fig:overlays}
 \end{figure}
 
@@ -574,33 +595,39 @@ run (Prop.~\ref{prop:invariance}). The takeaway is that \QCBO{} attains robustne
 \label{sec:exp-scope}
 The cleanest statement of the scope is a single controlled contrast: the
 \emph{same} operation --- adding a directed edge on a latently-confounded pair ---
-is invisible when intra-cluster and catastrophic when it spans clusters. Adding
-$X_1\!\to\!X_2$ (intra $C_1$, on the $U_{12}$-confounded pair) leaves
-\QCBO{}-coarse byte-identical ($\Delta=0$). Adding $X_1\!\to\!X_5$ (across $C_1,C_2$,
-on the $U_{15}$-confounded pair) forms a \emph{cluster-level} bow $C_1\to C_2$ with
-$C_1\leftrightarrow C_2$, which makes $\do(C_1)$ --- the arm \QCBO{}-coarse relies
-on --- non-identifiable; the arm is deleted and \QCBO{}-coarse fails as badly as the
-field. Table~\ref{tab:taxonomy} fills in the full taxonomy (intra $\to$ immune;
-inter-but-redundant $\to$ immune; inter non-redundant edge-deletion $\to$ shifts
-only when the edge enters a used arm's identification; inter bow $\to$ catastrophic),
-and Figure~\ref{fig:dial} shows a severity dial: \QCBO{}-coarse stays flat at zero
-across a one-, two-, three-edit intra-cluster sweep while the field climbs, with the
-inter-cluster bow as the panel where \QCBO{}-coarse leaves zero. This is the exact
-empirical realization of the scope in Remark~\ref{rem:structural_robustness}:
-protection holds iff the perturbed edge is invisible in the quotient.
+is invisible to the quotient when intra-cluster and visible when it spans clusters.
+Adding $X_1\!\to\!X_2$ (intra $C_1$, on the $U_{12}$-confounded pair) leaves
+\QCBO{}-coarse byte-identical ($\Delta\mathrm{GAP}=\Delta\text{PA-GAP}=0$). Adding
+$X_1\!\to\!X_5$ (across $C_1,C_2$, on the $U_{15}$-confounded pair) forms a
+\emph{cluster-level} bow $C_1\to C_2$ with $C_1\leftrightarrow C_2$, which makes
+$\do(C_1)$ --- the arm \QCBO{}-coarse relies on --- non-identifiable; the guarantee
+is lost and \QCBO{}-coarse's trajectory moves off zero. Table~\ref{tab:taxonomy}
+contrasts the gated \CBO{} (\QCBO{}-finest), whose GAP/PA-GAP shift under \emph{every}
+edge it can see, against \QCBO{}-coarse, whose $\Delta$ is exactly zero on every
+quotient-invisible perturbation (intra $\to$ immune; inter-but-redundant $\to$ immune)
+and nonzero only on the quotient-visible ones (the inter bow, and the inter
+edge-deletion when it enters a used arm's identification). Figure~\ref{fig:dial} shows
+the severity dial: \QCBO{}-coarse stays flat at zero across a one-, two-, three-edit
+intra-cluster sweep while the gated method's $\Delta$ wanders, with the inter-cluster
+bow as the panel where \QCBO{}-coarse leaves zero. This is the exact empirical
+realization of the scope in Remark~\ref{rem:structural_robustness}: the guarantee
+holds iff the perturbed edge is invisible in the quotient.
 
 \begin{table*}[t]\centering
-  \caption{Conditions characterization: per perturbation, its locus relative to the
-  coarse partition, and measured $\Delta$ for \QCBO{}-coarse vs the field. The
-  intra/inter bow rows are the headline contrast.}
+  \caption{Conditions characterization: paired $\Delta$GAP and $\Delta$PA-GAP@100
+  (misspecified $-$ correct; mean$\pm$s.e., $10$ seeds). \QCBO{}-coarse is exactly
+  $\mathbf{0}$ on every quotient-invisible perturbation (byte-identical, in bold),
+  while the gated \QCBO{}-finest shifts on the edges it can see. \BO{} and the
+  non-gating \CBO{} are $\equiv\!0$ and omitted.}
   \label{tab:taxonomy}
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_taxonomy}}
 \end{table*}
 \begin{figure}[t]\centering
   \includegraphics[width=\linewidth]{figures/clusterbench10_dial}
-  \caption{Degradation vs perturbation severity (left) and the inter-cluster-bow
-  control (right). \QCBO{}-coarse is flat at $0$ on intra-cluster edits and jumps on
-  the inter bow.}
+  \caption{$\Delta$GAP@100 vs intra-cluster severity (left; $0$--$3$ simultaneous
+  edits) and under the inter-cluster bow (right). \QCBO{}-coarse is flat at $0$ across
+  the intra sweep (byte-identical) and leaves $0$ only on the inter bow; the gated
+  \QCBO{}-finest moves under both.}
   \label{fig:dial}
 \end{figure}
 
@@ -689,19 +716,27 @@ Prop.~\ref{prop:invariance} is structural, not statistical: coarsening acts as a
 hard regularizer on the hypothesis space, trading resolution (Prop.~\ref{prop:price})
 for immunity to an entire class of misspecifications, and the practitioner chooses
 where to sit on this dial by choosing the partition. Several caveats sharpen the
-claim. (i) \emph{Honest gating-fragility:} \QCBO{}-\emph{finest} is exactly as
-fragile as the gating field --- the win is \emph{coarsening}, not the
-implementation, which is why we anchor \QCBO{}-finest to \CBO{}
-(Prop.~\ref{prop:identity}) and read robustness off the finest-to-coarse contrast.
-(ii) \BO{} is trivially robust but pays in absolute performance; robustness is not
-the same as ignoring structure. (iii) The gate (Eq.~\ref{eq:es_gate}) commits to
-the assumed structure; an un-gated variant would convert arm damage into
-exploration overhead and deserves a systematic comparison. (iv) We exclude DCBO and
-model-based \CBO{} because they couple surrogate structure to the objective or
-hard-code per-environment setups, so the fixed-objective seam does not apply; they
-remain in the standardized correct-DAG comparison. (v) Faithfulness does not
-transfer to the cluster level \citep{wahl2024foundations}, so cluster-level
-conditional independences must not be read back as fine structure. (vi) We evaluate
+claim. (i) \emph{Where the guarantee comes from.} The invariance is a property of the
+\emph{quotient}, not of our implementation: \QCBO{}-\emph{finest}
+($\equiv$\CBO{}, Prop.~\ref{prop:identity}) has no such guarantee, because its
+estimators are functionals of the fine edges; we therefore read robustness off the
+finest-to-coarse contrast rather than off absolute numbers. (ii) \emph{Scope of the
+empirical damage.} Uncapped, a within-cluster error \emph{shifts} the gated method's
+convergence (GAP, PA-GAP) but, because the optimal arm intervenes on the whole cluster
+and severs the edge, does not change its converged value; the dramatic, \emph{permanent}
+version --- a deleted optimal arm with no identifiable substitute --- requires an
+intervention budget smaller than a cluster (App.~\ref{app:fulltables}). The guarantee,
+exact invariance, holds in both regimes, and it is a guarantee about \emph{behaviour}:
+the practitioner's optimizer does provably the same thing whether or not the
+within-cluster edges are right. (iii) \BO{} is trivially robust but pays heavily in
+absolute performance; robustness is not the same as ignoring structure. (iv) The gate
+(Eq.~\ref{eq:es_gate}) commits to the assumed structure; an un-gated variant would
+convert arm damage into exploration overhead and deserves a systematic comparison.
+(v) We exclude DCBO and model-based \CBO{} because they couple surrogate structure to
+the objective or hard-code per-environment setups, so the fixed-objective seam does
+not apply; they remain in the standardized correct-DAG comparison. (vi) Faithfulness
+does not transfer to the cluster level \citep{wahl2024foundations}, so cluster-level
+conditional independences must not be read back as fine structure. (vii) We evaluate
 at unit intervention costs; cost-asymmetric settings change where coarsening pays.
 
 % =============================================================================
