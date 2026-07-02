@@ -95,9 +95,11 @@ def main():
     pmeta = {p["id"]: p for p in cb.PERTURBATIONS}
 
     # Build the unit list. BO is invariant -> only run it at P0 (per seed).
+    # S1 == P1 by construction -> scored from P1's runs (see drv.aggregate),
+    # so it is never run as its own unit.
     units = []
     for m in methods:
-        run_pids = ["P0"] if m == "BO" else pids
+        run_pids = ["P0"] if m == "BO" else [p for p in pids if p != "S1"]
         for pid in run_pids:
             for s in range(args.seeds):
                 units.append((m, pid, s, args.cap, args.trials, args.ninit))

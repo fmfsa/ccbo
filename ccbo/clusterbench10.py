@@ -142,6 +142,8 @@ PERTURBATIONS: List[Perturbation] = [
      "ops": [("del", "X1", "M2")], "tier": "structural",
      "locus": "inter-redundant", "protected": True},
     # Dial sweep: 1->2->3 simultaneous intra-C1 edits (QCBO-coarse Delta==0 at every severity).
+    # S1 == P1 (identical ops); the drivers score it from P1's runs rather than
+    # re-running the same variant (see run_misspec_fullfield.aggregate).
     {"id": "S1", "label": "sweep sev=1", "ops": [("add", "X1", "X2")],
      "tier": "sweep", "locus": "intra", "protected": True},
     {"id": "S2", "label": "sweep sev=2",

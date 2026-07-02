@@ -47,17 +47,30 @@ class CoarsenedGraph(GraphStructure):
         Name of the assumed graph structure for adjustment formulas.
         If None, uses graph_name (correct graph). Set to a different
         name (e.g., 'CompleteGraph_NoCD') to simulate graph misspecification.
+    gating : bool, optional
+        When True (default), the exploration set keeps only the subsets
+        whose interventional effect is identifiable from the C-DAG (the
+        identifiability gate). When False, every non-empty subset up to
+        ``max_intervention_size`` is kept regardless of identifiability;
+        non-identifiable arms fall back to the uninformative prior in
+        ``get_all_do``. ``gating=False`` at the identity partition is the
+        non-gating CBO baseline: on a correct DAG (where the gate passes
+        everything) it coincides with the gated run trajectory-for-
+        trajectory, and under misspecification it keeps every arm but
+        pays with a corrupted prior (Tier-1) instead of arm deletion
+        (Tier-2).
     """
 
     def __init__(self, original_graph, partition, graph_name,
                  observational_samples, max_intervention_size=3,
-                 num_mc_samples=10000, assumed_graph_name=None):
+                 num_mc_samples=10000, assumed_graph_name=None, gating=True):
         self.original_graph = original_graph
         self.partition = partition
         self.graph_name = graph_name
         self.assumed_graph_name = assumed_graph_name or graph_name
         self.num_mc_samples = num_mc_samples
         self.max_intervention_size = max_intervention_size
+        self.gating = gating
 
         # Store observational data columns
         self._obs_samples = observational_samples
@@ -147,10 +160,13 @@ class CoarsenedGraph(GraphStructure):
             key = frozenset(combo)
             if key in seen or len(key) == 0 or len(key) > self.max_intervention_size:
                 return
-            ok, _, _ = _ananke_id_check(self._coarsened_admg, set(combo), target_node)
-            if ok:
-                seen.add(key)
-                exploration_tuples.append(combo)
+            if self.gating:
+                ok, _, _ = _ananke_id_check(self._coarsened_admg, set(combo),
+                                            target_node)
+                if not ok:
+                    return
+            seen.add(key)
+            exploration_tuples.append(combo)
 
         M = self._manip_coarsened_nodes
         for r in range(1, min(len(M), self.max_intervention_size) + 1):

@@ -1,4 +1,4 @@
-"""Standardized efficiency metrics for CBO trajectories: GAP and PA-GAP.
+"""Standardized efficiency metrics for CBO trajectories: GAP, PA-GAP, regret.
 
 These follow the definitions in the CBO survey of Anonymous (TMLR 2026),
 "Causal Bayesian Optimization: Foundations, Methods, and Applications"
@@ -76,6 +76,32 @@ def pa_gap(traj, y_star, task='min'):
         return float('nan')
     weights = np.array([(T - (t - 1)) / T for t in range(1, T + 1)])
     return float(np.mean(ratios * weights))
+
+
+def simple_regret(traj, y_star, task='min'):
+    """Per-trial simple regret of the incumbent: r_t = |traj[t] - y_star|.
+
+    ``traj`` is the best-so-far trajectory (length T+1, including the initial
+    incumbent traj[0]); the returned array has length T+1 so r[0] is the
+    regret of the initial incumbent and r[-1] the final simple regret.
+    Smaller is better; 0 means the oracle optimum was found.
+    """
+    traj = np.asarray(traj, dtype=float)
+    r = (traj - y_star) if task == 'min' else (y_star - traj)
+    return np.maximum(r, 0.0)
+
+
+def cumulative_regret(traj, y_star, task='min'):
+    """Cumulative regret of the incumbent sequence: sum_{t=1..T} r_t.
+
+    NOTE: this is the *incumbent-based* cumulative regret (sum of best-so-far
+    regrets over trials), not the textbook cumulative regret over per-trial
+    proposals -- the pipeline logs only best-so-far values, so per-proposal
+    regret is not reconstructible for existing runs. The initial incumbent
+    r_0 is excluded (it reflects the shared initialization, not the method).
+    Smaller is better.
+    """
+    return float(np.sum(simple_regret(traj, y_star, task)[1:]))
 
 
 def reference_optimum(benchmark, trajectories, task='min'):

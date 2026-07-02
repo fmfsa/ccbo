@@ -41,13 +41,28 @@ def _label(name):
     return name.replace("_", "")
 
 
-def layered_pos(nodes, edges, sinks, dx=2.1, dy=1.35):
-    """Longest-path layering; sinks (e.g. Y) pinned to the last layer."""
-    succ = defaultdict(list)
+def layered_pos(nodes, edges, sinks, dx=None, dy=None, clusters=()):
+    """Longest-path layering with barycenter crossing reduction.
+
+    Sinks (e.g. Y) are pinned to the last layer; within-layer order is then
+    refined by a few barycenter sweeps (median-free Sugiyama step), which
+    removes most edge crossings on the denser datasets (Healthcare, Ecology).
+    Spacing adapts to the graph: wide layers pack slightly tighter vertically,
+    shallow graphs spread slightly wider horizontally.
+
+    ``clusters`` makes the layout partition-aware: source members of a cluster
+    are pulled to the cluster's earliest layer (so an isolated member like
+    Ecology's T sits next to its cluster-mates instead of drifting), and each
+    layer is finally stable-sorted so cluster members are vertically adjacent
+    at the top --- the fitted cluster boxes then stay tight and cannot engulf
+    non-members.
+    """
+    succ, pred = defaultdict(list), defaultdict(list)
     indeg = {n: 0 for n in nodes}
     for u, v in edges:
         if u in indeg and v in indeg:
             succ[u].append(v)
+            pred[v].append(u)
             indeg[v] += 1
     # Kahn topological order
     q = [n for n in nodes if indeg[n] == 0]
@@ -63,53 +78,140 @@ def layered_pos(nodes, edges, sinks, dx=2.1, dy=1.35):
     for n in order:
         for v in succ[n]:
             layer[v] = max(layer[v], layer[n] + 1)
-    maxL = max(layer.values()) if layer else 0
-    for s in sinks:
-        if s in layer:
-            layer[s] = maxL if maxL > max((layer[x] for x in nodes if x not in sinks),
-                                          default=0) else max(layer.values(), default=0)
-    # re-pin Y strictly to the rightmost layer
+    # pin sinks (Y) strictly to the rightmost layer
     if sinks:
-        mx = max(layer.values())
+        mx = max(layer.values(), default=0)
         for s in sinks:
-            layer[s] = mx
+            if s in layer:
+                layer[s] = mx
+    # pull source members of each cluster to the cluster's earliest layer, so
+    # weakly-connected members sit beside their cluster-mates
+    for cl in clusters:
+        members = [m for m in cl if m in layer]
+        if len(members) >= 2:
+            lmin = min(layer[m] for m in members)
+            for m in members:
+                if indeg.get(m, 0) == 0:
+                    layer[m] = lmin
     bylayer = defaultdict(list)
     for n in nodes:
         bylayer[layer[n]].append(n)
+    orders = {L: sorted(ns) for L, ns in bylayer.items()}
+    layers = sorted(orders)
+
+    # ---- barycenter sweeps: order each layer by the mean index of its
+    #      neighbours in the previously-ordered adjacent layer ----
+    for sweep in range(4):
+        forward = sweep % 2 == 0
+        seq = layers[1:] if forward else layers[-2::-1]
+        for L in seq:
+            refL = L - 1 if forward else L + 1
+            if refL not in orders:
+                continue
+            idx = {n: i for i, n in enumerate(orders[refL])}
+            nbrs = pred if forward else succ
+            cur = {n: i for i, n in enumerate(orders[L])}
+
+            def bary(n):
+                ns = [idx[m] for m in nbrs[n] if m in idx]
+                return sum(ns) / len(ns) if ns else cur[n]
+            orders[L] = sorted(orders[L], key=bary)
+
+    # ---- adaptive spacing ----
+    widest = max((len(ns) for ns in orders.values()), default=1)
+    if dx is None:
+        dx = 2.4 if len(layers) <= 3 else 2.1
+    if dy is None:
+        dy = 1.35 if widest <= 4 else 1.1
+
+    # ---- global row bands: each multi-member cluster gets dedicated top rows
+    #      (the same rows in every layer), non-members stack below. The fitted
+    #      cluster boxes then occupy disjoint horizontal strips and can neither
+    #      engulf a non-member nor overlap each other, no matter how far apart
+    #      a cluster's members sit across layers. ----
+    multi = [cl for cl in clusters
+             if len([m for m in cl if m in layer]) >= 2]
+    row_of_cluster, cursor = {}, 0
+    for k, cl in enumerate(multi):
+        percount = defaultdict(int)
+        for m in cl:
+            if m in layer:
+                percount[layer[m]] += 1
+        need = max(percount.values(), default=1)
+        row_of_cluster[k] = cursor
+        cursor += need
+    reserved = cursor
+
+    def cluster_idx(n):
+        for k, cl in enumerate(multi):
+            if n in cl:
+                return k
+        return None
+
     pos = {}
-    for L, ns in sorted(bylayer.items()):
-        ns = sorted(ns)
-        for i, n in enumerate(ns):
-            pos[n] = (L * dx, (i - (len(ns) - 1) / 2.0) * dy)
+    for L in layers:
+        ns = orders[L]
+        used = defaultdict(int)   # cluster -> members already placed this layer
+        free = reserved           # next free row for non-members
+        for n in ns:              # barycenter order preserved within groups
+            k = cluster_idx(n)
+            if k is None:
+                row = free
+                free += 1
+            else:
+                row = row_of_cluster[k] + used[k]
+                used[k] += 1
+            pos[n] = (L * dx, -row * dy)
     return pos
 
 
+def _cluster_of(n, clusters):
+    for k, cl in enumerate(clusters):
+        if n in cl:
+            return k
+    return None
+
+
 def tikz_graph(nodes, di, bi, manip, target, clusters, pos):
-    """Emit one tikzpicture for a (di, bi) graph with cluster boxes."""
+    """Emit one tikzpicture for a (di, bi) graph with cluster boxes.
+
+    Uses the shared style vocabulary defined in the paper preamble (obsnode /
+    mannode / tgtnode / clbox / diredge / biintra / bicross) so the appendix
+    figures match Fig. 1 exactly. Bidirected edges are drawn intra- vs
+    cross-cluster with distinct styles, with bends computed from the endpoint
+    distance (closer pairs arc more) and staggered when several confounders
+    share an endpoint, so parallel arcs cannot coincide.
+    """
     man = set(manip)
-    L = [r"\begin{tikzpicture}[>=Stealth, scale=0.95, every node/.style={transform shape},",
-         r"  obs/.style={circle,draw,minimum size=6mm,inner sep=0.5pt,font=\scriptsize},",
-         r"  man/.style={obs,fill=orange!25}, tgt/.style={obs,fill=yellow!55},",
-         r"  cl/.style={draw,dashed,rounded corners,inner sep=2.6mm},",
-         r"  bi/.style={<->,dashed,red!70!black}]"]
+    L = [r"\begin{tikzpicture}"]
     for n in nodes:
         x, y = pos[n]
-        sty = "tgt" if n == target else ("man" if n in man else "obs")
+        sty = "tgtnode" if n == target else ("mannode" if n in man else "obsnode")
         L.append(f"  \\node[{sty}] ({_safe(n)}) at ({x:.2f},{y:.2f}) {{{_label(n)}}};")
     for u, v in di:
         if u in pos and v in pos:
-            L.append(f"  \\draw[->] ({_safe(u)}) -- ({_safe(v)});")
+            L.append(f"  \\draw[diredge] ({_safe(u)}) -- ({_safe(v)});")
+    seen_at = defaultdict(int)  # endpoint -> #bidirected arcs so far (stagger)
     for u, v in bi:
-        if u in pos and v in pos:
-            L.append(f"  \\draw[bi,bend left=22] ({_safe(u)}) to ({_safe(v)});")
+        if u not in pos or v not in pos:
+            continue
+        cu, cv = _cluster_of(u, clusters), _cluster_of(v, clusters)
+        sty = "biintra" if (cu is not None and cu == cv) else "bicross"
+        (x1, y1), (x2, y2) = pos[u], pos[v]
+        dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+        bend = max(14, int(34 - 4 * dist)) + 8 * max(seen_at[u], seen_at[v])
+        seen_at[u] += 1
+        seen_at[v] += 1
+        L.append(f"  \\draw[{sty}] ({_safe(u)}) to[bend left={bend}] ({_safe(v)});")
     # cluster boxes (only multi-member manipulable clusters)
     for k, cl in enumerate(clusters):
         members = [c for c in cl if c in pos]
         if len(members) >= 2:
             fit = "".join(f"({_safe(c)})" for c in members)
-            L.append(f"  \\begin{{scope}}[on background layer]")
-            L.append(f"    \\node[cl,fit={fit},label=above:{{\\scriptsize$C_{{{k+1}}}$}}] {{}};")
-            L.append(f"  \\end{{scope}}")
+            L.append(r"  \begin{scope}[on background layer]")
+            L.append(f"    \\node[clbox,fit={fit},"
+                     f"label={{[label distance=0.5mm]above:{{\\scriptsize$C_{{{k+1}}}$}}}}] {{}};")
+            L.append(r"  \end{scope}")
     L.append(r"\end{tikzpicture}")
     return "\n".join(L)
 
@@ -152,7 +254,7 @@ def emit_dataset(ds, clusters, pretty, fobj):
     print(f"   C-DAG verts={cverts}\n   C-DAG di={cdi}\n   C-DAG bi={cbi}")
 
     # layouts
-    fpos = layered_pos(list(nodes), edges, sinks=[target])
+    fpos = layered_pos(list(nodes), edges, sinks=[target], clusters=clusters)
     cpos = layered_pos(cverts, cdi, sinks=["Y"])
     cmanip = [",".join(sorted(frozenset(c))) for c in clusters]  # cluster labels in C-DAG
 
@@ -160,12 +262,17 @@ def emit_dataset(ds, clusters, pretty, fobj):
     cdag = tikz_graph(cverts, cdi, cbi, cmanip, "Y", [], cpos)
 
     fobj.write(r"\begin{figure}[t]\centering" + "\n")
-    fobj.write(r"\resizebox{0.49\linewidth}{!}{" + dag + "}\hfill\n")
-    fobj.write(r"\resizebox{0.49\linewidth}{!}{" + cdag + "}\n")
+    # shrink-only (never enlarge): a 2-node C-DAG stretched to half a page
+    # would dwarf its fine-DAG panel; adjustbox caps width and leaves small
+    # pictures at natural size.
+    fobj.write(r"\adjustbox{max width=0.49\linewidth,valign=c}{" + dag + "}\hfill\n")
+    fobj.write(r"\adjustbox{max width=0.49\linewidth,valign=c}{" + cdag + "}\n")
     fobj.write(
         r"\caption{\textbf{%s.} Fine DAG with coarse partition (left) and quotient "
-        r"C-DAG (right). Manipulable variables in orange, target in yellow, dashed "
-        r"red edges are latent confounding; dashed boxes are manipulable clusters.}"
+        r"C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: "
+        r"manipulable variables orange, target blue, latent confounding dashed "
+        r"(intra-cluster) or dash-dotted (cross-cluster); dashed boxes are the "
+        r"manipulable clusters.}"
         % pretty + "\n")
     fobj.write(r"\label{fig:dag-%s}" % ds + "\n")
     fobj.write(r"\end{figure}" + "\n\n")

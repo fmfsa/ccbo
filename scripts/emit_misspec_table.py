@@ -14,8 +14,11 @@ paper/tables/:
                                   finest is not -- a misspecified edge perturbs its
                                   GAP/PA-GAP even when the final value converges.
   clusterbench10_fulltable.tex -- appendix: every method x perturbation, all metrics.
+  clusterbench10_regret.tex    -- appendix: simple regret @T and cumulative
+                                  (incumbent) regret per method x perturbation.
 
 GAP/PA-GAP in [0,1], higher = faster convergence. Final Y: lower = better (y*=0).
+Regret: lower = better (0 = oracle optimum found).
 
 Run:  PYTHONPATH=. python scripts/emit_misspec_table.py
 """
@@ -44,9 +47,9 @@ def _ms(pair, fmt="%+.3f"):
     return (fmt % m) + r"{\scriptstyle\,\pm\,}" + ("%.3f" % s)
 
 
-def _mp(pair, fmt="%.2f"):
+def _mp(pair, fmt="%.2f", fmt_s="%.2f"):
     m, s = pair
-    return (fmt % m) + r"{\scriptstyle\,\pm\,}" + ("%.2f" % s)
+    return (fmt % m) + r"{\scriptstyle\,\pm\,}" + (fmt_s % s)
 
 
 def _present(data):
@@ -56,11 +59,12 @@ def _present(data):
 def emit_headline(data):
     """T1: sample efficiency on the correct DAG (P0)."""
     methods = _present(data)
-    lines = [r"\begin{tabular}{@{}lcccc@{}}", r"\toprule",
+    lines = [r"\begin{tabular}{@{}lcccccc@{}}", r"\toprule",
              r"\textbf{Method} & \textbf{Final $Y$} & \textbf{GAP@20} & "
-             r"\textbf{GAP@50} & \textbf{GAP@100} \\",
+             r"\textbf{GAP@50} & \textbf{GAP@100} & $r_T$ & $R_T$ \\",
              r"\multicolumn{1}{c}{} & {\footnotesize $\downarrow$, $y^\star{=}0$} & "
-             r"\multicolumn{3}{c}{\footnotesize $\uparrow$ more sample-efficient} \\",
+             r"\multicolumn{3}{c}{\footnotesize $\uparrow$ more sample-efficient} & "
+             r"\multicolumn{2}{c}{\footnotesize $\downarrow$ regret} \\",
              r"\midrule"]
     for m in methods:
         p0 = data["methods"][m].get("P0")
@@ -68,8 +72,11 @@ def emit_headline(data):
             continue
         fy = _mp(p0["finalY"], fmt="%.3f")
         g20, g50, g100 = _mp(p0["GAP20"]), _mp(p0["GAP50"]), _mp(p0["GAP100"])
+        rT = "$" + _mp(p0["regretT"]) + "$" if "regretT" in p0 else "--"
+        cr = ("$" + _mp(p0["cumRegret"], fmt="%.1f", fmt_s="%.1f") + "$"
+              if "cumRegret" in p0 else "--")
         name = (r"\textbf{" + MLABEL[m] + r"}") if m == "QCBO-coarse" else MLABEL.get(m, m)
-        lines.append(f"{name} & ${fy}$ & ${g20}$ & ${g50}$ & ${g100}$ \\\\")
+        lines.append(f"{name} & ${fy}$ & ${g20}$ & ${g50}$ & ${g100}$ & {rT} & {cr} \\\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
@@ -133,13 +140,44 @@ def emit_fulltable(data):
     return "\n".join(lines) + "\n"
 
 
+def emit_regret(data):
+    """Appendix: simple regret r_T and cumulative (incumbent) regret R_T,
+    per perturbation (rows) x method (column pairs)."""
+    methods = _present(data)
+    perts = ["P0"] + PERT_ORDER
+    header = " & ".join(r"\multicolumn{2}{c}{\textbf{" + MLABEL.get(m, m) + "}}"
+                        for m in methods)
+    cmid = "".join(r"\cmidrule(lr){%d-%d}" % (2 + 2 * i, 3 + 2 * i)
+                   for i in range(len(methods)))
+    sub = " & ".join([r"$r_T$ & $R_T$"] * len(methods))
+    lines = [r"\begin{tabular}{@{}l" + "cc" * len(methods) + r"@{}}",
+             r"\toprule",
+             r"\textbf{Pert.} & " + header + r" \\",
+             cmid,
+             r" & " + sub + r" \\",
+             r"\midrule"]
+    for pid in perts:
+        cells = []
+        for m in methods:
+            c = data["methods"][m].get(pid)
+            if c is None or "regretT" not in c:
+                cells += ["--", "--"]
+            else:
+                cells += ["$" + _mp(c["regretT"]) + "$",
+                          "$" + _mp(c["cumRegret"], fmt="%.1f", fmt_s="%.1f") + "$"]
+        lines.append(f"{pid} & " + " & ".join(cells) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
 def main():
     with open(IN) as f:
         data = json.load(f)
     os.makedirs(OUTDIR, exist_ok=True)
     for name, fn in [("clusterbench10_headline", emit_headline),
                      ("clusterbench10_taxonomy", emit_taxonomy),
-                     ("clusterbench10_fulltable", emit_fulltable)]:
+                     ("clusterbench10_fulltable", emit_fulltable),
+                     ("clusterbench10_regret", emit_regret)]:
         path = os.path.join(OUTDIR, name + ".tex")
         with open(path, "w") as f:
             f.write(fn(data))

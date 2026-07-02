@@ -232,7 +232,8 @@ def _coarse_partition(clusters):
 
 
 def make_coarsened_graph(dg, ds, obs, partition, max_intervention_size=1,
-                         num_mc_samples=2000, assumed_graph_name=None):
+                         num_mc_samples=2000, assumed_graph_name=None,
+                         gating=True):
     """CoarsenedGraph subclass compatible with the benchmark's BO_CBO/CBO.py.
 
     The benchmark CBO keys do-functions as ``compute_do_{"_".join(vars)}`` and
@@ -274,7 +275,7 @@ def make_coarsened_graph(dg, ds, obs, partition, max_intervention_size=1,
     return BenchmarkCoarsenedGraph(
         dg, partition, ds, obs, max_intervention_size=max_intervention_size,
         num_mc_samples=num_mc_samples,
-        assumed_graph_name=assumed_graph_name or ds)
+        assumed_graph_name=assumed_graph_name or ds, gating=gating)
 
 
 def _initial_interventional_data(dg, ES, num_interventions, task, seed):
@@ -307,7 +308,7 @@ def _initial_interventional_data(dg, ES, num_interventions, task, seed):
 def run_qcbo_benchmark(ds, coarse_clusters=None, seed=0, num_trials=40,
                        num_interventions=10, max_intervention_size=None,
                        out_csv=None, method_label='QCBO',
-                       assumed_graph_name=None):
+                       assumed_graph_name=None, gating=True):
     """Run QCBO (finest if coarse_clusters is None, else coarse) on a benchmark
     dataset through the benchmark's CBO loop; write a progress CSV.
 
@@ -323,6 +324,10 @@ def run_qcbo_benchmark(ds, coarse_clusters=None, seed=0, num_trials=40,
     paper claims. Hardcoding 1 here silently strips every joint-intervention
     arm (e.g. ``do(Aspirin, Statin)``) and makes QCBO-finest a strictly
     weaker method than CBO rather than its equivalent.
+
+    ``gating=False`` disables the identifiability gate on the exploration
+    set (see ``CoarsenedGraph``): with the identity partition this is the
+    non-gating CBO baseline used in the misspecification stress test.
     """
     _ensure_benchmark_on_path()
     from baselines.BO_CBO.CBO import CBO
@@ -339,7 +344,8 @@ def run_qcbo_benchmark(ds, coarse_clusters=None, seed=0, num_trials=40,
 
     cg = make_coarsened_graph(dg, ds, obs, partition,
                               max_intervention_size=max_intervention_size,
-                              assumed_graph_name=assumed_graph_name)
+                              assumed_graph_name=assumed_graph_name,
+                              gating=gating)
     ES, _, manip_vars = cg.get_sets()
     ranges = dg.get_interventional_ranges()
     dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}

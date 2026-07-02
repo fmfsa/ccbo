@@ -7,10 +7,10 @@ with is perturbed). Reports the paired-by-seed degradation
 for final Y and GAP, and asserts QCBO-coarse byte-identity on the protected
 (quotient-invisible) perturbations.
 
-Currently wired methods: QCBO-finest, QCBO-coarse. External baselines
-(CBO/CEO/CoCaBO via scripts/misspec_inject.py) plug into METHODS below.
+Wired methods: BO (non-causal control, via misspec_inject), CBO (non-gating
+QCBO backend at the identity partition), QCBO-finest, QCBO-coarse.
 
-Run (quick):  PYTHONPATH=. python scripts/run_misspec_fullfield.py --seeds 3 --trials 40 --cap 1
+Run (quick):  PYTHONPATH=. python scripts/run_misspec_fullfield.py --seeds 3 --trials 40
 """
 
 import os
@@ -31,6 +31,7 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 from ccbo import benchmark, clusterbench10 as cb
+from ccbo.metrics import simple_regret, cumulative_regret
 import misspec_inject
 
 sys.path.insert(0, benchmark.BENCH_ROOT)
@@ -51,49 +52,34 @@ def score(traj, ystar, task, n):
 
 # --- Method runners: (perturbation_id, seed, cap, trials, ninit) -> trajectory ---
 
-def _qcbo_runner(clusters):
+def _qcbo_runner(clusters, gating=True, label=None):
     def run(pid, seed, cap, trials, ninit):
-        label = "QCBO-coarse" if clusters else "QCBO-finest"
-        csv = os.path.join(RUNDIR, f"{label}_{pid}_seed{seed}.csv")
+        name = label or ("QCBO-coarse" if clusters else "QCBO-finest")
+        csv = os.path.join(RUNDIR, f"{name}_{pid}_seed{seed}.csv")
         os.makedirs(os.path.dirname(csv), exist_ok=True)
         benchmark.run_qcbo_benchmark(
             DS, coarse_clusters=clusters, seed=seed, num_trials=trials,
             num_interventions=ninit, max_intervention_size=cap, out_csv=csv,
-            method_label=label, assumed_graph_name=cb.variant_name(pid))
+            method_label=name, assumed_graph_name=cb.variant_name(pid),
+            gating=gating)
         return pd.read_csv(csv)["current_optimal"].tolist()
     return run
 
 
 def _cbo_runner():
-    """Benchmark CBO with a misspecified causal prior (true objective).
+    """Non-gating CBO: the QCBO backend at the identity partition, gate off.
 
-    Mirrors the benchmark's own CBO invocation (as in run_qcbo_benchmark) but
-    on the plain DiscoveredGraph whose adjacency was perturbed by
-    misspec_inject. CBO does NOT gate (get_sets() = all subsets <= cap), so the
-    bow only biases its prior (Tier-1) -- it keeps do(X1); contrast the gating
-    methods (CEO, QCBO-finest) which lose it (Tier-2).
+    CBO does NOT gate (exploration set = all subsets <= cap regardless of
+    identifiability), so a structural error never deletes an arm -- it only
+    corrupts the arm's prior (Tier-1: a wrong-but-identifiable graph biases
+    the adjustment; a bow demotes the arm to the uninformative prior).
+    Contrast the gating methods (QCBO-finest/coarse), which drop arms whose
+    effect the assumed graph cannot identify (Tier-2). On the correct DAG the
+    gate passes every subset, so CBO and QCBO-finest coincide trajectory-for-
+    trajectory (Prop. 1 anchor: same backend, same seeds, same arms, same
+    priors).
     """
-    def run(pid, seed, cap, trials, ninit):
-        from baselines.BO_CBO.CBO import CBO
-        from baselines.BO_CBO.utils import compute_coverage
-        np.random.seed(seed)
-        graph, obs, functions, config = misspec_inject.build_cbo_graph(DS, seed, pid)
-        manip = list(config["intervention"]); task = config["task"]
-        ranges = graph.get_interventional_ranges()
-        dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}
-        es, _, manip_vars = graph.get_sets()
-        es = [list(s) for s in es if len(s) <= cap]
-        costs = graph.get_cost_structure(1)
-        dx, dy, bx, oy, bv = benchmark._initial_interventional_data(
-            graph, es, ninit, task, seed)
-        _, _, cov = compute_coverage(obs, manip_vars, dict_ranges)
-        csv = os.path.join(RUNDIR, f"CBO_{pid}_seed{seed}.csv")
-        os.makedirs(os.path.dirname(csv), exist_ok=True)
-        CBO(trials, es, manip_vars, dx, dy, bx, oy, bv, dict_ranges, functions,
-            obs, cov, graph, 20, costs, obs, task, len(obs) + 50, len(obs),
-            ninit, Causal_prior=True, csv_log_file=csv)
-        return pd.read_csv(csv)["current_optimal"].tolist()
-    return run
+    return _qcbo_runner(None, gating=False, label="CBO")
 
 
 def _bo_runner():
@@ -153,7 +139,17 @@ def _sem(v):
 def aggregate(traj, methods, pids, pmeta, ystar, task, args):
     """Score paired Delta vs P0 per (method, perturbation), print the table and
     the QCBO-coarse premise checks, and return the results dict. Shared by the
-    serial driver and the parallel driver (run_misspec_parallel.py)."""
+    serial driver and the parallel driver (run_misspec_parallel.py).
+
+    S1 is the same perturbation as P1 by construction (identical edge ops:
+    the severity sweep's k=1 point IS the intra bow), so it is scored from
+    P1's trajectories rather than re-run: recomputing the identical variant
+    only re-samples GP-solver floating-point jitter, which would make two
+    rows of the same condition disagree.
+    """
+    for m in methods:
+        if "S1" in pids and "P1" in pids and traj[m].get("P1"):
+            traj[m]["S1"] = traj[m]["P1"]
     out = {"dataset": DS, "y_star": ystar, "task": task, "cap": args.cap,
            "trials": args.trials, "seeds": args.seeds, "methods": {}}
     print(f"\n{'='*78}\nClusterBench10 misspecification  (cap={args.cap}, "
@@ -167,6 +163,7 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
         for pid in pids:
             finals, dfin, dgap, dpag, ident = [], [], [], [], []
             g20s, g50s, g100s, pag100s = [], [], [], []  # absolute GAP@T / PA-GAP
+            rTs, cums = [], []  # simple / cumulative (incumbent) regret
             for s in range(args.seeds):
                 if s not in traj[m][pid] or s not in base:
                     continue
@@ -175,6 +172,10 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
                 g0, pag0, fin0 = score(t0, ystar, task, args.trials)
                 finals.append(fin); dfin.append(fin - fin0); dgap.append(g - g0)
                 dpag.append(pag - pag0)
+                rTs.append(float(simple_regret(
+                    t[: args.trials + 1], ystar, task)[-1]))
+                cums.append(cumulative_regret(
+                    t[: args.trials + 1], ystar, task))
                 # Invariance check up to GP-solver floating-point nondeterminism:
                 # the quotient computation is identical, so trajectories are
                 # bit-identical on most seeds and match to <=2.6e-9 on the rest
@@ -202,6 +203,9 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
                 "GAP50": [float(np.mean(g50s)), _sem(g50s)],
                 "GAP100": [float(np.mean(g100s)), _sem(g100s)],
                 "PAGAP100": [float(np.mean(pag100s)), _sem(pag100s)],
+                # Standard regret (incumbent-based; see ccbo/metrics.py).
+                "regretT": [float(np.mean(rTs)), _sem(rTs)],
+                "cumRegret": [float(np.mean(cums)), _sem(cums)],
                 "byte_identical_to_P0": byte_id}
             print(f"{m:12s} {pid:4s} {str(meta.get('locus')):16s} "
                   f"{str(meta.get('protected')):9s} "
@@ -236,8 +240,8 @@ def main():
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--trials", type=int, default=40)
     ap.add_argument("--ninit", type=int, default=5)
-    ap.add_argument("--cap", type=int, default=1,
-                    help="max intervention size (clusters); 1 = Tier-2 headline")
+    ap.add_argument("--cap", type=int, default=5,
+                    help="max intervention size (clusters)")
     ap.add_argument("--methods", default=",".join(METHODS))
     ap.add_argument("--perturbations", default="P0,P1,P2,P3,Pic,P5,P6,S1,S2,S3")
     args = ap.parse_args()
@@ -249,10 +253,13 @@ def main():
     pids = args.perturbations.split(",")
     pmeta = {p["id"]: p for p in cb.PERTURBATIONS}
 
-    # traj[method][pid][seed] -> list
+    # traj[method][pid][seed] -> list. S1 == P1 by construction and is scored
+    # from P1's runs in aggregate(), so it is never run as its own unit.
     traj = {m: {p: {} for p in pids} for m in methods}
     for m in methods:
         for pid in pids:
+            if pid == "S1":
+                continue
             for s in range(args.seeds):
                 try:
                     traj[m][pid][s] = METHODS[m](pid, s, args.cap,
