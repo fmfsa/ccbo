@@ -984,8 +984,17 @@ reasoning, never the problem it is solving.
 \section{Full head-to-head on the survey's curated datasets}\label{app:headtohead}
 On the \emph{correct} DAG we score every method by the survey's own GAP and PA-GAP
 against its oracle optima (mean$\pm$s.e., 5 seeds, $T{=}100$). Tables~\ref{tab:headtohead-gap}
-and~\ref{tab:headtohead-pagap} give the full field; \QCBO{}-finest is full-knowledge
-\CBO{} (Prop.~\ref{prop:identity}), and \QCBO{}-coarse uses the domain partition. DCBO and
+and~\ref{tab:headtohead-pagap} give the full field. The
+$\text{\CBO{}}^{\dagger}$ row is the survey's \emph{reference} \CBO{} implementation
+\citep{aglietti2020causal},\footnote{This head-to-head runs each method through the
+survey's released code; the $\text{\CBO{}}^{\dagger}$ baseline warm-starts its GP
+from a supervised prior and is a distinct codebase from our full-knowledge \CBO{}.
+Our full-knowledge \CBO{} --- \CBO{} run through the same complete-identification
+backend on the full DAG --- is exactly \QCBO{} at the identity partition
+(Prop.~\ref{prop:identity}) and appears as the \QCBO{}-finest row; it is the \CBO{}
+used throughout the ClusterBench10 study of \S\ref{sec:exp}. The two therefore need
+not (and do not) coincide numerically on this table.} so it differs from
+\QCBO{}-finest here; \QCBO{}-coarse uses the domain partition. DCBO and
 model-based \CBO{} (MCBO) appear here but are excluded from the misspecification study of
 \S\ref{sec:exp} for the reasons in \S\ref{sec:limitations} (a dash denotes a method that does
 not run on that dataset). Two caveats govern how these tables may be read. First,

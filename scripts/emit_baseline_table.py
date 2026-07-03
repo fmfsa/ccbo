@@ -40,7 +40,7 @@ CURATED = [("toyGraph", "ToyGraph"), ("synthetic_2", "Synthetic-2"),
            ("epidemiology", "Epidemiology"), ("ecology", "Ecology")]
 
 # (results-dir, display label). QCBO-* are filled from the json, not CSVs.
-METHODS = [("BO", "BO"), ("CBO", "CBO"), ("CEO", "CEO"), ("CoCaBO", "CoCaBO"),
+METHODS = [("BO", "BO"), ("CBO", "$\\text{CBO}^{\\dagger}$"), ("CEO", "CEO"), ("CoCaBO", "CoCaBO"),
            ("DCBO", "DCBO"), ("MCBO", "MCBO"),
            ("QCBO-finest", "\\QCBO{}-finest"), ("QCBO-coarse", "\\QCBO{}-coarse")]
 QCBO_KEYS = {"QCBO-finest", "QCBO-coarse"}
