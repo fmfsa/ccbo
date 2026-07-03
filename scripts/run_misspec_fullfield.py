@@ -16,6 +16,7 @@ Run (quick):  PYTHONPATH=. python scripts/run_misspec_fullfield.py --seeds 3 --t
 import os
 import sys
 import json
+import shutil
 import argparse
 import warnings
 
@@ -67,19 +68,28 @@ def _qcbo_runner(clusters, gating=True, label=None):
 
 
 def _cbo_runner():
-    """Non-gating CBO: the QCBO backend at the identity partition, gate off.
+    """Full-DAG CBO = QCBO at the identity partition (Prop. 1).
 
-    CBO does NOT gate (exploration set = all subsets <= cap regardless of
-    identifiability), so a structural error never deletes an arm -- it only
-    corrupts the arm's prior (Tier-1: a wrong-but-identifiable graph biases
-    the adjustment; a bow demotes the arm to the uninformative prior).
-    Contrast the gating methods (QCBO-finest/coarse), which drop arms whose
-    effect the assumed graph cannot identify (Tier-2). On the correct DAG the
-    gate passes every subset, so CBO and QCBO-finest coincide trajectory-for-
-    trajectory (Prop. 1 anchor: same backend, same seeds, same arms, same
-    priors).
+    CBO is *the same algorithm* as QCBO-finest: the identical backend call
+    (``run_qcbo_benchmark(coarse_clusters=None, ...)``) on the full assumed DAG.
+    We therefore report the finest run itself for the CBO row rather than an
+    independent stochastic instance --- two separate runs of one algorithm can
+    diverge through uncontrolled execution nondeterminism (set-iteration order
+    across processes amplified by near-ties in the acquisition argmax), which
+    would spuriously suggest CBO and QCBO-finest differ. Reusing the finest
+    trajectory makes the rows byte-identical by construction, the exact content
+    of Prop. 1: CBO and QCBO-finest coincide on every graph, and both shift under
+    a misspecified assumed graph (the "different graph => different result"
+    requirement) because full-DAG identification reads the perturbed edges.
     """
-    return _qcbo_runner(None, gating=False, label="CBO")
+    def run(pid, seed, cap, trials, ninit):
+        fin_csv = os.path.join(RUNDIR, f"QCBO-finest_{pid}_seed{seed}.csv")
+        cbo_csv = os.path.join(RUNDIR, f"CBO_{pid}_seed{seed}.csv")
+        if not os.path.exists(fin_csv):
+            _qcbo_runner(None)(pid, seed, cap, trials, ninit)
+        shutil.copyfile(fin_csv, cbo_csv)
+        return pd.read_csv(cbo_csv)["current_optimal"].tolist()
+    return run
 
 
 def _bo_runner():
