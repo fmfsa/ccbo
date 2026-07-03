@@ -169,7 +169,7 @@ pharmacological interactions; a reef ecologist separates nutrient/chemistry
 stressors from temperature/depth forcing without specifying the edges
 \emph{within} either subsystem. The two ends of the spectrum are served: full-DAG
 \CBO{} at one end, and methods that learn structure online at heavy per-trial
-cost at the other \citep{mukherjee2024gacbo,branchini2023causal}. The practical
+cost at the other \citep{mukherjee2024gacbo,branchini2023ceo}. The practical
 middle --- reliable cluster-level knowledge --- has a developed identification
 theory \citep{anand2023cdag,ferreira2025cdmg,wahl2024foundations} but, to our
 knowledge, no optimization method.
@@ -591,10 +591,28 @@ algorithm on the quotient graph instead. Because the full-DAG methods identify o
 the assumed structure, a misspecified edge that changes an identification formula
 or verdict shifts their trajectory, whereas the matching coarse partition absorbs
 every quotient-invisible edit.
+We score trajectories with the survey's GAP/PA-GAP protocol, restated here so the
+paper is self-contained. Let $y_0$ be the initial incumbent,
+$y^{\mathrm{best}}_t$ the best-so-far value after trial $t$, and
+$\rho_t=\min\{(y_0-y^{\mathrm{best}}_t)/(y_0-y^\star),\,1\}$ the clipped
+improvement ratio (minimization shown; the sign flips for maximization). With
+$t^\star$ the first trial attaining the final ratio $\rho_T$ ($t^\star{=}T$ if
+there is no improvement),
+\begin{equation*}
+\mathrm{GAP}=\frac{\rho_T+(T-t^\star)/T}{1+(T-1)/T}\in[0,1],
+\qquad
+\text{PA-GAP}=\frac{1}{T}\sum_{t=1}^{T}\rho_t\,\frac{T-t+1}{T}
+\in\Big[0,\tfrac{T+1}{2T}\Big].
+\end{equation*}
+GAP combines final improvement with how early it is attained; PA-GAP weights
+every trial's improvement by a linearly decaying factor, so it is sensitive to
+the whole path. Higher is better for both; GAP@$k$ is GAP computed on the first
+$k$ trials.
 We report the paired-by-seed degradation
 $\Delta=\mathrm{metric}(\text{misspecified},s)-\mathrm{metric}(\text{correct},s)$
-for final $Y$, GAP, and PA-GAP, so that per-seed noise cancels. Alongside the
-survey's GAP/PA-GAP protocol we report standard regret: the simple regret
+for final $Y$, GAP, and PA-GAP, so that per-seed noise cancels; for GAP-type
+metrics a \emph{negative} $\Delta$ is a degradation. Alongside we report
+standard regret: the simple regret
 $r_T=|y^{\mathrm{best}}_T-y^\star|$ of the final incumbent and the cumulative
 regret $R_T=\sum_{t=1}^{T} r_t$ of the incumbent sequence (per-proposal
 outcomes are additionally logged, enabling proposal-level cumulative regret in
@@ -683,7 +701,8 @@ holds iff the perturbed edge is invisible in the quotient.
 
 \begin{table*}[t]\centering
   \caption{Conditions characterization: paired $\Delta$GAP and $\Delta$PA-GAP@100
-  (misspecified $-$ correct; mean$\pm$s.e., $10$ seeds). \QCBO{}-coarse is exactly
+  (misspecified $-$ correct; negative $=$ degradation; mean$\pm$s.e., $10$ seeds).
+  \QCBO{}-coarse is exactly
   $\mathbf{0}$ on every quotient-invisible perturbation (byte-identical, in bold),
   while full-DAG \CBO{}/\QCBO{}-finest shifts on the edges it can see. \BO{} reads no
   structure and is $\equiv\!0$ by construction; it and \CBO{} ($\equiv\!\QCBO{}$-finest) are
@@ -717,8 +736,16 @@ protocol against oracle optima,
 Prop.~\ref{prop:identity}) on the higher-dimensional datasets while reaching
 comparable final $Y$ (Table~\ref{tab:efficiency}). We state the caveat plainly: GAP
 rewards early plateaus, so the comparison is read only where final $Y$ is
-comparable; the contribution is a favourable resolution/efficiency trade whenever
-the optimum does not require splitting a cluster (Prop.~\ref{prop:price}).
+comparable. Synthetic-2 is the exception and deserves emphasis rather than a
+footnote: there the domain partition is \emph{lossy} --- the optimum requires
+splitting a cluster --- and \QCBO{}-coarse plateaus at final $Y=-0.511$ versus
+$-1.856$ for full-knowledge \CBO{}, the price of coarsening of
+Prop.~\ref{prop:price} realized empirically (its GAP is higher only because GAP
+rewards the early plateau). This is the trade the practitioner accepts by
+committing to a partition: a favourable resolution/efficiency trade whenever the
+optimum does not require splitting a cluster (Prop.~\ref{prop:price}), and a
+bounded-away-from-optimum plateau when it does (the lossy-cluster experiment
+below quantifies this on a controlled variant of ClusterBench10).
 
 \begin{table*}[t]\centering
   \caption{Sample efficiency on the \textsc{CausalBO} survey's curated datasets
@@ -765,19 +792,20 @@ axis: it neither assumes the full DAG nor learns one, but takes a coarser, more
 reliable input (a partition + C-DAG) and identifies on the quotient. Methods that
 relax \CBO{}'s full-graph requirement either learn structure online --- GACBO
 maintains a posterior over DAGs at substantial per-trial cost
-\citep{mukherjee2024gacbo}, local-discovery \CBO{} learns around $Y$
-\citep{branchini2023causal}, and \citet{durand2025unknown} identify $\Pa(Y)$ under
-a $Y$-leaf assumption --- or assume a known equivalence class
+\citep{mukherjee2024gacbo}, \CEO{} keeps a graph posterior and hedges through an
+entropy-based acquisition \citep{branchini2023ceo}, and \citet{durand2025unknown}
+identify $\Pa(Y)$ under a $Y$-leaf assumption --- or assume a known equivalence class
 \citep{park2025dmis}; even contextual \CBO{} \citep{arsenyan2026contextual} assumes
-the full graph. The contrast with graph \emph{averaging} (\CEO{}) is instructive:
+the full graph. The contrast with graph \emph{averaging}
+\citep[\CEO{};][]{branchini2023ceo} is instructive:
 averaging hedges over candidate DAGs at per-trial cost, whereas \QCBO{}
 \emph{commits} to a coarser-but-correct quotient and pays nothing per trial; our
 experiments show averaging only partially protects. The identification machinery we
 rely on is established --- C-DAG do-calculus \citep{anand2023cdag}, its extension
 to C-DMGs over ADMGs \citep{ferreira2025cdmg}, cluster-level Markov properties
 \citep{wahl2024foundations}, relaxed partition admissibility
-\citep{tikka2025relaxing}, and C-DAGs as discovery background knowledge
-\citep{ll2025cdagdiscovery} --- but none of these perform optimization. Closest in
+\citep{yvernes2025relaxing}, and C-DAGs as discovery background knowledge
+\citep{ruizdevargas2025cdags} --- but none of these perform optimization. Closest in
 spirit is the concurrent abstraction-based proposal of \citet{zeitler2025mfacbo},
 which coarsens the \emph{outcome} as a cheap proxy
 \citep{poloczek2017multi,beckers2019approximate}; \QCBO{} is complementary in that
@@ -994,12 +1022,16 @@ backend on the full DAG --- is exactly \QCBO{} at the identity partition
 (Prop.~\ref{prop:identity}) and appears as the \QCBO{}-finest row; it is the \CBO{}
 used throughout the ClusterBench10 study of \S\ref{sec:exp}. The two therefore need
 not (and do not) coincide numerically on this table.} so it differs from
-\QCBO{}-finest here; \QCBO{}-coarse uses the domain partition. DCBO and
-model-based \CBO{} (MCBO) appear here but are excluded from the misspecification study of
+\QCBO{}-finest here; \QCBO{}-coarse uses the domain partition. DCBO
+\citep{aglietti2021dynamic}, model-based \CBO{} (MCBO; \citealp{sussex2023model}),
+\CEO{} \citep{branchini2023ceo}, and CoCaBO --- the survey's contextual causal \BO{}
+baseline \citep{arsenyan2026contextual} --- appear here; DCBO and MCBO are excluded
+from the misspecification study of
 \S\ref{sec:exp} for the reasons in \S\ref{sec:limitations} (a dash denotes a method that does
 not run on that dataset). Two caveats govern how these tables may be read. First,
 the compared methods were designed for different problem settings --- DCBO for
-dynamic environments, CEO for graph uncertainty --- and each runs with its
+dynamic environments, \CEO{} for graph uncertainty, CoCaBO for contextual
+interventions --- and each runs with its
 authors' released defaults, untuned; the tables are \emph{reference points
 under a common protocol}, not rankings, and no claim of algorithmic superiority
 over a method solving a different problem is intended. Second, these numbers
@@ -1103,24 +1135,24 @@ Anonymous.
 \newblock Under review; OpenReview \url{https://openreview.net/forum?id=XT6DC37m5I}.
 
 \bibitem[Arsenyan et al.(2026)]{arsenyan2026contextual}
-V.~Arsenyan, A.~Grosnit, H.~Bou~Ammar, and A.~S.~Dalalyan.
+V.~Arsenyan, A.~Grosnit, H.~Bou~Ammar, and A.~Dalalyan.
 \newblock Contextual causal {B}ayesian optimisation.
-\newblock In \emph{ICLR}, 2026. % TODO: verify details.
+\newblock In \emph{ICLR}, 2026.
 
 \bibitem[Beckers \& Halpern(2019)]{beckers2019approximate}
 S.~Beckers and J.~Y.~Halpern.
 \newblock Abstracting causal models.
 \newblock In \emph{AAAI}, 2019.
 
-\bibitem[Branchini et al.(2023)]{branchini2023causal}
+\bibitem[Branchini et al.(2023)]{branchini2023ceo}
 N.~Branchini, V.~Aglietti, N.~Dhir, and T.~Damoulas.
-\newblock Causal {B}ayesian optimization via local causal discovery.
-\newblock In \emph{CLeaR}, volume 236 of \emph{PMLR}, 2023.
+\newblock Causal entropy optimization.
+\newblock In \emph{AISTATS}, volume 206 of \emph{PMLR}, pp.\ 8586--8605, 2023.
 
 \bibitem[Durand et al.(2025)]{durand2025unknown}
 J.~Durand, Y.~Annadani, S.~Bauer, and S.~Parbhoo.
-\newblock Causal {B}ayesian optimization with unknown causal graphs.
-\newblock In \emph{ICLR}, 2025. % TODO: verify author list / venue.
+\newblock Causal {B}ayesian optimization with unknown graphs.
+\newblock \emph{arXiv:2503.19554}, 2025.
 
 \bibitem[Ferreira \& Assaad(2025)]{ferreira2025cdmg}
 E.~Ferreira and C.~K.~Assaad.
@@ -1153,9 +1185,9 @@ F.~Madaleno, P.~Misra, and A.~Markham.
 \newblock \emph{arXiv:2601.10531}, 2026.
 
 \bibitem[Mukherjee et al.(2024)]{mukherjee2024gacbo}
-S.~Mukherjee, et al.
-\newblock Graph-agnostic causal {B}ayesian optimization.
-\newblock \emph{arXiv}, 2024.
+S.~Mukherjee, M.~Zhang, S.~Flaxman, and S.~J.~Vollmer.
+\newblock Graph agnostic causal {B}ayesian optimisation.
+\newblock \emph{arXiv:2411.03028}, 2024.
 
 \bibitem[Park et al.(2025)]{park2025dmis}
 J.~Park, M.~Zemplenyi, and V.~Aglietti.
@@ -1183,21 +1215,21 @@ S.~Sussex, A.~Makarova, and A.~Krause.
 \newblock Model-based causal {B}ayesian optimization.
 \newblock In \emph{ICLR}, 2023.
 
-\bibitem[Tikka et al.(2025)]{tikka2025relaxing}
-Anonymous.
+\bibitem[Yvernes et al.(2025)]{yvernes2025relaxing}
+C.~Yvernes, E.~Devijver, A.~H.~Ribeiro, M.~Clausel-Lesourd, and \'E.~Gaussier.
 \newblock Relaxing partition admissibility in cluster-{DAG}s: a causal calculus
 with arbitrary variable clustering.
-\newblock \emph{arXiv:2511.01396}, 2025. % TODO: fix author list.
+\newblock \emph{arXiv:2511.01396}, 2025.
 
 \bibitem[Wahl et al.(2024)]{wahl2024foundations}
 J.~Wahl, U.~Ninad, and J.~Runge.
 \newblock Foundations of causal discovery on groups of variables.
 \newblock \emph{Journal of Causal Inference}, 12(1), 2024.
 
-\bibitem[Wang et al.(2025)]{ll2025cdagdiscovery}
-Anonymous.
+\bibitem[Ruiz~de~Vargas et al.(2025)]{ruizdevargas2025cdags}
+J.~M.~Ruiz~de~Vargas, K.~Padh, and N.~Kilbertus.
 \newblock Cluster-{DAG}s as powerful background knowledge for causal discovery.
-\newblock \emph{arXiv:2512.10032}, 2025. % TODO: fix author list.
+\newblock \emph{arXiv:2512.10032}, 2025.
 
 \bibitem[Zeitler(2025)]{zeitler2025mfacbo}
 J.~Zeitler.
