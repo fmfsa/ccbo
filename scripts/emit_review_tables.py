@@ -22,6 +22,7 @@ import json
 
 MISSPEC = "results/clusterbench10_misspec.json"
 LOSSY = "results/clusterbench10L.json"
+DAMAGE = "results/clusterbench10D.json"
 OUTDIR = "paper/tables"
 
 MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-finest": r"\QCBO-finest",
@@ -90,6 +91,35 @@ def emit_lossy(data):
     return "\n".join(lines) + "\n"
 
 
+def emit_damage(data):
+    """Deleted-optimal-arm damage on ClusterBench10D.
+
+    Rows: QCBO-finest (=CBO) under the correct DAG and the intra bow P1, then
+    QCBO-coarse (byte-identical across both). Cols: Final Y, cumulative
+    incumbent regret R_T, GAP@100 -- R_T is the metric that registers the
+    slowdown; GAP saturates and misses it.
+    """
+    lines = [r"\begin{tabular}{@{}llccc@{}}", r"\toprule",
+             r"\textbf{Method} & \textbf{Assumed DAG} & \textbf{Final $Y$} & "
+             r"$R_T$ & \textbf{GAP@100} \\",
+             r"\multicolumn{2}{c}{} & {\footnotesize $\downarrow$, $y^\star{=}0$} & "
+             r"{\footnotesize $\downarrow$} & {\footnotesize $\uparrow$} \\",
+             r"\midrule"]
+    fin = data["methods"]["QCBO-finest"]
+    for pid, tag in [("P0", "correct"), ("P1", r"intra bow $P_1$")]:
+        c = fin[pid]
+        lines.append(
+            rf"\CBO$\,\equiv\,$\QCBO-finest & {tag} & ${_mp(c['finalY'])}$ & "
+            rf"${_mp(c['cumRegret'], fmt='%.1f', fmt_s='%.1f')}$ & ${_mp(c['GAP100'])}$ \\")
+    c = data["methods"]["QCBO-coarse"]["P0"]
+    lines.append(
+        rf"\textbf{{\QCBO-coarse}} & either {{\footnotesize(byte-identical)}} & "
+        rf"${_mp(c['finalY'])}$ & ${_mp(c['cumRegret'], fmt='%.1f', fmt_s='%.1f')}$ & "
+        rf"${_mp(c['GAP100'])}$ \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
     with open(MISSPEC) as f:
@@ -110,6 +140,16 @@ def main():
         print(f"wrote {p}  (realized price={realized}, oracle={oracle})")
     else:
         print(f"SKIP lossy table: {LOSSY} not found (run scripts/run_clusterbench10L.py)")
+
+    if os.path.exists(DAMAGE):
+        with open(DAMAGE) as f:
+            dd = json.load(f)
+        p = os.path.join(OUTDIR, "clusterbench10D_damage.tex")
+        with open(p, "w") as f:
+            f.write(emit_damage(dd))
+        print(f"wrote {p}")
+    else:
+        print(f"SKIP damage table: {DAMAGE} not found (run scripts/run_clusterbench10D.py)")
 
 
 if __name__ == "__main__":

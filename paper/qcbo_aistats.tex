@@ -657,10 +657,36 @@ unidentifiable and leave the exploration set --- so its GAP and PA-GAP
 shift even helps: $\doo(X_1)$ is a decoy --- the strongest singleton, yet bounded
 away from the optimum --- so deleting it concentrates the budget earlier on the
 larger arms that contain the optimum, visible as the faster misspecified regret
-decay in Fig.~\ref{fig:overlays}. But the sign of the shift is not
-something a practitioner could know in advance;
-Prop.~\ref{prop:invariance} removes that uncertainty for every quotient-invisible
-error.
+decay in Fig.~\ref{fig:overlays}.
+
+\paragraph{The same edit with the opposite sign.}
+That the deletion \emph{helped} is a property of this SCM, not of the mechanism.
+\textsc{ClusterBench10D} (App.~\ref{app:scm}) keeps the structure, mechanisms,
+and confounding but moves $Y$'s centers so that the strongest singleton \emph{is}
+the global optimum: $\doo(X_1{=}2)$ attains $y^\star{=}0$ (every other singleton
+is $\ge 14$), and $\doo(C_1)$ attains the same value, so the coarse partition
+remains lossless. Now the identical intra bow deletes the cheap one-dimensional
+optimal arm, and full-DAG \CBO{} must reach the optimum through the
+higher-dimensional $\doo(X_1,X_2)$ and $\doo(C_1)$: its cumulative regret rises
+from $2.4\pm0.6$ to $11.1\pm2.1$ (Table~\ref{tab:damage}) --- a slowdown paid on
+every trial, which interventional data never repairs because the arm itself is
+gone; GAP, which saturates once the optimum is eventually found, barely registers
+it. \QCBO{}-coarse is byte-identical on both variants. The two SCMs are the two
+signs of one mechanism --- deleting a decoy accelerates, deleting the optimal arm
+injures --- and which case one is in cannot be known without the very structure in
+doubt; Prop.~\ref{prop:invariance} removes the question for every
+quotient-invisible error.
+
+\begin{table}[t]\centering
+  \caption{The same intra bow, opposite sign: on \textsc{ClusterBench10D} the
+  deleted arm \emph{is} the optimum's cheapest route, and full-DAG \CBO{}'s
+  cumulative regret $R_T$ rises $4.6\times$ ($10$ seeds, $T{=}100$,
+  $y^\star{=}0$). \QCBO{}-coarse is byte-identical under the bow (one row:
+  correct and misspecified coincide).}
+  \label{tab:damage}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10D_damage}}
+\end{table}
 
 \begin{table*}[t]\centering
   \caption{Sample efficiency on ClusterBench10 under the \emph{correct} DAG
@@ -703,6 +729,13 @@ trajectory is unchanged on this SCM: the deleted
 edge never enters the identification of an arm the optimizer uses.
 Quotient-invisibility
 is thus a \emph{sufficient} condition for invariance, not a necessary one.
+The field also contains the most realistic error of all: omitting the latent
+confounder $X_1\!\leftrightarrow\!X_2$ from the assumed graph ($P_7$). No
+identifiability verdict flips --- the damage channel is pure prior bias --- yet
+the full-DAG method's whole trajectory reshuffles ($\Delta\mathrm{GAP}
+{=}{+}0.098{\pm}0.038$, with per-seed $\Delta$PA-GAP ranging from $-0.05$ to
+$+0.16$), in a direction that varies seed by seed; the quotient discards
+intra-cluster bidirected edges, so \QCBO{}-coarse is again byte-identical.
 Figure~\ref{fig:dial} shows
 the severity dial: \QCBO{}-coarse stays flat at zero across a one-, two-, three-edit
 intra-cluster sweep while the full-DAG method's $\Delta$ wanders, and leaves zero
@@ -727,7 +760,8 @@ only under the inter-cluster bow.
   \caption{$\Delta$PA-GAP (misspecified $-$ correct) for the whole perturbation
   field, split at the exact scope boundary of Prop.~\ref{prop:invariance}:
   quotient-\emph{invisible} edits (left; includes the $1$--$3$-edit severity
-  sweep $S_1$--$S_3$ and the inter-but-redundant deletion $P_6$) versus
+  sweep $S_1$--$S_3$, the inter-but-redundant deletion $P_6$, and the
+  forgotten-confounder omission $P_7$) versus
   quotient-\emph{visible} edits (right). Filled markers denote trajectories
   byte-identical to the correct-DAG run. \QCBO{}-coarse sits at exactly $0$
   across the entire left panel and departs from $0$ only under the inter bow on
@@ -1058,9 +1092,23 @@ $C_1\!\leftrightarrow\!C_2$, deleting $\doo(C_1)$ at the coarse level). The rema
 perturbations are P2 (delete $X_3\!\to\!X_2$) and P3 (reverse it), both intra-$C_1$
 prior-bias controls; P5 (delete the sole inter edge $X_3\!\to\!M_1$) and P6 (delete the
 \emph{redundant} inter edge $X_1\!\to\!M_2$, with $X_2\!\to\!M_2$ surviving so the
-quotient is unchanged); and a severity sweep S1--S3 of $1,2,3$ simultaneous intra-$C_1$
+quotient is unchanged); P7 (omit the latent confounder $X_1\!\leftrightarrow\!X_2$
+from the assumed graph --- the \emph{forgotten confounder}; directed edges and hence
+all identifiability verdicts are untouched, so this is a pure prior-bias
+perturbation); and a severity sweep S1--S3 of $1,2,3$ simultaneous intra-$C_1$
 edits. \QCBO{}-coarse is provably byte-identical on every quotient-invisible
-perturbation (P1, P2, P3, P6, S1--S3) and is \emph{not} protected on Pic and P5.
+perturbation (P1, P2, P3, P6, P7, S1--S3) and is \emph{not} protected on Pic and P5.
+
+\paragraph{ClusterBench10D (the damage companion).}
+Identical structure, mechanisms, noise, and latents; only $Y$'s centers move to
+the values $\doo(X_1{=}2)$ induces in the noise-free SEM, $c=(2,0,0,0,2,0,0)$
+over $(X_1,X_2,X_3,M_1,M_2,M_3,Z)$. Consequently $\doo(X_1)$ attains the global
+optimum $y^\star{=}0$ (the runner-up singleton is $\ge 14$), $\doo(C_1)$ attains
+the same value --- the coarse partition stays lossless --- and
+$\mathrm{corr}(X_1,X_2)=0.70$ is unchanged. Build-time oracle checks D1--D3
+assert exactly these three premises
+(\texttt{scripts/generate\_clusterbench10D.py}); the runner asserts
+\QCBO{}-coarse's byte-identity under the bow before writing results.
 
 \section{Fixed-objective protocol: per-method details}\label{app:seam}
 The invariant is that every method optimizes the \emph{same} objective --- the true
@@ -1107,7 +1155,7 @@ $\Delta$-metrics isolate the effect of a wrong prior/exploration set from surrog
 noise. \textbf{Acquisition.} Causal Expected Improvement, maximized over the
 box-constrained intervention domain by gradient-based L-BFGS. \textbf{Protocol.}
 Unit per-variable intervention costs; $5$ initial interventional points per arm;
-$T{=}100$ trials; $10$ seeds on ClusterBench10/10L and $5$ on the survey suite. GAP and
+$T{=}100$ trials; $10$ seeds on ClusterBench10/10L/10D and $5$ on the survey suite. GAP and
 PA-GAP are defined in \S\ref{sec:exp-setup}; a negative $\Delta$ is a
 degradation throughout. \textbf{Invariance tolerance.} Byte-identity of
 trajectories holds exactly on all seeds of every protected perturbation except
@@ -1115,8 +1163,8 @@ one seed of the intra bow, where GP-solver floating-point nondeterminism
 (independent of the perturbation) perturbs intermediate iterates by
 $<\!10^{-8}$ while the recovered optimum is exact; every quotient-visible
 perturbation moves trajectories by $\ge\!10^{-2}$. We report invariance at this
-tolerance. \textbf{Artifacts.} The ClusterBench10 and ClusterBench10L
-generators (with their C1--C3 / L1--L3 oracle checks), the structure-assertion tests,
+tolerance. \textbf{Artifacts.} The ClusterBench10, ClusterBench10L, and ClusterBench10D
+generators (with their C1--C3 / L1--L3 / D1--D3 oracle checks), the structure-assertion tests,
 the \texttt{seam\_ok} guard, every per-method runner, and the table/figure emitters are
 released, so all reported numbers regenerate from the released SCMs and seeds.
 
