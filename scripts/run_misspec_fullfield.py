@@ -132,13 +132,63 @@ def _bo_runner():
     return run
 
 
+# Cost of a misspecified partition: one variable misassigned relative to the
+# domain partition ({X1,X2,X4},{X3,X5}). The quotient of the *base* structure
+# under this partition is acyclic (the only inter-cluster directed edge is
+# {X3,X5}->{X1,X2,X4} via X3->X2), so the practitioner's asserted C-DAG is a
+# well-formed, runnable C-DAG -- it is simply *wrong* (the true graph does not
+# quotient to it, so the gate's verdicts, POMIS, and priors are unsound).
+#
+# QCBO's contract is C-DAG-only: it never sees the true DAG. We therefore hold
+# this wrong C-DAG FIXED (assumed structure = base P0), decoupled from the
+# structural perturbations, and score it against the true SEM. QCBO runs (never
+# refuses) and pays a constant suboptimality -- the honest price of committing
+# to the wrong clustering. (Re-deriving the quotient from each perturbed *fine*
+# DAG, as an earlier version did, both leaks the true graph into QCBO and lets
+# the Pic bow induce a cyclic quotient -> a spurious "refusal" that the C-DAG-
+# only interface can never actually reach. We do not do that.)
+WRONG_CLUSTERS = [["X1", "X2", "X4"], ["X3", "X5"]]
+
+
+def _wrongpi_runner():
+    """QCBO on a fixed acyclic *wrong* C-DAG (base structure, wrong partition).
+
+    Like the BO arm, this method's assumed structure does not track the
+    perturbation id: the practitioner asserts one wrong C-DAG and keeps it. It
+    is thus invariant to every fine-structure edit (dFinalY == 0 across perts by
+    construction) -- but that fixed C-DAG is the wrong one, so its *absolute*
+    trajectory sits a constant gap above the correct-partition runs. We run it
+    once per seed and reuse that trajectory for every perturbation id.
+    """
+    _cache: dict = {}
+
+    def run(pid, seed, cap, trials, ninit):
+        csv = os.path.join(RUNDIR, f"QCBO-wrongpi_{pid}_seed{seed}.csv")
+        os.makedirs(os.path.dirname(csv), exist_ok=True)
+        if seed not in _cache:
+            run_csv = os.path.join(RUNDIR, f"QCBO-wrongpi_P0_seed{seed}.csv")
+            benchmark.run_qcbo_benchmark(
+                DS, coarse_clusters=WRONG_CLUSTERS, seed=seed, num_trials=trials,
+                num_interventions=ninit, max_intervention_size=cap, out_csv=run_csv,
+                method_label="QCBO-wrongpi",
+                assumed_graph_name=cb.variant_name("P0"), gating=True)
+            _cache[seed] = pd.read_csv(run_csv)["current_optimal"].tolist()
+        traj = _cache[seed]
+        if not os.path.exists(csv):
+            pd.DataFrame({"trial_number": list(range(len(traj))),
+                          "current_optimal": traj}).to_csv(csv, index=False)
+        return traj
+    return run
+
+
 METHODS = {
     "BO": _bo_runner(),
     "CBO": _cbo_runner(),
     "QCBO-finest": _qcbo_runner(None),
     "QCBO-coarse": _qcbo_runner([list(c) for c in cb.COARSE_CLUSTERS]),
-    # CEO / CoCaBO are out of scope (related-work discussion only); the field is
-    # BO (non-causal control), CBO (non-gating causal prior), and QCBO x2.
+    "QCBO-wrongpi": _wrongpi_runner(),
+    # CEO runs through its authors' own stack (scripts/run_ceo_misspec.py);
+    # CoCaBO remains benchmark-only (related-work discussion).
 }
 
 

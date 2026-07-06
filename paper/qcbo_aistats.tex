@@ -662,7 +662,10 @@ the very edges one is least sure about.
   prior, and the coarse partition concentrates the budget on the fewest arms.
   \CBO{} and \QCBO{}-finest coincide by Prop.~\ref{prop:identity} (full-DAG \CBO{}
   \emph{is} \QCBO{} at the identity partition); we list both to make the
-  equivalence explicit.}
+  equivalence explicit. \QCBO{}-coarse's efficiency advantage over finest is
+  significant on the paired seeds (GAP: $8/2$ seed wins, Wilcoxon $p{=}0.03$;
+  PA-GAP: $10/0$, $p{=}0.002$); the final-$Y$ gap is directional ($6/4$,
+  $p{=}0.08$).}
   \label{tab:headline}
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_headline}}
 \end{table*}
@@ -750,7 +753,10 @@ below quantifies this on a controlled variant of ClusterBench10).
 \begin{table*}[t]\centering
   \caption{Sample efficiency on the \textsc{CausalBO} survey's curated datasets
   (final $Y$, GAP, PA-GAP; 5 seeds, $T{=}100$). \QCBO{}-finest is full-knowledge
-  \CBO{}; \QCBO{}-coarse uses the domain partition.}
+  \CBO{}; \QCBO{}-coarse uses the domain partition. Across the suite \QCBO{}-coarse's
+  GAP exceeds finest's on $23/29$ paired seeds ($5$ of $6$ datasets; epidemiology
+  favours finest); with only $5$ seeds per dataset the per-dataset paired Wilcoxon
+  is underpowered (best $p{=}0.06$), so we report seed-level win/loss.}
   \label{tab:efficiency}
   \small
   \adjustbox{max width=\linewidth}{\begin{tabular}{@{}llccc@{}}
@@ -760,6 +766,72 @@ below quantifies this on a controlled variant of ClusterBench10).
     \input{tables/benchmark_gap}
   \end{tabular}}
 \end{table*}
+
+\subsection{When the partition is lossy or wrong}
+\label{sec:exp-partition}
+Two experiments probe the assumption that carries the method --- that the
+practitioner's partition is trustworthy and the optimum respects it --- by breaking
+it deliberately.
+
+\textbf{The price of coarsening, realized.}
+\textsc{ClusterBench10L} shares \textsc{ClusterBench10}'s structure but strengthens
+the $X_3\!\to\!X_2$ mechanism and restricts hard interventions to a policy box
+$[-2,2]$ per variable, engineered so the global optimum $\mathrm{do}(X_1,X_3)$
+\emph{splits} the coarse cluster $C_1=\{X_1,X_2,X_3\}$ (oracle-verified: the optimum
+is not a union of clusters, is interior to the box, and the coarse-arm price
+$V(\pi)-y^\star=0.95>0$). This is exactly the regime of Prop.~\ref{prop:price}: a
+whole-cluster arm $\mathrm{do}(C_1)$ must pin $X_2$ inside the box and cannot reach
+the split optimum, whereas full-knowledge \CBO{}$\,\equiv\,$\QCBO{}-finest can. The
+realized price appears in Table~\ref{tab:price}: \CBO{} reaches $y^\star$ while
+\QCBO{}-coarse plateaus a bounded gap above it (realized price $1.03$, matching the
+oracle $0.95$). The plateau is the resolution the
+practitioner forfeits by committing to the coarse partition --- paid only where
+coarsening is lossy, and exactly $0$ everywhere else (\S\ref{sec:exp-eff}). It is
+the honest complement to the sample-efficiency win: coarsening is a
+resolution/efficiency trade, favourable when the optimum does not require splitting
+a cluster and a bounded plateau when it does.
+
+\textbf{The cost of a wrong partition.}
+\QCBO{}'s soundness requires the true fine graph to quotient to $G^\pi$; we stress
+that assumption directly by handing \QCBO{} a \emph{wrong} partition
+($\{X_1,X_2,X_4\},\{X_3,X_5\}$, one variable misassigned). Because \QCBO{} consumes
+only the C-DAG and never the fine graph, we quotient the base structure under this
+wrong partition once to obtain a fixed, acyclic --- hence perfectly runnable --- but
+\emph{incorrect} C-DAG, and optimize the true objective through it (the wrong
+partition alters the exploration set, identification verdicts, and priors, but not
+the objective; it is therefore invariant to the fine-structure perturbations of
+\S\ref{sec:exp-scope} by construction, and we report its single cost).
+Table~\ref{tab:wrongpi} shows a graceful degradation, not a collapse: the wrong
+partition costs final quality (final $Y=0.49$ vs $0.13$ for the correct coarse
+partition and $0.29$ for full-knowledge \CBO{}), yet remains far better than
+discarding structure entirely (\BO{}, $1.98$) and keeps near-coarse sample
+efficiency (GAP and PA-GAP within $0.05$ of the correct coarse run). A misspecified
+\emph{clustering} thus incurs a bounded loss of solution quality --- qualitatively
+milder than the identification failures a wrong \emph{edge} inflicts on full-DAG
+methods. We stress what this is not: it is not protected by
+Prop.~\ref{prop:invariance}, whose invariance is to intra-cluster edits under a
+\emph{correct} partition, not to errors in the partition itself.
+
+\begin{table}[t]\centering
+  \caption{Realized price of coarsening on \textsc{ClusterBench10L} (the lossy
+  variant; 10 seeds, $T{=}100$, $y^\star{=}0.10$). The optimum splits cluster $C_1$,
+  so \QCBO{}-coarse plateaus above $y^\star$ by the price of Prop.~\ref{prop:price}
+  (oracle $0.95$), while \CBO{}$\,\equiv\,$\QCBO{}-finest reaches it.}
+  \label{tab:price}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10L_price}}
+\end{table}
+
+\begin{table}[t]\centering
+  \caption{Cost of a \emph{wrong} partition on \textsc{ClusterBench10} (correct
+  objective; 10 seeds, $T{=}100$, $y^\star{=}0$). \QCBO{}-wrong$\pi$ holds a fixed,
+  acyclic but incorrect C-DAG (base structure under a wrong partition). It loses
+  final quality against the correct partition yet degrades gracefully, staying far
+  above non-causal \BO{}.}
+  \label{tab:wrongpi}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_wrongpi}}
+\end{table}
 
 % =============================================================================
 \section{Related work}
@@ -798,9 +870,12 @@ identify $\Pa(Y)$ under a $Y$-leaf assumption --- or assume a known equivalence 
 \citep{park2025dmis}; even contextual \CBO{} \citep{arsenyan2026contextual} assumes
 the full graph. The contrast with graph \emph{averaging}
 \citep[\CEO{};][]{branchini2023ceo} is instructive:
-averaging hedges over candidate DAGs at per-trial cost, whereas \QCBO{}
-\emph{commits} to a coarser-but-correct quotient and pays nothing per trial; our
-experiments show averaging only partially protects. The identification machinery we
+averaging hedges over a candidate set of full DAGs at per-trial cost and only
+dilutes a wrong edge in proportion to the posterior mass on graphs lacking it,
+whereas \QCBO{} \emph{commits} to a coarser-but-correct quotient, pays nothing
+per trial, and is exactly invariant to any edit the quotient does not resolve
+(Prop.~\ref{prop:invariance})---a qualitatively different guarantee from
+posterior-weighted dilution. The identification machinery we
 rely on is established --- C-DAG do-calculus \citep{anand2023cdag}, its extension
 to C-DMGs over ADMGs \citep{ferreira2025cdmg}, cluster-level Markov properties
 \citep{wahl2024foundations}, relaxed partition admissibility
