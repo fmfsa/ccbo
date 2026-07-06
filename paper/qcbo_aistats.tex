@@ -578,19 +578,33 @@ their endpoints lie within a coarse cluster (\emph{intra}) or across clusters
 (\emph{inter}); the headline perturbation is a \emph{bow} --- a directed edge
 added on a latently-confounded pair, which renders the corresponding
 $\doo$-effect non-identifiable. We compare four methods sharing one estimator
-backend, seeds, and initialization. \BO{} is the non-causal control: a single GP
-with expected-improvement acquisition over a joint intervention on all five
-manipulable variables, with no causal prior. \CBO{} is the full-DAG causal
-baseline: do-calculus \CBO{}~\citep{aglietti2020causal} that runs the complete
-identification algorithm on the full assumed DAG. By Prop.~\ref{prop:identity}
-this is exactly \QCBO{} at the identity partition, so \CBO{} and \QCBO{}-finest
-are the same algorithm and coincide trajectory-for-trajectory on \emph{every}
-graph, correct or perturbed; we report both rows to make the equivalence explicit
-(they are byte-identical throughout). \QCBO{}-coarse runs the same identification
-algorithm on the quotient graph instead. Because the full-DAG methods identify on
-the assumed structure, a misspecified edge that changes an identification formula
-or verdict shifts their trajectory, whereas the matching coarse partition absorbs
-every quotient-invisible edit.
+backend, seeds, and initialization, differing only in the causal prior and the graph
+each identifies on (Table~\ref{tab:methods}). \BO{} reads no structure;
+\CBO{}~\citep{aglietti2020causal} runs the complete identification algorithm on the
+full assumed DAG, which by Prop.~\ref{prop:identity} is exactly \QCBO{} at the identity
+partition, so \CBO{} and \QCBO{}-finest are the same algorithm and are byte-identical
+on \emph{every} graph (we list both to make the equivalence explicit);
+\QCBO{}-coarse runs that same algorithm on the quotient. Because the full-DAG methods
+identify on the assumed structure, a misspecified edge that changes an identification
+formula or verdict shifts their trajectory, whereas the matching coarse partition
+absorbs every quotient-invisible edit.
+
+\begin{table}[t]\centering
+  \caption{The four experimental arms share one GP surrogate, expected-improvement
+  acquisition, seeds, and budget; they differ only in the causal prior and the graph
+  identification runs on. \CBO{}$\,\equiv\,$\QCBO{}-finest by Prop.~\ref{prop:identity}.}
+  \label{tab:methods}
+  \small
+  \adjustbox{max width=\linewidth}{\begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Method} & \textbf{Causal prior} & \textbf{Identifies on} & \textbf{Exploration set} \\
+    \midrule
+    \BO{} & none (zero mean) & --- & one joint arm (all vars) \\
+    \CBO{}$\,\equiv\,$\QCBO{}-finest & do-calculus & full assumed DAG & (PO)MIS, full DAG \\
+    \textbf{\QCBO{}-coarse} & cluster do-calculus & quotient C-DAG & identifiable cluster unions \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
 We score trajectories with the survey's GAP/PA-GAP protocol, restated here so the
 paper is self-contained. Let $y_0$ be the initial incumbent,
 $y^{\mathrm{best}}_t$ the best-so-far value after trial $t$, and
@@ -919,6 +933,14 @@ not apply; they remain in the correct-DAG head-to-head (App.~\ref{app:headtohead
 does not transfer to the cluster level \citep{wahl2024foundations}, so cluster-level
 conditional independences must not be read back as fine structure. (vii) We evaluate
 at unit intervention costs; cost-asymmetric settings change where coarsening pays.
+(viii) \emph{Cost of the gate.} The exploration set is gated by one complete-%
+identification check (Shpitser--Pearl via \texttt{ananke}) per candidate cluster-union
+of size $\le m$; for $K$ manipulable clusters that is $\sum_{k\le m}\binom{K}{k}$
+checks, polynomial in the number of clusters for fixed $m$ and --- crucially --- run
+on the $\le\!K{+}|\text{atoms}|$-node \emph{quotient}, not the fine graph, so its cost
+is set by the coarse partition, not the fine dimension it abstracts. Coarsening
+contracts the identification problem exactly as it contracts the search space, and the
+checks are precomputed once before optimization begins.
 
 % =============================================================================
 \section{Conclusion}
@@ -1083,6 +1105,24 @@ singleton arm at random points under the true (P0) versus each perturbed
 structure and asserts the outcomes match to machine precision. It passes for all
 perturbations P1--P6 and S1--S3: feeding a method a wrong DAG changes only its causal
 reasoning, never the problem it is solving.
+
+\section{Implementation and reproducibility}\label{app:repro}
+All methods share one surrogate/acquisition backend (the benchmark's \CBO{} loop), so
+comparisons differ only in the assumed structure. \textbf{Surrogate.} Each
+exploration-set arm carries a \textsc{GPy} \texttt{GPRegression} model with an RBF
+kernel (signal variance and lengthscale initialised to $1$, ARD off) and observation
+noise fixed near zero ($10^{-10}$, matching the deterministic mechanisms); the causal
+prior supplies the do-calculus estimate as the GP \emph{mean function}, so
+$\Delta$-metrics isolate the effect of a wrong prior/exploration set from surrogate
+noise. \textbf{Acquisition.} Causal Expected Improvement, maximised over the
+box-constrained intervention domain by gradient-based L-BFGS. \textbf{Protocol.}
+Unit per-variable intervention costs; $5$ initial interventional points per arm;
+$T{=}100$ trials; $10$ seeds on ClusterBench10/10L and $5$ on the survey suite. GAP and
+PA-GAP are defined in \S\ref{sec:exp-setup}; a negative $\Delta$ is a
+degradation throughout. \textbf{Artifacts.} The ClusterBench10 and ClusterBench10L
+generators (with their C1--C3 / L1--L3 oracle checks), the structure-assertion tests,
+the \texttt{seam\_ok} guard, every per-method runner, and the table/figure emitters are
+released, so all reported numbers regenerate from the released SCMs and seeds.
 
 \section{Full head-to-head on the survey's curated datasets}\label{app:headtohead}
 On the \emph{correct} DAG we score every method by the survey's own GAP and PA-GAP
