@@ -30,11 +30,12 @@ IN = "results/clusterbench10_misspec.json"
 OUTDIR = "paper/tables"
 
 METHOD_ORDER = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
-PERT_ORDER = ["P1", "P2", "P3", "S1", "S2", "S3", "P6", "P5", "Pic"]
+PERT_ORDER = ["P1", "P2", "P3", "P7", "S1", "S2", "S3", "P6", "P5", "Pic"]
 PERT_LABEL = {
     "P1": r"add $X_1\!\to\!X_2$ (bow)", "P2": r"del $X_3\!\to\!X_2$",
     "P3": r"rev $X_3\!\to\!X_2$", "Pic": r"add $X_1\!\to\!X_5$ (bow)",
     "P5": r"del $X_3\!\to\!M_1$", "P6": r"del $X_1\!\to\!M_2$",
+    "P7": r"omit $X_1\!\leftrightarrow\!X_2$ (confounder)",
     "S1": "sweep $k{=}1$", "S2": "sweep $k{=}2$", "S3": "sweep $k{=}3$",
 }
 LOCUS_TEX = {"intra": "intra", "inter": "inter", "inter-redundant": "inter (red.)"}

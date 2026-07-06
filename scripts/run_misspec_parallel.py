@@ -82,7 +82,7 @@ def main():
                     help="max intervention size; 5 = uncapped for ClusterBench10")
     ap.add_argument("--methods", default=",".join(drv.METHODS))
     ap.add_argument("--perturbations",
-                    default="P0,P1,P2,P3,Pic,P5,P6,S1,S2,S3")
+                    default="P0,P1,P2,P3,Pic,P5,P6,P7,S1,S2,S3")
     ap.add_argument("--jobs", type=int,
                     default=min(30, (os.cpu_count() or 8) - 2))
     args = ap.parse_args()

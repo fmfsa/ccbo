@@ -270,8 +270,8 @@ def emit_dataset(ds, clusters, pretty, fobj):
     fobj.write(
         r"\caption{\textbf{%s.} Fine DAG with coarse partition (left) and quotient "
         r"C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: "
-        r"manipulable variables orange, target blue, latent confounding dashed "
-        r"(intra-cluster) or dash-dotted (cross-cluster); dashed boxes are the "
+        r"manipulable variables orange, target blue, dash-dotted latent "
+        r"confounding; dashed boxes are the "
         r"manipulable clusters.}"
         % pretty + "\n")
     fobj.write(r"\label{fig:dag-%s}" % ds + "\n")

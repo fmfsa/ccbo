@@ -141,6 +141,17 @@ PERTURBATIONS: List[Perturbation] = [
     {"id": "P6", "label": "del X1->M2 (inter, redundant)",
      "ops": [("del", "X1", "M2")], "tier": "structural",
      "locus": "inter-redundant", "protected": True},
+    # The FORGOTTEN CONFOUNDER: the assumed graph omits the latent U12, i.e. the
+    # bidirected X1<->X2 -- arguably the most realistic misspecification (nobody
+    # adds bows; everybody misses confounders). Directed edges are untouched, so
+    # no identifiability verdict flips: this is a pure PRIOR-BIAS perturbation.
+    # At the finest partition do(X1)/do(X2) priors are computed as if
+    # unconfounded (naive regressions on corr(X1,X2)=0.7 data -> biased); the
+    # quotient drops intra-cluster bidirected edges anyway, so the coarse C-DAG
+    # is unchanged -> QCBO-coarse is protected (Prop. 2, bidirected intra edit).
+    {"id": "P7", "label": "omit X1<->X2 confounder",
+     "ops": [], "drop_confounders": ["U12"], "tier": "prior bias (omission)",
+     "locus": "intra", "protected": True},
     # Dial sweep: 1->2->3 simultaneous intra-C1 edits (QCBO-coarse Delta==0 at every severity).
     # S1 == P1 (identical ops); the drivers score it from P1's runs rather than
     # re-running the same variant (see run_misspec_fullfield.aggregate).
@@ -157,7 +168,7 @@ PERTURBATIONS: List[Perturbation] = [
 # Stable suffix used for the registered graph name of each perturbation.
 VARIANT_SUFFIX: Dict[str, str] = {
     "P0": "", "P1": "_WrongX1X2", "P2": "_NoX3X2", "P3": "_RevX3X2",
-    "Pic": "_InterBow", "P5": "_NoX3M1", "P6": "_NoX1M2",
+    "Pic": "_InterBow", "P5": "_NoX3M1", "P6": "_NoX1M2", "P7": "_NoU12",
     "S1": "_S1", "S2": "_S2", "S3": "_S3",
 }
 
@@ -214,6 +225,19 @@ def variant_edges(perturbation_id: str) -> List[Tuple[str, str]]:
     return apply_ops(TRUE_EDGES, pert["ops"])  # type: ignore[arg-type]
 
 
+def variant_confounders(perturbation_id: str) -> List[Tuple[str, List[str]]]:
+    """Return the latent-confounder list for a given perturbation id.
+
+    Perturbations may omit confounders from the *assumed* structure via a
+    ``drop_confounders`` field (e.g. P7 forgets ``U12``); the true SCM --- and
+    therefore the objective and the observational sampler --- always keeps the
+    full ``CONFOUNDERS`` list, so this only starves the method's reasoning.
+    """
+    pert = next(p for p in PERTURBATIONS if p["id"] == perturbation_id)
+    dropped = set(pert.get("drop_confounders", []))  # type: ignore[arg-type]
+    return [(lat, list(vs)) for lat, vs in CONFOUNDERS if lat not in dropped]
+
+
 def variant_name(perturbation_id: str, prefix: str = NAME) -> str:
     return prefix + VARIANT_SUFFIX[perturbation_id]
 
@@ -240,6 +264,6 @@ def register_variants(prefix: str = NAME) -> List[str]:
         coarsening.register_graph(
             name, dag_edges=edges, nodes=list(NODES), hidden_nodes=[],
             manipulative_variables=list(MANIPULATIVE),
-            confounders=[(lat, list(vs)) for lat, vs in CONFOUNDERS])
+            confounders=variant_confounders(pert["id"]))  # type: ignore[arg-type]
         registered.append(name)
     return registered

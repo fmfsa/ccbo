@@ -303,7 +303,7 @@ def main():
     ap.add_argument("--cap", type=int, default=5,
                     help="max intervention size (clusters)")
     ap.add_argument("--methods", default=",".join(METHODS))
-    ap.add_argument("--perturbations", default="P0,P1,P2,P3,Pic,P5,P6,S1,S2,S3")
+    ap.add_argument("--perturbations", default="P0,P1,P2,P3,Pic,P5,P6,P7,S1,S2,S3")
     args = ap.parse_args()
 
     cb.register_variants()

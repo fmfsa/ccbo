@@ -28,7 +28,7 @@ def main():
     R.cb.register_variants()
     ystar = benchmark.theoretical_best(R.DS)
     task = benchmark.load_config(R.DS)["task"]
-    pids = ["P0", "P1", "P2", "P3", "Pic", "P5", "P6", "S1", "S2", "S3"]
+    pids = ["P0", "P1", "P2", "P3", "Pic", "P5", "P6", "P7", "S1", "S2", "S3"]
     pmeta = {p["id"]: p for p in R.cb.PERTURBATIONS}
     m = "QCBO-wrongpi"
 

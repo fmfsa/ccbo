@@ -23,7 +23,7 @@ from ccbo import benchmark, clusterbench10 as cb
 RUNDIR = drv.RUNDIR
 OUTDIR = drv.OUTDIR
 METHODS = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
-PIDS = ["P0", "P1", "P2", "P3", "Pic", "P5", "P6", "S1", "S2", "S3"]
+PIDS = ["P0", "P1", "P2", "P3", "Pic", "P5", "P6", "P7", "S1", "S2", "S3"]
 
 
 def main():

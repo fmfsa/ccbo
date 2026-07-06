@@ -1,12 +1,12 @@
 """Generate the two ClusterBench10 misspecification figures for the paper.
 
-F1  figures/clusterbench10_overlays.pdf -- 2x4 grid, one column per method.
-    Top row: best-so-far Y (mean +/- s.e. band over seeds), correct DAG
-    (solid) vs intra-cluster bow P1 (dashed), full range (no clipping).
-    Bottom row: simple regret of the incumbent (best-so-far - y*) on a log
-    scale, so early and late behaviour are both legible. QCBO-coarse's two
-    curves coincide exactly -- the visual counterpart of Prop. 2 -- and each
-    panel is annotated with its invariance flag.
+F1  figures/clusterbench10_overlays.pdf -- two panels, all methods overlaid
+    (one color per method; CBO and QCBO-finest are byte-identical so the pair
+    is drawn once). Left: best-so-far Y (mean +/- s.e. band over seeds),
+    correct DAG (solid) vs intra-cluster bow P1 (dashed). Right: simple regret
+    of the incumbent (best-so-far - y*) on a log scale, so early and late
+    behaviour are both legible. QCBO-coarse's two curves coincide exactly --
+    the visual counterpart of Prop. 2.
 F2  figures/clusterbench10_dial.pdf -- dPA-GAP for the whole perturbation
     field, split at the exact scope boundary of Prop. 2: left panel = the
     quotient-invisible (protected) perturbations, right panel = the
@@ -40,12 +40,12 @@ METHODS = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
 COLORS = {"BO": "#999999", "CBO": "#0072B2",
           "QCBO-finest": "#E69F00", "QCBO-coarse": "#D55E00"}
 # Perturbations split at the Prop. 2 scope boundary.
-PROTECTED = ["P1", "P2", "P3", "S1", "S2", "S3", "P6"]   # quotient-invisible
+PROTECTED = ["P1", "P2", "P3", "P7", "S1", "S2", "S3", "P6"]   # quotient-invisible
 VISIBLE = ["P5", "Pic"]                                   # quotient-visible
 PERT_TEX = {
     "P1": "P$_1$", "P2": "P$_2$", "P3": "P$_3$",
     "S1": "S$_1$", "S2": "S$_2$", "S3": "S$_3$",
-    "P5": "P$_5$", "P6": "P$_6$", "Pic": "P$_{ic}$",
+    "P5": "P$_5$", "P6": "P$_6$", "P7": "P$_7$", "Pic": "P$_{ic}$",
 }
 
 
@@ -78,46 +78,44 @@ def _traj_stats(label, pid):
 def fig_overlays(data):
     ystar = data["y_star"]
     task = data.get("task", "min")
-    fig, axes = plt.subplots(2, len(METHODS), figsize=(9.0, 4.6),
-                             sharex=True, sharey="row")
-    for j, m in enumerate(METHODS):
+    fig, (axY, axR) = plt.subplots(1, 2, figsize=(9.0, 3.4))
+    # CBO and QCBO-finest are byte-identical (Prop. 1): drawing both would
+    # hide one curve under the other, so the pair is drawn once.
+    DRAW = [("BO", "BO"),
+            ("CBO", r"CBO $\equiv$ Q-finest"),
+            ("QCBO-coarse", "Q-coarse")]
+    for m, label in DRAW:
         c = COLORS[m]
         m0, s0 = _traj_stats(m, "P0")
         m1, s1 = _traj_stats(m, "P1")
         x0, x1 = np.arange(len(m0)), np.arange(len(m1))
         bid = _cell(data, m, "P1")["byte_identical_to_P0"]
+        tag = "invariant" if bid else "perturbed"
 
-        # Top: best-so-far Y, full range, +/- s.e. band.
-        ax = axes[0, j]
-        ax.fill_between(x0, m0 - s0, m0 + s0, color=c, alpha=0.18, lw=0)
-        ax.plot(x0, m0, color=c, lw=1.8, label="correct DAG")
-        ax.plot(x1, m1, color=c, lw=1.6, ls="--", label="misspecified")
-        if bid:
-            ax.set_title(f"{_short(m)}  (invariant ✓)", fontsize=10)
-            ax.annotate("curves coincide", xy=(0.97, 0.55),
-                        xycoords="axes fraction", ha="right", fontsize=8,
-                        style="italic", color=c)
-        else:
-            ax.fill_between(x1, m1 - s1, m1 + s1, color=c, alpha=0.12, lw=0)
-            ax.set_title(f"{_short(m)}  (perturbed ✗)", fontsize=10)
-        ax.tick_params(labelsize=8)
+        # Left: best-so-far Y, full range, +/- s.e. band.
+        axY.fill_between(x0, m0 - s0, m0 + s0, color=c, alpha=0.15, lw=0)
+        axY.plot(x0, m0, color=c, lw=1.8, label=f"{label} ({tag})")
+        axY.plot(x1, m1, color=c, lw=1.4, ls="--")
+        if not bid:
+            axY.fill_between(x1, m1 - s1, m1 + s1, color=c, alpha=0.10, lw=0)
 
-        # Bottom: simple regret of the incumbent, log scale.
-        ax = axes[1, j]
+        # Right: simple regret of the incumbent, log scale.
         r0 = np.maximum(m0 - ystar if task == "min" else ystar - m0, 1e-12)
         r1 = np.maximum(m1 - ystar if task == "min" else ystar - m1, 1e-12)
-        ax.plot(x0, r0, color=c, lw=1.8)
-        ax.plot(x1, r1, color=c, lw=1.6, ls="--")
-        ax.set_yscale("log")
-        ax.set_xlabel("trial", fontsize=10)
-        ax.tick_params(labelsize=8)
+        axR.plot(x0, r0, color=c, lw=1.8)
+        axR.plot(x1, r1, color=c, lw=1.4, ls="--")
 
-    axes[0, 0].set_ylabel("best-so-far $Y$", fontsize=10)
-    axes[1, 0].set_ylabel(r"simple regret $r_t$", fontsize=10)
-    axes[0, 0].legend(fontsize=8, frameon=False, loc="upper left")
+    axY.set_xlabel("trial", fontsize=10)
+    axY.set_ylabel("best-so-far $Y$", fontsize=10)
+    axY.tick_params(labelsize=8)
+    axY.legend(fontsize=8, frameon=False, loc="upper right")
+    axR.set_yscale("log")
+    axR.set_xlabel("trial", fontsize=10)
+    axR.set_ylabel(r"simple regret $r_t$", fontsize=10)
+    axR.tick_params(labelsize=8)
     fig.suptitle("Correct DAG (solid) vs intra-cluster bow $P_1$ (dashed); "
                  "bands: $\\pm$ s.e. over seeds", fontsize=11, y=0.995)
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
     out = os.path.join(OUTDIR, "clusterbench10_overlays.pdf")
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     print(f"wrote {out}")
@@ -152,8 +150,15 @@ def fig_dial(data):
         ax.set_xticklabels([PERT_TEX[p] for p in pids], fontsize=9)
         ax.tick_params(axis="y", labelsize=8)
 
-    _panel(axL, PROTECTED)
-    _panel(axR, VISIBLE)
+    # Skip perturbations not yet aggregated into the JSON (e.g. a variant
+    # whose runs are still in flight) rather than failing the whole figure.
+    have = set(data["methods"][METHODS[0]])
+    prot = [p for p in PROTECTED if p in have]
+    vis = [p for p in VISIBLE if p in have]
+    for missing in [p for p in PROTECTED + VISIBLE if p not in have]:
+        print(f"  fig_dial: skipping {missing} (not in JSON yet)")
+    _panel(axL, prot)
+    _panel(axR, vis)
     axL.set_ylabel(r"$\Delta$PA-GAP (misspecified $-$ correct)", fontsize=10)
     axL.set_title("Quotient-invisible edits (Prop. 2: guarantee holds)",
                   fontsize=10)
