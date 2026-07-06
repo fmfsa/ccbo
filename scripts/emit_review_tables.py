@@ -25,7 +25,7 @@ LOSSY = "results/clusterbench10L.json"
 OUTDIR = "paper/tables"
 
 MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-finest": r"\QCBO-finest",
-          "QCBO-coarse": r"\QCBO-coarse", "QCBO-wrongpi": r"\QCBO-wrong$\pi$"}
+          "QCBO-coarse": r"\QCBO-coarse", "QCBO-wrongpi": r"\QCBO-wrong$\Pi$"}
 
 
 def _mp(pair, fmt="%.3f", fmt_s="%.3f"):
@@ -40,8 +40,8 @@ def emit_wrongpi(data):
     Cols: Final Y (lower better), GAP@100, PA-GAP@100 (higher better).
     """
     rows = ["BO", "CBO", "QCBO-coarse", "QCBO-wrongpi"]
-    note = {"QCBO-coarse": r"\;{\footnotesize(correct $\pi$)}",
-            "QCBO-wrongpi": r"\;{\footnotesize(wrong $\pi$)}"}
+    note = {"QCBO-coarse": r"\;{\footnotesize(correct $\Pi$)}",
+            "QCBO-wrongpi": r"\;{\footnotesize(wrong $\Pi$)}"}
     lines = [r"\begin{tabular}{@{}lccc@{}}", r"\toprule",
              r"\textbf{Method} & \textbf{Final $Y$} & \textbf{GAP@100} & "
              r"\textbf{PA-GAP@100} \\",
