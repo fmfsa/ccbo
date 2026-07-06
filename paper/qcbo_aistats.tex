@@ -672,7 +672,8 @@ error.
 \end{table*}
 \begin{figure}[!tb]\centering
   \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
-  \caption{Correct DAG (solid) vs intra-cluster bow $P_1$ (dashed), one color
+  \caption{ClusterBench10 (SCM in App.~\ref{app:scm}): correct DAG (solid) vs
+  intra-cluster bow $P_1$ (dashed), one color
   per method; bands are $\pm$\,s.e.\ over $10$ seeds. Top: best-so-far $Y$.
   Bottom: simple regret $r_t$ of the incumbent (log scale). \CBO{} and
   \QCBO{}-finest are byte-identical (Prop.~\ref{prop:identity}), so the pair is
@@ -1019,7 +1020,13 @@ with curvatures $a=(3.0,1.5,1.0,0.5,0.8,0.3,0.3)$ and centres
 $c=(2,1,1,1,3,0,0)$ over $(X_1,X_2,X_3,M_1,M_2,M_3,Z)$. The quadratic form places the
 optimum at an \emph{interior} point (not a box vertex), so unstructured \BO{} cannot
 solve it in a constant number of evaluations; this is what makes the sample-efficiency
-comparison non-degenerate. The latent confounders enter only the observational
+comparison non-degenerate. In the observational sampler every node receives
+additive Gaussian noise ($\sigma=0.7$, except $\sigma_Y=1$ and
+$\sigma_{X_3}=\sigma_{X_4}=\sigma_{X_5}=1$), and the latents enter their
+children with unit loadings, $U_{12}\sim\mathcal{N}(0,1.6^2)$ and
+$U_{15}\sim\mathcal{N}(0,1^2)$ --- the $U_{12}$ scale is what produces
+$\mathrm{corr}(X_1,X_2)\approx 0.70$. The latent confounders enter only the
+observational
 sampler and the declared structure --- the noise-free objective every method optimizes
 is the deterministic SEM above, identical across all methods and perturbations
 (App.~\ref{app:seam}).
