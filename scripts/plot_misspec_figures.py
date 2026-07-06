@@ -78,14 +78,16 @@ def _traj_stats(label, pid):
 def fig_overlays(data):
     ystar = data["y_star"]
     task = data.get("task", "min")
-    fig, (axY, axR) = plt.subplots(1, 2, figsize=(9.0, 3.4))
+    # Stacked panels sized for a single column of the two-column layout;
+    # kept short enough to share a page with a full-width float on top.
+    fig, (axY, axR) = plt.subplots(2, 1, figsize=(3.5, 3.8), sharex=True)
     # CBO and QCBO-finest are byte-identical (Prop. 1): drawing both would
-    # hide one curve under the other, so the pair is drawn once.
-    DRAW = [("BO", "BO"),
-            ("CBO", r"CBO $\equiv$ Q-finest"),
-            ("QCBO-coarse", "Q-coarse")]
-    for m, label in DRAW:
-        c = COLORS[m]
+    # hide one curve under the other, so the pair is drawn once. BO keeps the
+    # yellow of the old per-method grid (gray reads as de-emphasized).
+    DRAW = [("BO", "BO", "#E69F00"),
+            ("CBO", r"CBO $\equiv$ Q-finest", "#0072B2"),
+            ("QCBO-coarse", "Q-coarse", "#D55E00")]
+    for m, label, c in DRAW:
         m0, s0 = _traj_stats(m, "P0")
         m1, s1 = _traj_stats(m, "P1")
         x0, x1 = np.arange(len(m0)), np.arange(len(m1))
@@ -105,7 +107,6 @@ def fig_overlays(data):
         axR.plot(x0, r0, color=c, lw=1.8)
         axR.plot(x1, r1, color=c, lw=1.4, ls="--")
 
-    axY.set_xlabel("trial", fontsize=10)
     axY.set_ylabel("best-so-far $Y$", fontsize=10)
     axY.tick_params(labelsize=8)
     axY.legend(fontsize=8, frameon=False, loc="upper right")
@@ -113,9 +114,7 @@ def fig_overlays(data):
     axR.set_xlabel("trial", fontsize=10)
     axR.set_ylabel(r"simple regret $r_t$", fontsize=10)
     axR.tick_params(labelsize=8)
-    fig.suptitle("Correct DAG (solid) vs intra-cluster bow $P_1$ (dashed); "
-                 "bands: $\\pm$ s.e. over seeds", fontsize=11, y=0.995)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.tight_layout()
     out = os.path.join(OUTDIR, "clusterbench10_overlays.pdf")
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     print(f"wrote {out}")

@@ -670,17 +670,17 @@ error.
   \label{tab:headline}
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_headline}}
 \end{table*}
-\begin{figure*}[t]\centering
-  \includegraphics[width=\textwidth]{figures/clusterbench10_overlays}
+\begin{figure}[!tb]\centering
+  \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
   \caption{Correct DAG (solid) vs intra-cluster bow $P_1$ (dashed), one color
-  per method; bands are $\pm$\,s.e.\ over $10$ seeds. Left: best-so-far $Y$.
-  Right: simple regret $r_t$ of the incumbent (log scale), which shows early
-  and late convergence on one axis. \CBO{} and \QCBO{}-finest are
-  byte-identical (Prop.~\ref{prop:identity}), so the pair is drawn once.
-  \QCBO{}-coarse's and \BO{}'s dashed curves coincide exactly with their solid
-  ones (invariant); the full-DAG pair's curves separate but both converge.}
+  per method; bands are $\pm$\,s.e.\ over $10$ seeds. Top: best-so-far $Y$.
+  Bottom: simple regret $r_t$ of the incumbent (log scale). \CBO{} and
+  \QCBO{}-finest are byte-identical (Prop.~\ref{prop:identity}), so the pair is
+  drawn once. \QCBO{}-coarse's and \BO{}'s dashed curves coincide exactly with
+  their solid ones (invariant); the full-DAG pair's curves separate but both
+  converge.}
   \label{fig:overlays}
-\end{figure*}
+\end{figure}
 
 \subsection{Which misspecifications are protected?}
 \label{sec:exp-scope}
