@@ -35,6 +35,25 @@ Run in order:
 
 Structural premise (no dataset needed): `pytest ccbo/tests/test_clusterbench10_structure.py`.
 
+## QCBO-refine (hierarchical refinement; §"Refining the partition")
+
+Plateau-triggered partition refinement: run coarse, split the incumbent's cluster one level
+down the declared hierarchy when the incumbent plateaus, warm-start (Prop. 4), continue.
+Orchestrator: `ccbo.benchmark.run_qcbo_refine_benchmark` (zero third-party patch; two-phase:
+the plateau monitor determines t_r on the coarse trajectory — phase 1 is byte-identical to
+the QCBO-coarse baseline prefix — then one warm-started phase-2 call; per-arm data carried by
+arm key, Prop.-3 validity refusal). Unit tests: `pytest ccbo/tests/test_refine.py`.
+
+1. **`run_clusterbench10_refine.py`** — QCBO-refine on ClusterBench10L (lossy; the headline),
+   the lossless ClusterBench10 control (`_misspec` P0 CSVs), and the survey's synthetic_2 /
+   ecology / healthcare (suite CSV layout). Reuses all existing baseline CSVs; writes
+   `results/clusterbench10_refine.json` and adds the `QCBO-refine` row to
+   `results/clusterbench10L.json`. Trigger (k=5, δ=1e-3, chunk=5) tuned once on 10L seed 0.
+2. **`plot_refine_figure.py`** — `paper/figures/clusterbench10L_refine.pdf`: best-so-far +
+   cumulative-regret panels (fixed-coarse linear in T vs refine's bounded transient).
+3. **`emit_review_tables.py`** — the price table now carries the QCBO-refine row and an $R_T$
+   column.
+
 ## Standardized CausalBO benchmark (sample-efficiency / main comparison)
 
 - `run_qcbo_benchmark_suite.py` / `run_qcbo_benchmark_parallel.py` — QCBO on the 6 curated datasets.

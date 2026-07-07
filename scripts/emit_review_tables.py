@@ -26,7 +26,8 @@ DAMAGE = "results/clusterbench10D.json"
 OUTDIR = "paper/tables"
 
 MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-finest": r"\QCBO-finest",
-          "QCBO-coarse": r"\QCBO-coarse", "QCBO-wrongpi": r"\QCBO-wrong$\Pi$"}
+          "QCBO-coarse": r"\QCBO-coarse", "QCBO-wrongpi": r"\QCBO-wrong$\Pi$",
+          "QCBO-refine": r"\QCBO-refine"}
 
 
 def _mp(pair, fmt="%.3f", fmt_s="%.3f"):
@@ -66,27 +67,33 @@ def emit_wrongpi(data):
 def emit_lossy(data):
     """Realized price of coarsening on ClusterBench10L.
 
-    Rows: BO, CBO (=QCBO-finest), QCBO-coarse. Cols: Final Y, gap-to-y*
-    (= Final Y - y*), GAP@100. Caption carries the oracle price.
+    Rows: BO, CBO (=QCBO-finest), QCBO-coarse, QCBO-refine. Cols: Final Y,
+    gap-to-y* (= Final Y - y*), cumulative incumbent regret R_T, GAP@100.
+    R_T is the framing metric: fixed-coarse pays the price linearly in T
+    (its R_T keeps growing), refine's is a bounded transient. Caption
+    carries the oracle price.
     """
     ystar = data["y_star"]
-    rows = ["BO", "CBO", "QCBO-coarse"]
-    lines = [r"\begin{tabular}{@{}lccc@{}}", r"\toprule",
+    rows = ["BO", "CBO", "QCBO-coarse", "QCBO-refine"]
+    lines = [r"\begin{tabular}{@{}lcccc@{}}", r"\toprule",
              r"\textbf{Method} & \textbf{Final $Y$} & "
-             r"\textbf{Final $Y-y^\star$} & \textbf{GAP@100} \\",
+             r"\textbf{Final $Y-y^\star$} & $R_T$ & \textbf{GAP@100} \\",
              r"\multicolumn{1}{c}{} & {\footnotesize $\downarrow$} & "
-             r"{\footnotesize price$\,\downarrow$} & {\footnotesize $\uparrow$} \\",
+             r"{\footnotesize price$\,\downarrow$} & {\footnotesize $\downarrow$} "
+             r"& {\footnotesize $\uparrow$} \\",
              r"\midrule"]
     for m in rows:
         c = data["methods"].get(m)
         if c is None:
             continue
         gap_to_star = c["finalY"][0] - ystar
-        label = (r"\textbf{" + MLABEL[m] + r"}" if m == "QCBO-coarse"
-                 else MLABEL.get(m, m))
+        label = (r"\textbf{" + MLABEL[m] + r"}"
+                 if m in ("QCBO-coarse", "QCBO-refine") else MLABEL.get(m, m))
+        rt = (r" & $" + _mp(c["cumRegret"], fmt="%.1f", fmt_s="%.1f") + r"$"
+              if "cumRegret" in c else r" & --")
         lines.append(
-            f"{label} & ${_mp(c['finalY'])}$ & ${gap_to_star:+.3f}$ & "
-            f"${_mp(c['GAP100'])}$ \\\\")
+            f"{label} & ${_mp(c['finalY'])}$ & ${gap_to_star:+.3f}$"
+            f"{rt} & ${_mp(c['GAP100'])}$ \\\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 

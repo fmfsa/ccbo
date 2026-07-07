@@ -249,6 +249,7 @@ DIMS = {
     'Epidemiology_dag.png': (746, 1166), 'Epidemiology_cdag.png': (567, 1166),
     'Ecology_dag.png': (1453, 1166), 'Ecology_cdag.png': (1100, 1444),
     'Protein_dag.png': (1453, 1444), 'Protein_cdag.png': (1100, 1166),
+    'clusterbench10L_refine.png': (608, 667),
 }
 # node-encoding colours (match the matplotlib figures)
 C_MANIP = RGBColor(0xE0, 0x76, 0x3A)
@@ -352,6 +353,97 @@ build_gallery("Benchmark structures and their quotients  (3 / 3)", [
     ('Ecology', "Ecology", "clusters {C,N,O}, {D,T}"),
     ('Protein', "Protein", "clusters {Akt,Mek}, {PKA,PKC}"),
 ])
+
+
+def build_refine_wip():
+    """WIP slide: hierarchical QCBO (plateau-triggered partition refinement)."""
+    s = prs.slides.add_slide(BLANK)
+    bg = s.background.fill; bg.solid(); bg.fore_color.rgb = WHITE
+
+    textbox(s, 0.6, 0.38, 10.6, 0.75,
+            [[("Hierarchical QCBO: refine the partition when the plateau says so",
+               28, NAVY, True, SERIF)]])
+    card(s, 11.65, 0.44, 1.1, 0.5, CORLT, line=CORAL, radius=0.15, shadow=False)
+    textbox(s, 11.65, 0.52, 1.1, 0.4, [[("WIP", 15, CORAL, True, SANS)]],
+            align=PP_ALIGN.CENTER)
+
+    # ---- WHY (left column, two tinted cards) ----
+    lx, lw = 0.6, 7.0
+    card(s, lx, 1.25, lw, 1.30, TEALLT, radius=0.07)
+    textbox(s, lx + 0.28, 1.39, lw - 0.56, 1.05,
+            [[("Why 1 — full-DAG CBO always self-corrects. ", 13.5, NAVY, True, SANS),
+              ("A wrong edge only biases priors; interventional data override "
+               "it, and its arm space always contains an optimum. So coarse "
+               "guarantees are worth finite budget, never limiting value.",
+               13.5, INK, False, SANS)]], line_spacing=1.08)
+    card(s, lx, 2.70, lw, 1.30, CORLT, radius=0.07)
+    textbox(s, lx + 0.28, 2.84, lw - 0.56, 1.05,
+            [[("Why 2 — a lossy partition is paid forever. ", 13.5, NAVY, True, SANS),
+              ("On ClusterBench10L the optimum do(X1, X3) splits cluster C1: "
+               "fixed-coarse plateaus 1.03 above y* and its cumulative regret "
+               "grows by 1.03 per trial — linear in T.", 13.5, INK, False, SANS)]],
+            line_spacing=1.08)
+
+    # ---- IDEA in 3 steps ----
+    textbox(s, lx, 4.14, lw, 0.4,
+            [[("The idea in 3 steps", 15, NAVY, True, SERIF)]])
+    steps = [
+        ("1 · Commit coarse", "Run QCBO at partition Pi: intra-cluster "
+         "invariance + a focused arm space."),
+        ("2 · Plateau trigger", "Incumbent gain < 1e-3 over 5 trials -> "
+         "split its cluster via the declared hierarchy (default "
+         "singletons); re-check quotient validity."),
+        ("3 · Warm start", "Prop. 4: superset arm space, shared arms keep "
+         "identical functionals -> carry all data by arm; init only new arms."),
+    ]
+    sy = 4.56
+    for i, (head, body) in enumerate(steps):
+        sx = lx + i * 2.42
+        card(s, sx, sy, 2.26, 1.52, WHITE, line=BORDER, radius=0.07,
+             shadow=False)
+        textbox(s, sx + 0.15, sy + 0.12, 2.0, 0.36,
+                [[(head, 12.5, TEAL, True, SANS)]])
+        textbox(s, sx + 0.15, sy + 0.5, 2.0, 0.95,
+                [[(body, 10, INK, False, SANS)]], line_spacing=1.04)
+
+    # ---- What survives + honest note ----
+    card(s, lx, 6.24, lw, 0.86, TEALLT, radius=0.07, shadow=False)
+    textbox(s, lx + 0.28, 6.34, lw - 0.56, 0.7,
+            [[("Survives: ", 11.5, NAVY, True, SANS),
+              ("invariance for never-split clusters (phase-scoped) · a split "
+               "can be refused (validity) · price -> bounded transient.  ",
+               11.5, INK, False, SANS),
+              ("Honest: ", 11.5, NAVY, True, SANS),
+              ("CBO keeps the best regret constant (5.3); the win is vs "
+               "fixed-coarse.", 11.5, INK, False, SANS)]], line_spacing=1.1)
+
+    # ---- Results figure (right column) ----
+    card(s, 7.85, 1.25, 4.9, 5.85, WHITE, line=BORDER, radius=0.05)
+    add_image_fit(s, 'clusterbench10L_refine.png', 8.0, 1.38, 4.6, 4.55)
+    textbox(s, 8.1, 6.0, 4.4, 1.0,
+            [[("ClusterBench10L, 10 seeds. Trigger at trial 11 ± 1; final Y "
+               "0.101 (= CBO's 0.103) vs coarse 1.128; cumulative regret 32 "
+               "(bounded) vs coarse 120 (linear).", 11, MUTED, False, SANS)]],
+            line_spacing=1.08)
+
+    # ---- footer ----
+    textbox(s, 0.6, 7.16, 12.1, 0.3,
+            [[("hierarchical C-DAGs now  ·  discovering the hierarchy / local "
+               "structure from the run's own interventional data -> next paper",
+               11.5, MUTED, False, SANS, 'italic')]], align=PP_ALIGN.CENTER)
+
+    s.notes_slide.notes_text_frame.text = (
+        "WIP slide. Framing: full-DAG CBO self-corrects eventually, so coarse "
+        "guarantees are finite-budget; and when the partition is lossy, "
+        "fixed-coarse pays the price forever (linear cumulative regret). "
+        "Hierarchical QCBO makes the partition a starting resolution: plateau "
+        "trigger -> split incumbent's cluster -> warm start (Prop. 4). "
+        "Honest positioning: it does NOT beat CBO's regret constant; it "
+        "removes fixed-coarse's linear term and keeps invariance for clusters "
+        "never split. Rollback rule + hierarchy discovery = next paper.")
+
+
+build_refine_wip()
 
 # Speaker notes
 prs.slides[0].notes_slide.notes_text_frame.text = (

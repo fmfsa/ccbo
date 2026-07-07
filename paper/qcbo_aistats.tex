@@ -102,6 +102,9 @@ $\Delta$PA-GAP exactly zero --- while it perturbs the convergence of full-DAG \C
 The protection is \emph{exactly} scoped: the same edge placed across
 clusters breaks it. Coarsening additionally concentrates the intervention budget,
 improving sample efficiency over both full-DAG \CBO{} and structure-free \BO{}.
+When the committed partition is too coarse --- the optimum splits a cluster --- a
+plateau-triggered refinement down a declared hierarchy restores it, turning the
+price of coarsening from a linear-in-$T$ regret into a bounded transient.
 \end{abstract}
 
 % =============================================================================
@@ -181,7 +184,10 @@ error confined to a cluster cannot be represented, let alone affect the optimize
   costs nothing. On the benchmark suite the \textsc{CausalBO} survey aggregates
   from the CBO literature,
   under its common GAP/PA-GAP scoring protocol, \QCBO{}-coarse attains higher
-  GAP than full-knowledge \CBO{} at comparable final $Y$.
+  GAP than full-knowledge \CBO{} at comparable final $Y$. When the partition
+  \emph{is} lossy, a plateau-triggered walk down a declared hierarchy
+  (\S\ref{sec:refine}) converts the price into a bounded transient: fixed-coarse
+  pays cumulative regret linear in $T$; hierarchical \QCBO{} does not.
   \item \textbf{Method and theory.} We formalize \QCBO{}: complete
   identification on the C-DAG \citep{shpitser2006identification}, an
   exploration set restricted to identifiable cluster unions, and a two-tier causal GP prior
@@ -344,7 +350,7 @@ experiments of \S\ref{sec:exp} this set is empty.
 \begin{algorithmic}[1]
 \REQUIRE C-DAG $\Gq$ over the clusters of $\Pi$ (or a fine hypothesis $\Gg$ and
 $\Pi$); target $Y$; budget $T$; observational data $\mathcal{D}^{O}$; cluster
-budget $m$.
+budget $m$; optional hierarchy $H$ (\S\ref{sec:refine}).
 \STATE If given $\Gg$: $\Gg^*\leftarrow$ latent projection of $\Gg$;\quad
 $\Gq\leftarrow$ quotient of $\Gg^*$ under $\Pi$. Check acyclicity of $\Gq$
 (Assumption~\ref{ass:valid}).
@@ -358,6 +364,10 @@ Eq.~\eqref{eq:two_tier_prior} on $\mathcal{D}^{O}$.
   \STATE $(\mathbf{X}_{s_t},\mathbf{x}_t)\leftarrow\arg\max_{s,\mathbf{x}}
   \mathrm{EI}^{s}_{t}(\mathbf{x})/Co(\mathbf{X}_s,\mathbf{x})$.
   \STATE Intervene, observe $y_t$; update $\mathcal{D}^{I}_t$.
+  \STATE \textbf{if} $H$ declared \textbf{and} incumbent plateaued: split the
+  incumbent's clusters via $H$, re-check validity, rebuild
+  $\ESpi\,\cup$ past arms, carry $\mathcal{D}^{I}_t$ by arm, init new arms
+  (\S\ref{sec:refine}).
 \ENDFOR
 \RETURN $(\mathbf{X}_{s_{t^\star}},\mathbf{x}_{t^\star})$ where $t^\star=\arg\min_t y_t$.
 \end{algorithmic}
@@ -460,6 +470,76 @@ $V(\Pi)=\min_{\mathbf{X}_s\in\ESpi_0}\mu^\star(\mathbf{X}_s)$, with $m=\infty$. 
 $\Pi'\preceq\Pi$, $V(\Pi_\bot)\le V(\Pi')\le V(\Pi)$, and $V(\Pi)=V(\Pi_\bot)$ iff
 some optimizer $\mathbf{X}_s^\star$ of Eq.~\eqref{eq:cbo_obj} is a union of $\Pi$-clusters.
 \end{proposition}
+
+\subsection{Refining the partition: hierarchical \QCBO{}}
+\label{sec:refine}
+Prop.~\ref{prop:price} prices the commitment: when no optimizer is a union of
+$\Pi$-clusters, a fixed-partition run pays $V(\Pi)-y^\star>0$ \emph{forever} ---
+its incumbent-based cumulative regret grows linearly,
+$R_T/T\to V(\Pi)-y^\star$. Full-DAG \CBO{} has no such floor: its arm space
+always contains an optimal arm, so a wrong fine graph biases priors and
+misdirects search (Remark~\ref{rem:taxonomy}) but is eventually overridden by
+interventional data. Coarse \QCBO{}'s lossy-partition failure is different in
+kind --- a \emph{missing arm}, which no amount of data can restore. Refinement
+converts the uncorrectable kind of misspecification (arm deletion) back into
+the correctable kind, by treating $\Pi$ as a starting resolution rather than a
+terminal commitment.
+
+\textbf{Input.} Besides \QCBO{}'s inputs, the practitioner may declare a
+\emph{hierarchy} $H$: for each cluster $C\in\Pi$, an optional sub-partition
+$H(C)$ of $C$ (default: singletons). No new graph is supplied --- the refined
+C-DAG is the quotient of the same assumed structure under the refined
+partition, exactly as in Algorithm~\ref{alg:ccbo}.
+
+\textbf{Trigger and step.} \QCBO{}-refine runs Algorithm~\ref{alg:ccbo} at
+$\Pi$ and monitors the incumbent every trial: if it improves by less than
+$\delta$ over the last $k$ trials ($k{=}5$, $\delta{=}10^{-3}$, tuned once on
+one seed and then fixed across all datasets and seeds), each cluster of the
+incumbent arm with a declared sub-partition is replaced by it:
+$\Pi'=(\Pi\setminus\{C\})\cup H(C)$. Until the trigger, the run is
+byte-identical to fixed-coarse \QCBO{} by construction. Validity is re-checked on the new
+quotient --- refinement does not preserve acyclicity
+(Prop.~\ref{prop:refinement_validity}) --- and an invalid split is
+\emph{refused}, the run continuing at $\Pi$. On acceptance the exploration set
+is rebuilt at $\Pi'$ and \emph{unioned} with every previously explored arm
+(under a finite cluster budget $m$ the superset of
+Prop.~\ref{prop:refinement}(i) need not hold verbatim; the union restores it
+operationally); all interventional data carry over keyed by arm --- shared
+arms keep identical identification functionals
+(Prop.~\ref{prop:refinement}(ii)) --- and only the arms new at $\Pi'$ receive
+the same $n_0$ initialization points every arm received at $t=0$ (on
+\textsc{ClusterBench10L}: $12$ new arms, $60$ extra evaluations, disclosed
+wherever compared). Optimization continues warm-started; we evaluate a single
+refinement step.
+
+\begin{remark}[Phase-scoped invariance]
+\label{rem:phase_invariance}
+Let a \QCBO{}-refine run visit partitions $\Pi_0\succeq\Pi_1$. Any
+misspecification of the fine graph that is quotient-invisible at \emph{every}
+visited partition --- in particular, any edit inside a cluster that is never
+split --- leaves the entire trajectory unchanged, including the trigger time
+and the refinement decision: per phase this is Prop.~\ref{prop:invariance},
+and the trigger and split are functions of the trajectory and the declared
+$H$ alone, so the phases agree by induction. Refining a cluster \emph{spends}
+its invariance: edits inside a split cluster are invisible before the trigger
+and exposed after --- resolution is bought with exposure, cluster by cluster.
+\end{remark}
+
+\begin{remark}[The price becomes a transient]
+\label{rem:regret}
+If the identifiable exploration set at some visited partition contains an
+optimal arm (with singleton leaves this holds by Prop.~\ref{prop:identity}
+whenever it holds for full-DAG \CBO{}), then $V$ at that partition equals
+$y^\star$ (Prop.~\ref{prop:price}) and, whenever the base optimizer is
+consistent on a finite arm set, the incumbent converges to $y^\star$:
+cumulative regret stops growing, $R_T \le t_r\,r_0 + o(T)$ with $t_r$ the
+trigger time and $r_0$ the initial incumbent's regret --- whereas the
+fixed-partition run pays $\Theta(T)$. The trigger cannot distinguish
+``converged at $V(\Pi)$'' from ``converged at $y^\star$'' (it never observes
+$y^\star$), so it also fires on lossless partitions; there refinement costs
+only the new arms' initialization and, empirically, a small polish tax
+(\S\ref{sec:exp-partition}).
+\end{remark}
 
 % =============================================================================
 \section{Experiments}
@@ -829,6 +909,49 @@ oracle $0.95$). The plateau is the resolution the
 practitioner forfeits by committing to the coarse partition --- paid only where
 coarsening is lossy, and exactly $0$ everywhere else (\S\ref{sec:exp-eff}).
 
+\textbf{Refining away the plateau.}
+\QCBO{}-refine (\S\ref{sec:refine}) runs the identical coarse configuration
+with the singleton hierarchy declared for $C_1$. The plateau trigger fires at
+trial $11.1\pm0.8$ (10 seeds), the split passes the validity re-check, and the
+warm-started refined phase --- whose exploration set now contains the split
+optimum $\mathrm{do}(X_1,X_3)$ --- descends immediately: final
+$Y=0.101\pm0.001$, indistinguishable from full-knowledge \CBO{}
+($0.103\pm0.001$), against the coarse plateau $1.128\pm0.016$. Cumulative
+regret is where the asymptotics live (Remark~\ref{rem:regret}): fixed-coarse
+accrues $R_{100}=120.3\pm3.1$ and keeps paying the price ${\approx}1.03$ per
+trial forever, while \QCBO{}-refine's $32.1\pm2.6$ has stopped growing --- the
+price is paid only until the trigger. \CBO{}'s $5.3\pm0.7$ remains the best
+constant: refinement does not out-run a correctly specified full-DAG
+optimizer; it removes fixed-coarse's linear regret while phase 1 keeps
+coarse's invariance and is byte-identical to it (Remark~\ref{rem:phase_invariance}).
+Figure~\ref{fig:refine} overlays the trajectories.
+The lossless control and the survey suite complete the picture. On
+\textsc{ClusterBench10} (lossless: the optimum is a union of clusters) the
+trigger still fires (trial $10.8\pm0.6$) --- it cannot observe $y^\star$ ---
+and costs nothing: final $Y=0.070\pm0.021$ vs coarse $0.128\pm0.021$, with
+$R_{100}=41.6\pm5.8$ vs $41.8\pm5.2$ (both ahead of \CBO{}'s $71.3\pm5.6$).
+Nor is the lossy case an artifact of our construction: on the survey's own
+\textsc{synthetic\_2}, whose $\{X,Z\}$ partition is lossy in the wild,
+\QCBO{}-refine escapes the coarse plateau ($-0.511$) to the finest-level
+optimum ($-1.855$ vs \QCBO{}-finest's $-1.856$; $R_{100}$: $231\pm1$ vs coarse
+$346$). On the remaining lossless survey partitions the false-trigger tax is
+within noise on \textsc{healthcare} ($5.354\pm0.031$ vs coarse
+$5.329\pm0.015$) and small on \textsc{ecology} ($4.885\pm0.028$ vs
+$4.983\pm0.051$, task max) --- the singleton-starvation effect that the
+rollback rule of \S\ref{sec:limitations} would bound by construction.
+
+\begin{figure}[t]\centering
+  \includegraphics[width=\linewidth]{figures/clusterbench10L_refine}
+  \caption{\QCBO{}-refine on \textsc{ClusterBench10L} (10 seeds, mean
+  $\pm$ s.e.; dashed vertical line = mean trigger). Top: best-so-far $Y$ ---
+  refine rides the coarse trajectory, then splits $C_1$ and descends to
+  $y^\star$. Bottom: cumulative incumbent regret $R_t$ --- fixed-coarse is
+  linear in $t$ (the price of Prop.~\ref{prop:price}, paid forever), refine's
+  flattens after the trigger (the price as a transient,
+  Remark~\ref{rem:regret}).}
+  \label{fig:refine}
+\end{figure}
+
 \textbf{The cost of a wrong partition.}
 \QCBO{}'s soundness requires the true fine graph to quotient to $\Gq$; we stress
 that assumption directly by handing \QCBO{} a \emph{wrong} partition
@@ -854,7 +977,10 @@ Prop.~\ref{prop:invariance}, whose invariance covers intra-cluster edits under a
   \caption{Realized price of coarsening on \textsc{ClusterBench10L} (the lossy
   variant; 10 seeds, $T{=}100$, $y^\star{=}0.10$). The optimum splits cluster $C_1$,
   so \QCBO{}-coarse plateaus above $y^\star$ by the price of Prop.~\ref{prop:price}
-  (oracle $0.95$), while \CBO{}$\,\equiv\,$\QCBO{}-finest reaches it.}
+  (oracle $0.95$), while \CBO{}$\,\equiv\,$\QCBO{}-finest reaches it.
+  \QCBO{}-refine (\S\ref{sec:refine}) splits $C_1$ at the plateau trigger and
+  recovers $y^\star$: its $R_T$ is a bounded transient, while fixed-coarse's
+  grows linearly in $T$.}
   \label{tab:price}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10L_price}}
@@ -959,6 +1085,22 @@ on the $\le\!K{+}|\text{atoms}|$-node \emph{quotient}, not the fine graph, so it
 is set by the coarse partition, not the fine dimension it abstracts. Coarsening
 contracts the identification problem exactly as it contracts the search space, and the
 checks are precomputed once before optimization begins.
+(viii) \emph{Asymptotics.} Full-DAG \CBO{} eventually self-corrects under any
+wrong graph --- its arm space always contains an optimal arm, and interventional
+data override a biased prior --- so fixed-coarse \QCBO{}'s advantages are
+finite-budget focus and invariance, never limiting value; on a lossy partition
+its cumulative regret is linear in $T$. Refinement (\S\ref{sec:refine}) removes
+the linear term, but at a cost stated by Remark~\ref{rem:phase_invariance}:
+each split cluster surrenders its local invariance --- resolution is bought
+with exposure. And because the trigger never observes $y^\star$, it also fires
+on lossless partitions, where the realized cost is the new arms' initialization
+plus, on one of three lossless controls (\textsc{ecology}), a small polish tax
+under the benchmark's cost-weighted acquisition, which favors the newly added
+cheap singleton arms over re-polishing the incumbent
+cluster arm (\S\ref{sec:exp-partition}); a rollback rule that reverts a split
+which fails to improve the incumbent within a fixed window would bound this tax
+by construction, and we leave it to the hierarchical follow-up, along with
+discovering the hierarchy itself from the interventional data the run collects.
 
 % =============================================================================
 \section{Conclusion}
@@ -969,7 +1111,9 @@ quotient-level identification, a provable invariance to intra-cluster misspecifi
 sample-efficiency benefit. Robustness to a wrong graph is not a single property but
 a question of \emph{how} the graph enters the algorithm; coarsening removes an
 entire class of errors from the input, and the practitioner dials resolution against
-robustness by choosing how much structure to commit to.
+robustness by choosing how much structure to commit to --- and, with a declared
+hierarchy, can re-dial it mid-run: plateau-triggered refinement turns the price of
+a too-coarse commitment into a bounded transient instead of a permanent regret rate.
 
 \subsubsection*{Acknowledgements}
 % Left blank for anonymous submission.

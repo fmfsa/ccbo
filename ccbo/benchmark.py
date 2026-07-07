@@ -371,3 +371,260 @@ def run_qcbo_benchmark(ds, coarse_clusters=None, seed=0, num_trials=40,
     # CBO returns ... global_opt as last element (see run_cbo.py usage).
     global_opt = result[-1] if isinstance(result, (list, tuple)) else None
     return global_opt, out_csv
+
+
+# ---------------------------------------------------------------------------
+# QCBO-refine: plateau-triggered partition refinement (hierarchical C-DAG)
+# ---------------------------------------------------------------------------
+
+def _plateau(traj, k, delta, task):
+    """True when the best-so-far trajectory improved < ``delta`` over the last
+    ``k`` steps."""
+    if len(traj) < k + 1:
+        return False
+    gain = (traj[-1 - k] - traj[-1]) if task == 'min' else (traj[-1] - traj[-1 - k])
+    return gain < delta
+
+
+def _split_partition(partition, refine_map, incumbent_vars):
+    """Split every refinable cluster that intersects the incumbent arm.
+
+    ``refine_map`` maps a cluster (any iterable of fine vars) to its declared
+    sub-partition (list of lists). Returns ``(new_partition, split_clusters)``;
+    ``split_clusters`` is empty when nothing applies.
+    """
+    rmap = {frozenset(c): [frozenset(s) for s in subs]
+            for c, subs in refine_map.items()}
+    inc = set(incumbent_vars)
+    new_partition, split = [], []
+    for part in partition:
+        if part in rmap and part & inc:
+            subs = rmap[part]
+            assert frozenset().union(*subs) == part, (
+                f"refine_map for {set(part)} is not a partition of the cluster")
+            new_partition.extend(subs)
+            split.append(part)
+        else:
+            new_partition.append(part)
+    return new_partition, split
+
+
+def _union_and_carry(ES_old, data_x_list, data_y_list, ES_new, fresh_sampler):
+    """Union phase-1 arms into the refined ES and carry data by arm key.
+
+    Every arm of ``ES_old`` is kept even if the refined ES (built under a
+    finite ``max_intervention_size``) dropped it — the Prop. 4 superset made
+    operational. ``fresh_sampler(entries)`` returns ``(xs, ys)`` init data for
+    the arms that are new at the refined level. Returns ``(ES, dxl, dyl)``.
+    """
+    old_data = {tuple(e): (data_x_list[i], data_y_list[i])
+                for i, e in enumerate(ES_old)}
+    ES = [list(e) for e in ES_new]
+    for e in ES_old:
+        if not any(tuple(e) == tuple(n) for n in ES):
+            ES.append(list(e))
+    fresh = [e for e in ES if tuple(e) not in old_data]
+    fresh_data = {}
+    if fresh:
+        fx, fy = fresh_sampler(fresh)
+        fresh_data = {tuple(e): (fx[i], fy[i]) for i, e in enumerate(fresh)}
+    dxl = [old_data.get(tuple(e), fresh_data.get(tuple(e)))[0] for e in ES]
+    dyl = [old_data.get(tuple(e), fresh_data.get(tuple(e)))[1] for e in ES]
+    return ES, dxl, dyl
+
+
+def run_qcbo_refine_benchmark(ds, coarse_clusters, refine_map, seed=0,
+                              num_trials=100, num_interventions=10,
+                              max_intervention_size=None, out_csv=None,
+                              method_label='QCBO-refine',
+                              assumed_graph_name=None, gating=True,
+                              plateau_k=5, plateau_delta=1e-3,
+                              refine_at=None, coarse_csv=None, verbose=False):
+    """QCBO with one plateau-triggered partition-refinement step (two-phase).
+
+    Phase 1 of QCBO-refine *is* QCBO-coarse: same seed, same inputs, same
+    code path. The plateau monitor (improvement < ``plateau_delta`` over the
+    last ``plateau_k`` steps, evaluated every step) is therefore a function of
+    the coarse trajectory alone, and its firing time ``t_r`` is determined by
+    scanning that trajectory — from ``coarse_csv`` when the baseline run for
+    this seed exists, otherwise by running the coarse configuration once here
+    (simulation compute; the method's interventional budget stays
+    ``num_trials + 1`` steps). Phase 1 then executes as a single monolithic
+    CBO call of exactly ``t_r + 1`` steps — byte-identical to the coarse
+    baseline's prefix.
+
+    On trigger, every ``refine_map`` cluster intersecting the incumbent arm is
+    split one level (Prop. 3 validity is re-checked by the CoarsenedGraph
+    constructor; an invalid split is refused and the run continues coarse).
+    The refined exploration set is unioned with every phase-1 arm (Prop. 4
+    superset also under a finite ``max_intervention_size``), all
+    interventional data carries over by arm key, and only the new arms
+    receive the standard ``num_interventions`` init points. Phase 2 runs the
+    remaining budget in a single warm-started CBO call. (The benchmark CBO
+    forces an observation step at the start of every call, so the phase
+    boundary costs one observation trial — a bias *against* refine.)
+
+    ``refine_at`` (a step index) replaces the plateau trigger with a fixed
+    checkpoint (ablation).
+
+    Returns ``(traj, out_csv, info)`` where ``info`` records the trigger step
+    and the split clusters.
+    """
+    _ensure_benchmark_on_path()
+    from baselines.BO_CBO.CBO import CBO
+    from baselines.BO_CBO.utils import compute_coverage
+    import tempfile
+
+    np.random.seed(seed)
+    dg, obs, config = load_graph(ds, seed=seed)
+    manip = list(config['intervention'])
+    task = config['task']
+    if max_intervention_size is None:
+        max_intervention_size = min(5, len(manip))
+    partition = _coarse_partition(coarse_clusters)
+
+    def _build(part):
+        cg = make_coarsened_graph(dg, ds, obs, part,
+                                  max_intervention_size=max_intervention_size,
+                                  assumed_graph_name=assumed_graph_name,
+                                  gating=gating)
+        ES = [list(e) for e in cg.get_sets()[0]]
+        return cg, ES
+
+    cg, ES = _build(partition)
+    ranges = dg.get_interventional_ranges()
+    dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}
+    # Same construction order as run_qcbo_benchmark (models fitted BEFORE the
+    # init data re-seeds the RNG) so phase 1 is byte-identical to the coarse
+    # baseline run.
+    functions = cg.fit_all_models()
+    costs = cg.get_cost_structure(1)
+
+    (data_x_list, data_y_list, best_x, opt_y, best_variable) = \
+        _initial_interventional_data(dg, ES, num_interventions, task, seed)
+
+    _, _, coverage_total = compute_coverage(obs, cg.get_sets()[2], dict_ranges)
+
+    if out_csv is None:
+        out_csv = os.path.join(BENCH_ROOT, 'results', method_label, ds,
+                               f'{method_label}_{ds}_{num_trials}-trials_progress.csv')
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+
+    total_steps = num_trials + 1
+    steps_used = 0
+    traj = []            # concatenated best-so-far, one entry per executed step
+    segment_csvs = []
+    info = {'trigger_step': None, 'split_clusters': [], 'refused': False}
+
+    # ---- Trigger time from the coarse trajectory ---------------------------
+    if refine_at is not None:
+        t_fire = int(refine_at)
+    else:
+        if not (coarse_csv and os.path.exists(coarse_csv)):
+            fd, coarse_csv = tempfile.mkstemp(suffix='.csv',
+                                              prefix='refine_coarse_')
+            os.close(fd)
+            run_qcbo_benchmark(
+                ds, coarse_clusters=coarse_clusters, seed=seed,
+                num_trials=num_trials, num_interventions=num_interventions,
+                max_intervention_size=max_intervention_size,
+                out_csv=coarse_csv, method_label=method_label,
+                assumed_graph_name=assumed_graph_name, gating=gating)
+        coarse_traj = pd.read_csv(coarse_csv)['current_optimal'] \
+            .astype(float).tolist()
+        t_fire = next((t for t in range(len(coarse_traj))
+                       if _plateau(coarse_traj[:t + 1], plateau_k,
+                                   plateau_delta, task)), None)
+    # Refinement needs at least one phase-2 step.
+    if t_fire is not None and not (0 < t_fire < total_steps - 1):
+        t_fire = None
+
+    def _run_segment(n_steps):
+        nonlocal best_x, opt_y, best_variable, steps_used, functions
+        fd, seg_csv = tempfile.mkstemp(suffix='.csv', prefix='refine_seg_')
+        os.close(fd)
+        result = CBO(
+            n_steps - 1, ES, cg.get_sets()[2], data_x_list, data_y_list,
+            best_x, opt_y, best_variable, dict_ranges, functions,
+            obs, coverage_total, cg, 20, costs, obs, task,
+            len(obs) + 50, len(obs), num_interventions,
+            Causal_prior=True, csv_log_file=seg_csv)
+        _, best_intervention, _, global_opt, _, _ = result
+        segment_csvs.append(seg_csv)
+        # global_opt[0] repeats the entry incumbent; per-step values follow.
+        traj.extend(global_opt[1:])
+        steps_used += n_steps
+        if isinstance(best_intervention, dict) and 'original_key' in best_intervention:
+            best_variable = best_intervention['original_key']
+            best_x = best_intervention['intervention_values']
+            if isinstance(best_x, list):
+                best_x = np.asarray(best_x, dtype=float)
+        opt_y = traj[-1]
+
+    def _incumbent_arm():
+        """Arm (fine-var tuple) holding the best observed interventional Y."""
+        per_arm = [(Y.min() if task == 'min' else Y.max()) for Y in data_y_list]
+        s = int(np.argmin(per_arm) if task == 'min' else np.argmax(per_arm))
+        return tuple(ES[s])
+
+    # ---- Phase 1: one monolithic coarse call up to the trigger -------------
+    if t_fire is None:
+        _run_segment(total_steps)          # never refines: this IS coarse
+    else:
+        _run_segment(t_fire + 1)           # steps 0..t_fire, coarse prefix
+        incumbent = _incumbent_arm()
+        new_partition, split = _split_partition(partition, refine_map,
+                                                incumbent)
+        new_cg = None
+        if split:
+            try:
+                new_cg, new_ES = _build(new_partition)
+            except ValueError as e:        # Prop. 3: refuse invalid split
+                info['refused'] = True
+                if verbose:
+                    print(f'refine refused: {e}', flush=True)
+        if new_cg is not None:
+            def _sampler(entries):
+                fx, fy, _, _, _ = _initial_interventional_data(
+                    dg, entries, num_interventions, task, seed + 1000)
+                return fx, fy
+            ES, data_x_list, data_y_list = _union_and_carry(
+                ES, data_x_list, data_y_list, new_ES, _sampler)
+            # Register unioned phase-1 arms with the refined graph (before
+            # its memoized get_all_do first runs) so they get C-DAG priors
+            # too; each old cluster is a union of its sub-clusters, so
+            # identification stays valid (Prop. 4(ii)), and a failure falls
+            # back to the uninformative prior.
+            for e in ES:
+                if list(e) not in new_cg._exploration_set:
+                    new_cg._exploration_set.append(list(e))
+            cg, partition = new_cg, new_partition
+            functions = cg.fit_all_models()
+            costs = cg.get_cost_structure(1)
+            _, _, coverage_total = compute_coverage(
+                obs, cg.get_sets()[2], dict_ranges)
+            info['trigger_step'] = t_fire
+            info['split_clusters'] = [sorted(c) for c in split]
+            if verbose:
+                print(f'refined at step {t_fire}: split '
+                      f'{info["split_clusters"]}, |ES|={len(ES)}', flush=True)
+        # ---- Phase 2: the remaining budget in a single call ----------------
+        _run_segment(total_steps - steps_used)
+
+    # Merge segment CSVs into one benchmark-format progress CSV.
+    frames = []
+    offset = 0
+    for p in segment_csvs:
+        f = pd.read_csv(p)
+        f['trial_number'] = f['trial_number'] + offset
+        offset += len(f)
+        frames.append(f)
+        os.remove(p)
+    merged = pd.concat(frames, ignore_index=True)
+    # Best-so-far must be monotone across segment boundaries by construction;
+    # enforce defensively so scoring never regresses on a merge artifact.
+    col = merged['current_optimal'].astype(float)
+    merged['current_optimal'] = (np.minimum.accumulate(col) if task == 'min'
+                                 else np.maximum.accumulate(col))
+    merged.to_csv(out_csv, index=False)
+    return traj, out_csv, info
