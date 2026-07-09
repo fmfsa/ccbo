@@ -939,6 +939,12 @@ within noise on \textsc{healthcare} ($5.354\pm0.031$ vs coarse
 $5.329\pm0.015$) and small on \textsc{ecology} ($4.885\pm0.028$ vs
 $4.983\pm0.051$, task max) --- the singleton-starvation effect that the
 rollback rule of \S\ref{sec:limitations} would bound by construction.
+App.~\ref{app:refine} (Table~\ref{tab:refine-suite},
+Fig.~\ref{fig:refine-suite}) gives the full cross-dataset trajectories and
+regret; the honest summary is that refinement rescues the lossy partitions and
+does not harm the lossless ones materially, but neither quotient method
+out-performs full-knowledge \CBO{} on the small survey partitions, where too
+few clusters leave little for coarsening's focus to buy.
 
 \begin{figure}[t]\centering
   \includegraphics[width=\linewidth]{figures/clusterbench10L_refine}
@@ -1407,6 +1413,54 @@ incumbent regret $R_T$ ($\downarrow$) per method and perturbation
 \label{tab:regret}
 \small\adjustbox{max width=\linewidth}{\input{tables/clusterbench10_regret}}
 \end{table}
+
+\section{\QCBO{}-refine across datasets}\label{app:refine}
+Table~\ref{tab:refine-suite} and Fig.~\ref{fig:refine-suite} give the full
+cross-dataset picture for \QCBO{}-refine (\S\ref{sec:refine}): the two
+\textsc{ClusterBench} variants and the three survey datasets whose domain
+partition we refine ($10$ seeds on the \textsc{ClusterBench} pair, $5$ on the
+survey datasets; the finest run supplies the \CBO{} row by
+Prop.~\ref{prop:identity}). Three regimes are visible. \emph{(i) Lossless,
+partition helps} (\textsc{ClusterBench10}): both quotient methods beat \CBO{}
+on final $Y$ and cumulative regret, and refinement adds a little more; the
+false trigger --- refine cannot observe $y^\star$, so it fires anyway --- costs
+nothing ($R_T\,41.6$ vs coarse $41.8$). \emph{(ii) Lossy}
+(\textsc{ClusterBench10L}, \textsc{synthetic\_2}): fixed-coarse plateaus and
+its cumulative regret grows linearly; refinement escapes the plateau to
+\CBO{}'s optimum ($-1.855$ vs finest $-2.054$ on \textsc{synthetic\_2}) and
+bends $R_T$ back toward the better of \{coarse, \CBO{}\}. \emph{(iii) Lossless,
+partition neutral} (\textsc{ecology}, \textsc{healthcare}): the four methods
+sit within noise on final $Y$; here the false trigger costs a small polish tax
+on \textsc{ecology} ($4.885$ vs coarse $4.983$, task max) and nothing
+measurable on \textsc{healthcare}. Two honest reads follow. Refinement lowers
+GAP relative to fixed-coarse everywhere --- the mid-run split adds arms and
+re-explores, trading early-budget GAP for the final-value and regret recovery
+--- so it is the right default only when the partition is suspected lossy.
+And on the small survey partitions ($2$--$5$ manipulable variables) neither
+quotient method dominates full-knowledge \CBO{} on final $Y$; the clear wins
+are on the constructed benchmarks, where the cluster count is large enough for
+coarsening's focus to register. This is the finite-budget, few-cluster regime;
+the $\Theta(K^m)$-vs-$\Theta(N^m)$ arm-count gap that motivates coarsening
+widens with problem size, which these $N\!\le\!10$ datasets do not exercise.
+
+\begin{table}[t]\centering
+\caption{\QCBO{}-refine vs \BO{}, \CBO{}, and \QCBO{}-coarse across datasets.
+Final $Y$ (closest to $y^\star$ best), GAP@100 ($\uparrow$), cumulative
+incumbent regret $R_T$ ($\downarrow$); mean$\pm$s.e., best per group in bold.}
+\label{tab:refine-suite}
+\small\adjustbox{max width=\linewidth}{\input{tables/refine_suite}}
+\end{table}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.86\linewidth]{figures/refine_suite}
+\caption{Best-so-far $Y$ (left) and cumulative incumbent regret $R_t$ (right)
+per dataset; mean $\pm$ s.e., dashed line = mean \QCBO{}-refine trigger.
+\CBO{}$\,\equiv\,$\QCBO{}-finest (Prop.~\ref{prop:identity}). Refinement rides
+coarse until the trigger, then --- where the partition is lossy
+(\textsc{ClusterBench10L}, \textsc{synthetic\_2}) --- descends and flattens
+$R_t$; where it is lossless the trajectories stay together.}
+\label{fig:refine-suite}
+\end{figure}
 
 % =============================================================================
 \bibliographystyle{abbrvnat}

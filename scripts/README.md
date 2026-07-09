@@ -53,6 +53,12 @@ arm key, Prop.-3 validity refusal). Unit tests: `pytest ccbo/tests/test_refine.p
    cumulative-regret panels (fixed-coarse linear in T vs refine's bounded transient).
 3. **`emit_review_tables.py`** — the price table now carries the QCBO-refine row and an $R_T$
    column.
+4. **`emit_refine_table.py` + `plot_refine_suite.py`** — the cross-dataset comparison
+   (App. "QCBO-refine across datasets"): `paper/tables/refine_suite.tex` (BO/CBO/coarse/refine
+   × {ClusterBench10, 10L, synthetic_2, ecology, healthcare}, Final Y / GAP@100 / R_T) and
+   `paper/figures/refine_suite.pdf` (best-so-far + cumulative regret, one row per dataset).
+   Honest read: refine rescues lossy partitions, no material harm on lossless, does not beat
+   full-knowledge CBO on the small survey partitions.
 
 ## Standardized CausalBO benchmark (sample-efficiency / main comparison)
 

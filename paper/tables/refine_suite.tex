@@ -1,0 +1,35 @@
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Method} & \textbf{Final $Y$} & \textbf{GAP@100} & $R_T$ \\
+ & & {\footnotesize $\to y^\star$} & {\footnotesize $\uparrow$} & {\footnotesize $\downarrow$} \\
+\midrule
+\multicolumn{5}{@{}l}{\emph{\textsc{ClusterBench10}} {\footnotesize(lossless, $y^\star{=}0$)}} \\
+\quad & \BO & $1.981{\scriptstyle\,\pm\,}0.261$ & $0.175{\scriptstyle\,\pm\,}0.090$ & $205.6{\scriptstyle\,\pm\,}27.1$ \\
+\quad & \CBO & $0.290{\scriptstyle\,\pm\,}0.054$ & $0.561{\scriptstyle\,\pm\,}0.033$ & $71.3{\scriptstyle\,\pm\,}5.6$ \\
+\quad & \QCBO-coarse & $0.128{\scriptstyle\,\pm\,}0.021$ & $\mathbf{0.769{\scriptstyle\,\pm\,}0.066}$ & $41.8{\scriptstyle\,\pm\,}5.2$ \\
+\quad & \textbf{\QCBO-refine} & $\mathbf{0.070{\scriptstyle\,\pm\,}0.021}$ & $0.704{\scriptstyle\,\pm\,}0.059$ & $\mathbf{41.6{\scriptstyle\,\pm\,}5.8}$ \\
+\addlinespace[2pt]
+\multicolumn{5}{@{}l}{\emph{\textsc{ClusterBench10L}} {\footnotesize(lossy, $y^\star{=}0.10$)}} \\
+\quad & \BO & $1.188{\scriptstyle\,\pm\,}0.122$ & $0.765{\scriptstyle\,\pm\,}0.044$ & $153.3{\scriptstyle\,\pm\,}32.6$ \\
+\quad & \QCBO-coarse & $1.128{\scriptstyle\,\pm\,}0.016$ & $\mathbf{0.802{\scriptstyle\,\pm\,}0.036}$ & $120.3{\scriptstyle\,\pm\,}3.1$ \\
+\quad & \textbf{\QCBO-refine} & $\mathbf{0.101{\scriptstyle\,\pm\,}0.001}$ & $0.694{\scriptstyle\,\pm\,}0.037$ & $\mathbf{32.1{\scriptstyle\,\pm\,}2.6}$ \\
+\addlinespace[2pt]
+\multicolumn{5}{@{}l}{\emph{\textsc{synthetic\_2}} {\footnotesize(lossy, $y^\star{=}-3.97$)}} \\
+\quad & \BO & $-0.849{\scriptstyle\,\pm\,}0.191$ & $0.075{\scriptstyle\,\pm\,}0.050$ & $308.9{\scriptstyle\,\pm\,}18.9$ \\
+\quad & \CBO & $\mathbf{-2.054{\scriptstyle\,\pm\,}0.199}$ & $0.269{\scriptstyle\,\pm\,}0.109$ & $\mathbf{198.3{\scriptstyle\,\pm\,}21.6}$ \\
+\quad & \QCBO-coarse & $-0.511{\scriptstyle\,\pm\,}0.000$ & $\mathbf{0.490{\scriptstyle\,\pm\,}0.007}$ & $346.4{\scriptstyle\,\pm\,}0.2$ \\
+\quad & \textbf{\QCBO-refine} & $-1.855{\scriptstyle\,\pm\,}0.000$ & $0.402{\scriptstyle\,\pm\,}0.073$ & $231.0{\scriptstyle\,\pm\,}1.2$ \\
+\addlinespace[2pt]
+\multicolumn{5}{@{}l}{\emph{\textsc{ecology}} {\footnotesize(lossless, max, $y^\star{=}9.27$)}} \\
+\quad & \BO & $4.955{\scriptstyle\,\pm\,}0.032$ & $\mathbf{0.298{\scriptstyle\,\pm\,}0.086}$ & $443.9{\scriptstyle\,\pm\,}4.5$ \\
+\quad & \CBO & $\mathbf{5.826{\scriptstyle\,\pm\,}0.409}$ & $0.158{\scriptstyle\,\pm\,}0.099$ & $\mathbf{346.7{\scriptstyle\,\pm\,}42.3}$ \\
+\quad & \QCBO-coarse & $4.983{\scriptstyle\,\pm\,}0.051$ & $0.286{\scriptstyle\,\pm\,}0.083$ & $436.2{\scriptstyle\,\pm\,}5.0$ \\
+\quad & \textbf{\QCBO-refine} & $4.885{\scriptstyle\,\pm\,}0.028$ & $0.192{\scriptstyle\,\pm\,}0.094$ & $443.3{\scriptstyle\,\pm\,}2.6$ \\
+\addlinespace[2pt]
+\multicolumn{5}{@{}l}{\emph{\textsc{healthcare}} {\footnotesize(lossless, $y^\star{=}4.04$)}} \\
+\quad & \BO & $\mathbf{5.327{\scriptstyle\,\pm\,}0.028}$ & $0.432{\scriptstyle\,\pm\,}0.083$ & $\mathbf{129.7{\scriptstyle\,\pm\,}3.7}$ \\
+\quad & \CBO & $5.380{\scriptstyle\,\pm\,}0.025$ & $\mathbf{0.505{\scriptstyle\,\pm\,}0.019}$ & $135.4{\scriptstyle\,\pm\,}2.1$ \\
+\quad & \QCBO-coarse & $5.329{\scriptstyle\,\pm\,}0.015$ & $0.360{\scriptstyle\,\pm\,}0.071$ & $132.3{\scriptstyle\,\pm\,}1.7$ \\
+\quad & \textbf{\QCBO-refine} & $5.354{\scriptstyle\,\pm\,}0.031$ & $0.452{\scriptstyle\,\pm\,}0.059$ & $133.0{\scriptstyle\,\pm\,}2.5$ \\
+\bottomrule
+\end{tabular}
