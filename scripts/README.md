@@ -60,6 +60,23 @@ arm key, Prop.-3 validity refusal). Unit tests: `pytest ccbo/tests/test_refine.p
    Honest read: refine rescues lossy partitions, no material harm on lossless, does not beat
    full-knowledge CBO on the small survey partitions.
 
+## QMCBO pilot (quotient Model-based CBO; next-paper feasibility)
+
+Model-based analogue of QCBO: MCBO's per-node mechanism GPs become per-coordinate
+*cluster* mechanisms composed along the C-DAG — a pure `env_profile` transformation of the
+vendored MCBO (`ccbo/qmcbo/quotient.py`; no third-party edits, `mcbo_trial` runs stock).
+Intra-cluster + quotient-redundant edges are invisible to the architecture by construction.
+Tests: `pytest ccbo/tests/test_qmcbo.py`. Note: `notes/qmcbo_pilot.md`.
+
+1. **`ccbo/qmcbo/runner.py`** — one (env, algo, seed) unit; `--algo {MCBO,QMCBO}`,
+   `--misspec e2` perturbs only the model's DAG view (fixed objective). Deterministic per
+   seed (vendored `torch.seed()` de-seeding neutralized at runtime); units isolate their
+   scratch dirs (the stock CSV name collides across concurrent units otherwise).
+2. **`run_qmcbo_pilot.sh`** — E1 (ToyGraph/Synthetic_2/PSAGraph × MCBO/QMCBO × 5 seeds,
+   T=100) + E2 (same, canonical intra-cluster perturbation) into
+   `third_party/.../results/_qmcbo{,/_e2}`.
+3. **`analyze_qmcbo.py`** — scores the trial CSVs and checks E2 byte-identity per seed.
+
 ## Standardized CausalBO benchmark (sample-efficiency / main comparison)
 
 - `run_qcbo_benchmark_suite.py` / `run_qcbo_benchmark_parallel.py` — QCBO on the 6 curated datasets.
