@@ -264,7 +264,7 @@ Markov properties transfer to the cluster level, but faithfulness does not
 \citep{wahl2024foundations}.
 
 % =============================================================================
-\section{Quotient Causal Bayesian Optimization}
+\section{The first instantiation: Quotient \CBO{} (\QCBO{})}
 \label{sec:method}
 
 \subsection{Setup}
@@ -386,7 +386,7 @@ Eq.~\eqref{eq:two_tier_prior} on $\mathcal{D}^{O}$.
 \end{algorithm}
 
 % =============================================================================
-\section{What coarsening buys}
+\section{The quotient contract: what coarsening buys}
 \label{sec:theory}
 These results are a \emph{modeling} contribution rather than new estimation
 theory: \QCBO{}'s inputs are the quotient $\Gq$ and data, and the quotient is by
@@ -1064,26 +1064,16 @@ few clusters leave little for coarsening's focus to buy.
   \label{fig:refine}
 \end{figure}
 
-\textbf{The cost of a wrong partition.}
-\QCBO{}'s soundness requires the true fine graph to quotient to $\Gq$; we stress
-that assumption directly by handing \QCBO{} a \emph{wrong} partition
-($\{X_1,X_2,X_4\},\{X_3,X_5\}$: $X_3$ and $X_4$ swapped). Because \QCBO{} consumes
-only the C-DAG and never the fine graph, we quotient the base structure under this
-wrong partition once to obtain a fixed, acyclic --- hence perfectly runnable --- but
-\emph{incorrect} C-DAG, and optimize the true objective through it (the wrong
-partition alters the exploration set, identification verdicts, and priors, but not
-the objective; it is therefore invariant to the fine-structure perturbations of
-\S\ref{sec:exp-scope} by construction, and we report its single cost).
-Table~\ref{tab:wrongpi} shows a graceful degradation, not a collapse: the wrong
-partition costs final quality (final $Y=0.49$ vs $0.13$ for the correct coarse
-partition and $0.29$ for full-knowledge \CBO{}), yet remains far better than
-discarding structure entirely (\BO{}, $1.98$) and keeps near-coarse sample
-efficiency (GAP and PA-GAP within $0.06$ of the correct coarse run). A misspecified
-\emph{clustering} thus incurs a bounded loss of solution quality --- qualitatively
-milder than the identification failures a wrong \emph{edge} inflicts on full-DAG
-methods. This failure mode is outside
-Prop.~\ref{prop:invariance}, whose invariance covers intra-cluster edits under a
-\emph{correct} partition, not errors in the partition itself.
+\textbf{The cost of a wrong partition.} Soundness requires the true fine
+graph to quotient to $\Gq$; App.~\ref{app:wrongpi} stresses that assumption
+directly with a fixed, acyclic but \emph{incorrect} C-DAG (two variables
+swapped across clusters). The result is graceful degradation, not collapse:
+final $Y=0.49$ vs $0.13$ (correct partition) and $0.29$ (\CBO{}), still far
+above \BO{}'s $1.98$, with near-coarse sample efficiency --- a misspecified
+\emph{clustering} costs bounded solution quality, qualitatively milder than
+what a wrong \emph{edge} inflicts on full-DAG methods, and outside the scope
+of Prop.~\ref{prop:invariance} (which covers intra-cluster edits under a
+correct partition).
 
 \begin{table}[t]\centering
   \caption{Realized price of coarsening on \textsc{ClusterBench10L} (the lossy
@@ -1096,17 +1086,6 @@ Prop.~\ref{prop:invariance}, whose invariance covers intra-cluster edits under a
   \label{tab:price}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10L_price}}
-\end{table}
-
-\begin{table}[t]\centering
-  \caption{Cost of a \emph{wrong} partition on \textsc{ClusterBench10} (correct
-  objective; 10 seeds, $T{=}100$, $y^\star{=}0$). \QCBO{}-wrong$\Pi$ holds a fixed,
-  acyclic but incorrect C-DAG (base structure under a wrong partition). It loses
-  final quality against the correct partition yet degrades gracefully, staying far
-  above non-causal \BO{}.}
-  \label{tab:wrongpi}
-  \small
-  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_wrongpi}}
 \end{table}
 
 \subsection{The contract in the model-based family}
@@ -1221,54 +1200,45 @@ it coarsens the manipulable \emph{inputs}.
 % =============================================================================
 \section{Discussion and limitations}
 \label{sec:limitations}
-Prop.~\ref{prop:invariance} is structural, not statistical: coarsening acts as a
-hard regularizer on the hypothesis space, trading resolution (Prop.~\ref{prop:price})
-for immunity to an entire class of misspecifications. Several caveats sharpen the
-claim. (i) \emph{Where the guarantee comes from.} The invariance is a property of the
-\emph{quotient}, not of our implementation: \QCBO{}-\emph{finest}
-($\equiv$\CBO{}, Prop.~\ref{prop:identity}) has no such guarantee, because its
-estimators are functionals of the fine edges; we therefore read robustness off the
-finest-to-coarse contrast rather than off absolute numbers. (ii) \emph{Scope of the
-empirical damage.} A within-cluster error \emph{shifts} the full-DAG method's
-convergence (GAP, PA-GAP) but, because the optimal arm intervenes on the whole cluster
-and severs the edge, does not change its converged value; a deleted optimal arm with no
-identifiable substitute would require an intervention budget smaller than a cluster, a
-regime our identical-action-space protocol deliberately avoids. The guarantee,
-exact invariance, holds in either regime, and it is a guarantee about \emph{behavior}:
-the practitioner's optimizer does provably the same thing whether or not the
-within-cluster edges are right. (iii) \BO{} is trivially robust but pays heavily in
-absolute performance; robustness is not the same as ignoring structure.
-(iv) We exclude DCBO and model-based \CBO{} because they couple surrogate structure to
-the objective or hard-code per-environment setups, so the fixed-objective protocol
-does not apply; they remain in the correct-DAG head-to-head (App.~\ref{app:headtohead}).
-(v) Faithfulness
-does not transfer to the cluster level \citep{wahl2024foundations}, so cluster-level
-conditional independences must not be read back as fine structure. (vi) We evaluate
-at unit intervention costs; cost-asymmetric settings change where coarsening pays.
-(vii) \emph{Cost of the gate.} The exploration set is gated by one complete-%
-identification check (Shpitser--Pearl via \texttt{ananke}) per candidate cluster-union
-of size $\le m$; for $K$ manipulable clusters that is $\sum_{k\le m}\binom{K}{k}$
-checks, polynomial in the number of clusters for fixed $m$, and run
-on the $\le\!K{+}|\text{atoms}|$-node \emph{quotient}, not the fine graph, so its cost
-is set by the coarse partition, not the fine dimension it abstracts. Coarsening
-contracts the identification problem exactly as it contracts the search space, and the
-checks are precomputed once before optimization begins.
-(viii) \emph{Asymptotics.} Full-DAG \CBO{} eventually self-corrects under any
+Theorem~\ref{thm:contract} is structural, not statistical: coarsening acts as
+a hard regularizer on the hypothesis space, trading resolution
+(Prop.~\ref{prop:price}) for immunity to a class of misspecifications.
+Caveats, briefly. (i) The invariance belongs to the \emph{quotient}, not our
+implementations: the finest instantiations ($\equiv$\CBO{}/MCBO,
+Prop.~\ref{prop:identity}, Cor.~\ref{cor:qmcbo_invariance}) have no such
+guarantee, so robustness is read off the finest-to-coarse contrast, not
+absolute numbers. (ii) The guarantee is about \emph{behavior}: a
+within-cluster error shifts the full-DAG method's convergence but not
+necessarily its converged value under our identical-action-space protocol;
+invariance holds in either regime. (iii) \BO{} is trivially robust but pays
+heavily in absolute performance; robustness is not ignoring structure.
+(iv) DCBO is excluded from the fixed-objective protocol (per-environment
+coupling); MCBO now appears through its own harness in
+\S\ref{sec:exp-qmcbo}. (v) Faithfulness does not transfer to the cluster
+level \citep{wahl2024foundations}: cluster-level independences must not be
+read back as fine structure. (vi) Unit intervention costs only;
+cost-asymmetric settings move where coarsening pays. (vii) The
+identifiability gate costs $\sum_{k\le m}\binom{K}{k}$ complete-ID checks on
+the \emph{quotient} --- polynomial in clusters for fixed $m$, precomputed,
+set by the coarse partition rather than the fine dimension.
+(viii) \emph{\QMCBO{} assumes causal sufficiency} (Prop.~\ref{prop:qsound}),
+as MCBO itself does; bidirected C-DAG edges require correlated-noise cluster
+mechanisms and are the model-based family's open problem, where the
+arm-based family's identification gate already handles them.
+(ix) \emph{Asymptotics.} Full-DAG \CBO{} eventually self-corrects under any
 wrong graph --- its arm space always contains an optimal arm, and interventional
-data override a biased prior --- so fixed-coarse \QCBO{}'s advantages are
+data override a biased prior --- so a fixed coarse partition's advantages are
 finite-budget focus and invariance, never limiting value; on a lossy partition
-its cumulative regret is linear in $T$. Refinement (\S\ref{sec:refine}) removes
-the linear term, but at a cost stated by Remark~\ref{rem:phase_invariance}:
-each split cluster surrenders its local invariance --- resolution is bought
-with exposure. And because the trigger never observes $y^\star$, it also fires
-on lossless partitions, where the realized cost is the new arms' initialization
-plus, on one of three lossless controls (\textsc{ecology}), a small polish tax
-under the benchmark's cost-weighted acquisition, which favors the newly added
-cheap singleton arms over re-polishing the incumbent
-cluster arm (\S\ref{sec:exp-partition}); a rollback rule that reverts a split
-which fails to improve the incumbent within a fixed window would bound this tax
-by construction, and we leave it to the hierarchical follow-up, along with
-discovering the hierarchy itself from the interventional data the run collects.
+its cumulative regret is linear in $T$, in both families
+(Cor.~\ref{cor:qmcbo_invariance}). Refinement (\S\ref{sec:refine}) removes
+the linear term at the cost priced by Prop.~\ref{prop:qexposure} and
+Remark~\ref{rem:phase_invariance}: resolution is bought with exposure. The
+trigger never observes $y^\star$, so it also fires on lossless partitions,
+where the realized cost is the new arms' initialization plus, on one of three
+lossless controls (\textsc{ecology}), a small polish tax
+(\S\ref{sec:exp-partition}); a rollback rule bounding that tax by
+construction, and discovering the hierarchy from the run's own interventional
+data, are the natural follow-ups.
 
 % =============================================================================
 \section{Conclusion}
@@ -1641,6 +1611,29 @@ incumbent regret $R_T$ ($\downarrow$) per method and perturbation
 ($10$ seeds, $T{=}100$; $y^\star{=}0$).}
 \label{tab:regret}
 \small\adjustbox{max width=\linewidth}{\input{tables/clusterbench10_regret}}
+\end{table}
+
+\section{The cost of a wrong partition}\label{app:wrongpi}
+\QCBO{} consumes only the C-DAG and never the fine graph, so a wrong
+\emph{partition} is stressed by quotienting the base structure once under
+$\{X_1,X_2,X_4\},\{X_3,X_5\}$ ($X_3$ and $X_4$ swapped) to obtain a fixed,
+acyclic but incorrect C-DAG, and optimizing the true objective through it.
+The wrong partition alters the exploration set, identification verdicts, and
+priors, but not the objective; by construction it is invariant to the
+fine-structure perturbations of \S\ref{sec:exp-scope}, so it has a single
+cost, reported in Table~\ref{tab:wrongpi}: final quality degrades
+($Y=0.49$ vs $0.13$ correct-partition, $0.29$ \CBO{}) while GAP and PA-GAP
+stay within $0.06$ of the correct coarse run and far above \BO{}.
+
+\begin{table}[h]\centering
+  \caption{Cost of a \emph{wrong} partition on \textsc{ClusterBench10} (correct
+  objective; 10 seeds, $T{=}100$, $y^\star{=}0$). \QCBO{}-wrong$\Pi$ holds a fixed,
+  acyclic but incorrect C-DAG (base structure under a wrong partition). It loses
+  final quality against the correct partition yet degrades gracefully, staying far
+  above non-causal \BO{}.}
+  \label{tab:wrongpi}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_wrongpi}}
 \end{table}
 
 \section{\QCBO{}-refine across datasets}\label{app:refine}
