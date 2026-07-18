@@ -73,8 +73,10 @@ def _parse_misspec(spec):
 def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
              outdir: str, noise_scale: float = 0.0, beta: float = 10.0,
              misspec: str = "", initial_obs_samples: int = 5,
-             initial_int_samples: int = 2) -> dict:
-    """One (env, algo, seed) run. algo in {MCBO, QMCBO}. Returns run info."""
+             initial_int_samples: int = 2, mechanism: str = "ind") -> dict:
+    """One (env, algo, seed) run. algo in {MCBO, QMCBO}; for QMCBO,
+    mechanism in {ind, joint} (joint = JointQuotientGPNetwork; files are
+    labeled QMCBOJ so the ind ablation keeps its QMCBO name)."""
     ensure_mcbo_on_path()
     import torch
     import numpy as np
@@ -100,8 +102,22 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
         profile["dag"] = DAG(fine_parents)
 
     # --- QMCBO: quotient the (possibly perturbed) model view ---------------
+    # mechanism="ind"  : v1 — stock per-node GPs on the quotient profile
+    #                    (per-coordinate cluster mechanisms).
+    # mechanism="joint": Q-Soundness formulation — one multi-output GP per
+    #                    cluster (JointQuotientGPNetwork), injected via a
+    #                    runtime get_model patch; profile keeps the (possibly
+    #                    perturbed) fine dag + LIFTED targets.
+    joint_ctx = None
     if algo == "QMCBO":
-        profile = quotient_env_profile(profile, PARTITIONS[env_name])
+        from ccbo.qmcbo.quotient import lift_targets
+        if mechanism == "joint":
+            profile = dict(profile)
+            profile["valid_targets"] = lift_targets(
+                profile["valid_targets"], PARTITIONS[env_name])
+            joint_ctx = (profile, PARTITIONS[env_name])
+        else:
+            profile = quotient_env_profile(profile, PARTITIONS[env_name])
         run_algo = "MCBO"          # stock hallucination machinery
     elif algo == "MCBO":
         run_algo = "MCBO"
@@ -112,6 +128,29 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
     torch.manual_seed(seed)
     np.random.seed(seed)
     trial_mod.torch.seed = lambda: None   # runtime patch, vendored file untouched
+
+    # --- joint mechanisms: inject our model via a get_model patch ----------
+    if joint_ctx is not None:
+        from ccbo.qmcbo.qgp_network import JointQuotientGPNetwork
+        j_profile, j_partition = joint_ctx
+        stock_get_model = trial_mod.get_model
+
+        def _patched_get_model(X, network_observation_at_X, observation_at_X,
+                               algo_profile, env_profile):
+            model = JointQuotientGPNetwork(
+                train_X=X, train_Y=network_observation_at_X,
+                algo_profile=algo_profile, env_profile=j_profile,
+                partition=j_partition)
+            input_dim = env_profile["input_dim"]
+            if algo_profile["algo"] == "MCBO":
+                input_dim += env_profile["dag"].get_n_nodes()
+            if env_profile["interventional"]:
+                input_dim -= env_profile["dag"].get_n_nodes()
+            return model, input_dim
+
+        trial_mod.get_model = _patched_get_model
+    else:
+        stock_get_model = None
 
     wandb.init(mode="disabled")
     # mcbo_trial reads wandb.config.env/seed for the CSV filename; in disabled
@@ -141,8 +180,9 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
     # mcbo_trial writes its CSV to the CWD under a stock name that collides
     # across concurrent units (QMCBO runs as algo "MCBO"); isolate each unit
     # in its own scratch subdir, then move the CSV to its final name.
+    label = algo if not (algo == "QMCBO" and mechanism == "joint") else "QMCBOJ"
     os.makedirs(outdir, exist_ok=True)
-    unit_dir = os.path.join(outdir, f".unit_{algo}_{env_name}_{seed}")
+    unit_dir = os.path.join(outdir, f".unit_{label}_{env_name}_{seed}")
     os.makedirs(unit_dir, exist_ok=True)
     cwd = os.getcwd()
     os.chdir(unit_dir)
@@ -156,21 +196,22 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
         )
     finally:
         os.chdir(cwd)
+        if stock_get_model is not None:
+            trial_mod.get_model = stock_get_model
 
     stock_csv = os.path.join(unit_dir,
                              f"trial_results_{run_algo}_{env_name}_{seed}.csv")
     final_csv = os.path.join(outdir,
-                             f"trial_results_{algo}_{env_name}_{seed}.csv")
+                             f"trial_results_{label}_{env_name}_{seed}.csv")
     os.replace(stock_csv, final_csv)
     with contextlib.suppress(OSError):
         os.rmdir(unit_dir)
 
-    info = {"env": env_name, "algo": algo, "seed": seed,
+    info = {"env": env_name, "algo": label, "seed": seed,
             "num_trials": num_trials, "misspec": misspec,
+            "mechanism": mechanism if algo == "QMCBO" else None,
             "n_targets": len(profile["valid_targets"]),
-            "parents_model_view": fine_parents if algo == "MCBO" else
-            [list(profile["dag"].get_parent_nodes(k))
-             for k in range(profile["dag"].get_n_nodes())],
+            "parents_model_view": fine_parents,
             "secs": time.time() - t0, "csv": final_csv}
     with open(final_csv.replace(".csv", "_info.json"), "w") as f:
         json.dump(info, f, indent=2)
@@ -188,6 +229,9 @@ def main():
     ap.add_argument("--misspec", default="",
                     help="edge ops on the model view, e.g. 'del:0:1' or 'e2' "
                          "for the env's canonical intra-cluster perturbation")
+    ap.add_argument("--mechanism", default="ind", choices=["ind", "joint"],
+                    help="QMCBO cluster mechanism: per-coordinate (ind, v1) "
+                         "or joint multi-output GP (Q-Soundness formulation)")
     ap.add_argument("--outdir", default="third_party/CausalBO_Benchmark/"
                                         "results/_qmcbo")
     args = ap.parse_args()
@@ -195,7 +239,8 @@ def main():
     if misspec == "e2":
         misspec = ",".join(f"{k}:{u}:{v}" for k, u, v in E2_OPS[args.env])
     info = run_unit(args.env, args.algo, args.seed, args.num_trials,
-                    args.outdir, args.noise_scale, args.beta, misspec)
+                    args.outdir, args.noise_scale, args.beta, misspec,
+                    mechanism=args.mechanism)
     print(f"DONE {info['algo']:6s} {info['env']:12s} seed{info['seed']} "
           f"targets={info['n_targets']} ({info['secs']:.0f}s) -> {info['csv']}",
           flush=True)

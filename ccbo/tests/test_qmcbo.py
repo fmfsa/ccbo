@@ -85,6 +85,71 @@ def test_lift_targets():
     assert [int(x) for x in lifted[1]] == [0, 0, 0]
 
 
+# ---------------------------------------------------------------------------
+# Joint cluster mechanisms (WP1)
+# ---------------------------------------------------------------------------
+
+def _toy_joint_net(parent_nodes, partition, n=60, seed=0, intra_coef=0.9):
+    """Fit a JointQuotientGPNetwork on synthetic ToyGraph-shaped data where
+    X1 = intra_coef * X0 + noise inside cluster {0,1} and Y = X1 + noise."""
+    import torch
+    from ccbo.qmcbo.quotient import ensure_mcbo_on_path
+    ensure_mcbo_on_path()
+    from mcbo.utils.dag import DAG
+    from ccbo.qmcbo.qgp_network import JointQuotientGPNetwork
+    torch.set_default_dtype(torch.float64)
+    torch.manual_seed(seed)
+    x0 = torch.randn(n)
+    x1 = intra_coef * x0 + 0.3 * torch.randn(n)
+    y = x1 + 0.1 * torch.randn(n)
+    train_Y = torch.stack([x0, x1, y], dim=-1)
+    train_X = torch.zeros(n, 6)          # do-flags all zero + values unused
+    profile = {
+        "dag": DAG(parent_nodes), "interventional": True,
+        "valid_targets": [torch.tensor([0, 0, 0])],
+        "additive_noise_dists": None, "input_dim": 6,
+        "do_map": lambda X: X, "active_input_indices": [[]] * 6,
+    }
+    algo = {"algo": "MCBO", "beta": 1.0}
+    return JointQuotientGPNetwork(train_X, train_Y, algo, profile, partition)
+
+
+def test_joint_cluster_posterior_covariance():
+    """The 2-member cluster mechanism must learn the within-cluster residual
+    correlation (X1 = 0.9 X0 + small noise ⇒ predictive correlation near
+    +0.95). At fixed cluster inputs this correlation is aleatoric, so it
+    lives in the full-rank task NOISE — the predictive (observation-noise)
+    posterior must carry it."""
+    import torch
+    net = _toy_joint_net(TOY_PARENTS, TOY_PART)
+    gp = net.cluster_GPs[0]              # cluster {X0, X1}, root (const feat)
+    post = gp.posterior(torch.zeros(1, 1), observation_noise=True)
+    cov = post.mvn.covariance_matrix.reshape(2, 2)
+    corr = cov[0, 1] / (cov[0, 0].sqrt() * cov[1, 1].sqrt())
+    assert float(corr) > 0.5, f"residual correlation not learned: {float(corr)}"
+
+
+def test_joint_singleton_reduces_to_per_node():
+    """All-singleton partition: cluster inputs == fine parents and every
+    mechanism is a stock single-output GP (Q-Identity at the model level)."""
+    from botorch.models.gp_regression import SingleTaskGP
+    net = _toy_joint_net(TOY_PARENTS, [[0], [1], [2]])
+    assert net.cluster_inputs == [[], [0], [1]]     # == fine parents
+    assert all(isinstance(g, SingleTaskGP) for g in net.cluster_GPs)
+
+
+def test_joint_invariance_to_intra_cluster_edits():
+    """The joint network's structure (cluster parents + inputs) is identical
+    under intra-cluster edits of the fine DAG — Theorem-1 factoring for the
+    joint formulation."""
+    net_a = _toy_joint_net(TOY_PARENTS, TOY_PART)
+    net_b = _toy_joint_net(perturb_parent_nodes(TOY_PARENTS, [("rev", 0, 1)]),
+                           TOY_PART)
+    assert net_a.cluster_parents == net_b.cluster_parents
+    assert net_a.cluster_inputs == net_b.cluster_inputs
+    assert net_a.cluster_order == net_b.cluster_order
+
+
 if __name__ == "__main__":
     test_quotient_parents_toygraph()
     test_quotient_parents_psagraph()

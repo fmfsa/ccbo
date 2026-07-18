@@ -1,0 +1,105 @@
+{
+  "e1": {
+    "PSAGraph|MCBO": {
+      "final_mean": -4.341338802330005,
+      "final_sem": 0.0988372897231084,
+      "secs": 3574.154307460785,
+      "n": 5
+    },
+    "Synthetic_2|MCBO": {
+      "final_mean": 1.8453602674914755,
+      "final_sem": 0.008650407045823313,
+      "secs": 765.9730328559875,
+      "n": 5
+    },
+    "ToyGraph|MCBO": {
+      "final_mean": 1.4221338880055008,
+      "final_sem": 0.2218885453694346,
+      "secs": 573.0546394824981,
+      "n": 5
+    },
+    "PSAGraph|QMCBOJ": {
+      "final_mean": -4.258289302814317,
+      "final_sem": 0.11064252114984904,
+      "secs": 1135.4551881790162,
+      "n": 5
+    },
+    "Synthetic_2|QMCBOJ": {
+      "final_mean": 1.8525379388240755,
+      "final_sem": 0.0016019211103698563,
+      "secs": 611.2751543521881,
+      "n": 5
+    },
+    "ToyGraph|QMCBOJ": {
+      "final_mean": 2.1718053185909563,
+      "final_sem": 2.2752942754972032e-07,
+      "secs": 878.0512059688568,
+      "n": 5
+    },
+    "PSAGraph|QMCBO": {
+      "final_mean": -4.201188410738234,
+      "final_sem": 0.05470087381874034,
+      "secs": 1074.4651472091675,
+      "n": 5
+    },
+    "Synthetic_2|QMCBO": {
+      "final_mean": 1.8545015124773812,
+      "final_sem": 0.0006757414557903503,
+      "secs": 449.27483930587766,
+      "n": 5
+    },
+    "ToyGraph|QMCBO": {
+      "final_mean": 1.2608611334923951,
+      "final_sem": 0.15955906515918478,
+      "secs": 386.2586656570435,
+      "n": 5
+    }
+  },
+  "e2_identity": {
+    "PSAGraph|MCBO": {
+      "identical": 0,
+      "n": 5,
+      "mean_abs_dfinal": 0.3420750038885093
+    },
+    "Synthetic_2|MCBO": {
+      "identical": 0,
+      "n": 5,
+      "mean_abs_dfinal": 0.009359227132316095
+    },
+    "ToyGraph|MCBO": {
+      "identical": 1,
+      "n": 5,
+      "mean_abs_dfinal": 0.3846504532416097
+    },
+    "PSAGraph|QMCBOJ": {
+      "identical": 5,
+      "n": 5,
+      "mean_abs_dfinal": 0.0
+    },
+    "Synthetic_2|QMCBOJ": {
+      "identical": 5,
+      "n": 5,
+      "mean_abs_dfinal": 0.0
+    },
+    "ToyGraph|QMCBOJ": {
+      "identical": 5,
+      "n": 5,
+      "mean_abs_dfinal": 0.0
+    },
+    "PSAGraph|QMCBO": {
+      "identical": 5,
+      "n": 5,
+      "mean_abs_dfinal": 0.0
+    },
+    "Synthetic_2|QMCBO": {
+      "identical": 5,
+      "n": 5,
+      "mean_abs_dfinal": 0.0
+    },
+    "ToyGraph|QMCBO": {
+      "identical": 5,
+      "n": 5,
+      "mean_abs_dfinal": 0.0
+    }
+  }
+}

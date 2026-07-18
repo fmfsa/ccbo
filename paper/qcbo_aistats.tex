@@ -43,8 +43,10 @@
   biintra/.style={bicross},% legacy alias kept for generated figures
 }
 
+\newtheorem{theorem}{Theorem}
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
 \newtheorem{remark}{Remark}
 \newtheorem{assumption}{Assumption}
 
@@ -55,6 +57,7 @@
 \newcommand{\doo}{\mathrm{do}}
 \newcommand{\Pa}{\mathrm{Pa}}
 \newcommand{\QCBO}{\textsc{QCBO}}
+\newcommand{\QMCBO}{\textsc{QMCBO}}
 \newcommand{\CBO}{\textsc{CBO}}
 \newcommand{\BO}{\textsc{BO}}
 \newcommand{\CEO}{\textsc{CEO}}
@@ -85,26 +88,26 @@ assumption: the entire DAG must be specified correctly, and a recent survey of
 the field
 names robustness to structural misspecification a central open problem
 \citep{anonymous2026cbobench}. We first make precise how a single wrong edge
-enters the algorithm: it biases the do-calculus \emph{prior}, and --- because the
-exploration set is restricted to arms whose effect is identifiable --- it changes the
-\emph{search set} itself, altering which interventions are tried. We then
-introduce \emph{Quotient \CBO{}} (\QCBO{}), which requires only a partition of
-the manipulable variables into clusters together with the cluster-level
-(quotient) graph, and never reasons about edges inside a cluster. We prove that
-any misspecification confined within a cluster is \emph{invisible} to \QCBO{}:
-exploration set, identification formulas, priors, and the entire optimization
-trajectory --- and therefore GAP and PA-GAP --- are unchanged. This is a
-\emph{guarantee} no full-DAG method can offer, because its identifying estimators
-are functionals of the very edges in question. On a purpose-built ten-variable
-diagnostic SCM, a within-cluster edge error
-leaves \QCBO{}-coarse byte-for-byte invariant --- $\Delta\mathrm{GAP}$ and
-$\Delta$PA-GAP exactly zero --- while it perturbs the convergence of full-DAG \CBO{}.
-The protection is \emph{exactly} scoped: the same edge placed across
-clusters breaks it. Coarsening additionally concentrates the intervention budget,
-improving sample efficiency over both full-DAG \CBO{} and structure-free \BO{}.
-When the committed partition is too coarse --- the optimum splits a cluster --- a
-plateau-triggered refinement down a declared hierarchy restores it, turning the
-price of coarsening from a linear-in-$T$ regret into a bounded transient.
+enters the algorithm: it biases the do-calculus \emph{prior}, it can change the
+\emph{search set} itself by flipping an identifiability verdict, and --- in
+model-based methods --- it corrupts the \emph{surrogate's architecture}. We
+then propose coarsening as an \emph{input contract}: the practitioner supplies
+only a partition of the manipulable variables and the cluster-level (quotient)
+graph, and we prove that \emph{any} optimizer whose graph-dependent components
+factor through this quotient is invariant --- exploration sets, priors,
+surrogates, and the entire trajectory --- to every misspecification confined
+within a cluster. We instantiate the contract twice: \QCBO{}, arm-based
+quotient \CBO{} with complete identification on the C-DAG; and \QMCBO{},
+which coarsens model-based \CBO{}'s mechanism factorization into joint
+per-cluster mechanisms. Both are byte-for-byte invariant under within-cluster
+edge errors that measurably shift their full-DAG counterparts, and coarsening
+additionally concentrates the intervention budget. The price is resolution:
+when the optimum splits a cluster, a fixed partition pays a linear-in-$T$
+regret, which a plateau-triggered refinement down a declared hierarchy turns
+into a bounded transient. We prove this trade is intrinsic: evaluating
+sub-cluster interventions is not identifiable from quotient-level inputs
+alone, in either family --- resolution below the committed partition must be
+bought with intra-cluster structure, i.e.\ with exposure.
 \end{abstract}
 
 % =============================================================================
@@ -167,17 +170,17 @@ error confined to a cluster cannot be represented, let alone affect the optimize
 
 \paragraph{Contributions.}
 \begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
-  \item \textbf{Robustness via coarsening.} We prove an
-  \emph{intra-cluster invariance} property (Prop.~\ref{prop:invariance}): every
-  quantity \QCBO{} computes --- and hence its entire trajectory, GAP, and PA-GAP ---
-  is invariant to arbitrary within-cluster edge errors. This is a \emph{guarantee}
-  the full-DAG methods lack: their identifying estimators are functionals of the
-  misspecified edge, so a within-cluster error reaches them. Empirically, such an
-  error leaves \QCBO{}-coarse byte-identical
-  ($\Delta\mathrm{GAP}=\Delta\text{PA-GAP}=0$) while it perturbs the convergence of
-  full-DAG \CBO{}. We characterize the \emph{exact} scope: the
-  guarantee holds iff the perturbed edge is invisible in the quotient, and breaks
-  for the same edge placed across clusters (\S\ref{sec:exp}).
+  \item \textbf{Robustness as an input contract.} We prove that quotient
+  invariance is \emph{method-agnostic} (Theorem~\ref{thm:contract}): any
+  optimizer whose graph-dependent components factor through $(\Pi,\Gq)$ is
+  invariant to arbitrary within-cluster edge errors. We instantiate the
+  contract twice --- arm-based (\QCBO{}, Prop.~\ref{prop:invariance}) and
+  model-based (\QMCBO{}, \S\ref{sec:qmcbo}), the latter coarsening MCBO's
+  mechanism factorization, the method class most exposed to a wrong graph
+  because the DAG is its surrogate's architecture. Both are demonstrated
+  byte-identical under within-cluster errors that measurably shift their
+  full-DAG counterparts, and the scope is \emph{exact}: the same edge placed
+  across clusters breaks the guarantee (\S\ref{sec:exp}).
   \item \textbf{Sample efficiency.} Coarsening concentrates a fixed
   budget on fewer identifiable cluster-level arms; a price-of-coarsening
   characterization (Prop.~\ref{prop:price}) gives an exact condition for when this
@@ -188,11 +191,20 @@ error confined to a cluster cannot be represented, let alone affect the optimize
   \emph{is} lossy, a plateau-triggered walk down a declared hierarchy
   (\S\ref{sec:refine}) converts the price into a bounded transient: fixed-coarse
   pays cumulative regret linear in $T$; hierarchical \QCBO{} does not.
-  \item \textbf{Method and theory.} We formalize \QCBO{}: complete
+  \item \textbf{The exposure principle.} Sub-cluster interventions are
+  provably \emph{not identifiable} from quotient-level inputs
+  (Prop.~\ref{prop:qexposure}): in both families, resolution below the
+  committed partition must be bought with intra-cluster structure or finer
+  interventional data. Refinement's phase-scoped invariance
+  (\S\ref{sec:refine}) and \QMCBO{}'s soundness at cluster granularity
+  (Prop.~\ref{prop:qsound}) delimit exactly what the purchase costs and what
+  survives it.
+  \item \textbf{Methods and theory.} We formalize \QCBO{} --- complete
   identification on the C-DAG \citep{shpitser2006identification}, an
-  exploration set restricted to identifiable cluster unions, and a two-tier causal GP prior
-  (\S\ref{sec:method}); supporting theory is in \S\ref{sec:theory}, with proofs
-  in App.~\ref{app:proofs}.
+  exploration set restricted to identifiable cluster unions, a two-tier causal
+  GP prior (\S\ref{sec:method}) --- and \QMCBO{} (\S\ref{sec:qmcbo});
+  supporting theory is in \S\ref{sec:theory}, with proofs in
+  App.~\ref{app:proofs}.
 \end{itemize}
 
 % =============================================================================
@@ -395,6 +407,30 @@ $\mathbf{X}$ of size at most $m$; \QCBO{} reduces to full-DAG \CBO{}, with the
 exploration set restricted to the identifiable subsets.
 \end{proposition}
 
+The invariance guarantee is not specific to \QCBO{}: it is a property of the
+\emph{input contract}, holding for any optimizer that consumes the structural
+hypothesis only through its quotient. We state it once, method-agnostically;
+\QCBO{} (Prop.~\ref{prop:invariance}) and the model-based instantiation of
+\S\ref{sec:qmcbo} (Cor.~\ref{cor:qmcbo_invariance}) inherit it with their own
+byte-identity demonstrations.
+
+\begin{theorem}[Quotient invariance is method-agnostic]
+\label{thm:contract}
+Let $\mathcal{A}$ be any causal Bayesian optimizer each of whose
+graph-dependent components --- search space, identification formulas, priors,
+surrogate architecture, and selection rules --- depends on the structural
+hypothesis $\Gg$ only through the pair $(\Pi, \Gq)$, where $\Gq$ is the
+quotient of $\Gg$'s latent projection under a valid $\Pi$. Then for any two
+acyclic hypotheses $\Gg,\Gg'$ with $(\Gg')^{\Pi}=\Gq$, and the same data,
+seeds, and hyperparameters, $\mathcal{A}$ produces identical trajectories
+under $\Gg$ and $\Gg'$. In particular, this holds for every edit (insertion,
+deletion, or reversal of directed or bidirected edges) confined within a
+single cluster, and for inter-cluster edits that are redundant in the
+quotient. (Proof: App.~\ref{app:proofs} --- every decision of $\mathcal{A}$ at
+trial $t$ is a function of $(\Pi,\Gq)$, the data collected so far, and the RNG
+state; induction over trials.)
+\end{theorem}
+
 \begin{proposition}[Invariance to intra-cluster misspecification]
 \label{prop:invariance}
 Let $\Pi$ be valid for $\Gg$ and let $\Gg'$ differ from $\Gg$ by an arbitrary set
@@ -403,8 +439,10 @@ endpoints lie within a single cluster of $\Pi$, with $\Gg'$ acyclic. Then
 $(\Gg')^{\Pi}=\Gq$, and consequently the exploration set
 (Eq.~\ref{eq:es_gate}), every identification formula, every prior
 (Eq.~\ref{eq:two_tier_prior}), and --- given the same data and seeds --- the
-entire \QCBO{} trajectory are identical under $\Gg$ and $\Gg'$. More generally,
-the conclusion holds for \emph{any} acyclic $\Gg'$ with $(\Gg')^{\Pi}=\Gq$,
+entire \QCBO{} trajectory are identical under $\Gg$ and $\Gg'$: all of
+\QCBO{}'s graph-dependent components are functions of $(\Pi,\Gq)$, so
+Theorem~\ref{thm:contract} applies. More generally, the conclusion holds for
+\emph{any} acyclic $\Gg'$ with $(\Gg')^{\Pi}=\Gq$,
 i.e.\ for every quotient-invisible perturbation.
 \end{proposition}
 
@@ -540,6 +578,74 @@ $y^\star$), so it also fires on lossless partitions; there refinement costs
 only the new arms' initialization and, empirically, a small polish tax
 (\S\ref{sec:exp-partition}).
 \end{remark}
+
+% =============================================================================
+\section{The second instantiation: model-based \QCBO{}}
+\label{sec:qmcbo}
+Model-based \CBO{} (MCBO; \citealp{sussex2023model}) couples the surrogate to
+the graph more tightly than any arm-based method: it fits one GP per
+\emph{mechanism} --- node $k$'s GP maps (parent values, actions) to $k$'s
+value --- and evaluates interventions by composing these mechanism GPs along
+the DAG. The graph is therefore the surrogate's \emph{architecture}: a wrong
+intra-cluster edge corrupts the factorization every prediction flows through,
+a failure mode deeper than the prior-bias / arm-deletion taxonomy of
+Remark~\ref{rem:taxonomy} and the reason we excluded MCBO from the
+fixed-objective protocol of \S\ref{sec:exp}. It is exactly the method class
+for which the input contract of Theorem~\ref{thm:contract} matters most.
+
+\textbf{Construction (\QMCBO{}).} Coarsen the factorization, not the
+algorithm: one \emph{joint} mechanism per cluster,
+$P(\mathbf{X}_C \mid \mathbf{X}_{\mathrm{pa}(C)})$, modeled as a multi-output
+GP over $C$'s member coordinates whose inputs are the members of $C$'s parent
+clusters (ICM task kernel across coordinates; singleton clusters reduce to
+MCBO's per-node GPs), composed along the C-DAG with joint within-cluster
+sampling; do() targets are lifted to whole-cluster patterns. Operationally
+this is a transformation of MCBO's environment interface --- each node's
+mechanism conditions on the union of its parent clusters' members --- so the
+stock optimization loop runs unchanged; no component reads an intra-cluster
+edge.
+
+\begin{corollary}[\QMCBO{} inherits the contract]
+\label{cor:qmcbo_invariance}
+Every graph-dependent component of \QMCBO{} (mechanism factorization, target
+set, propagation order) is a function of $(\Pi,\Gq)$, so
+Theorem~\ref{thm:contract} applies: quotient-invisible edits leave its entire
+trajectory unchanged. Moreover, (i) at $\Pi=\Pi_\bot$, \QMCBO{} is exactly
+MCBO (the quotient parents equal the fine parents and the lifted targets
+coincide); and (ii) \QMCBO{}'s arm space equals \QCBO{}-coarse's, so the
+price of coarsening of Prop.~\ref{prop:price} applies verbatim: on a lossy
+partition, no amount of data recovers $y^\star$.
+\end{corollary}
+
+\begin{proposition}[Soundness of cluster mechanisms]
+\label{prop:qsound}
+Assume causal sufficiency and a valid $\Pi$. For every union-of-clusters
+intervention $\doo(\mathbf{X}_S{=}\mathbf{x}_S)$, the composition of the true
+joint cluster mechanisms along the C-DAG with the intervened clusters clamped
+--- the cluster-level truncated factorization --- equals the interventional
+distribution $P(\mathbf{V}\mid\doo(\mathbf{x}_S))$. (Proof:
+App.~\ref{app:proofs}.) The per-coordinate variant (independent outputs given
+cluster inputs) is its approximation, exact when clusters contain no
+intra-cluster edges; we ablate the two in \S\ref{sec:exp}.
+\end{proposition}
+
+\begin{proposition}[Exposure: sub-cluster interventions are not identifiable
+from cluster mechanisms]
+\label{prop:qexposure}
+There exist SCMs $M_1, M_2$, causally sufficient and valid for the same
+$\Pi$, with identical joint cluster mechanisms and identical interventional
+distributions for every union-of-clusters intervention, yet
+$P^{M_1}(Y\mid\doo(\mathbf{x}_A)) \neq P^{M_2}(Y\mid\doo(\mathbf{x}_A))$ for
+a strict subset $A\subsetneq C$ of some cluster. (Proof: App.~\ref{app:proofs},
+by a two-variable linear-Gaussian cluster whose internal edge direction is
+unidentified from the joint.) Consequently \emph{no} quotient-respecting
+method --- arm-based or model-based --- can evaluate sub-cluster arms from
+its inputs alone: resolution below the committed partition must be bought
+with intra-cluster structure (the hierarchy $H$ of \S\ref{sec:refine}, whose
+phase-scoped invariance prices that purchase) or with interventional data on
+the finer arms. The exposure trade of \S\ref{sec:refine} is thus a property
+of the quotient contract itself, not of our refinement procedure.
+\end{proposition}
 
 % =============================================================================
 \section{Experiments}
@@ -1003,6 +1109,62 @@ Prop.~\ref{prop:invariance}, whose invariance covers intra-cluster edits under a
   \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_wrongpi}}
 \end{table}
 
+\subsection{The contract in the model-based family}
+\label{sec:exp-qmcbo}
+We run \QMCBO{} against MCBO through MCBO's own harness and protocol
+(hallucinated GP network, $\beta{=}10$, $T{=}100$, $5$ seeds) on three of its
+environments that re-implement survey datasets: \textsc{ToyGraph} and
+\textsc{Synthetic\_2} (partition $\{X,Z\}$) and \textsc{PSAGraph}/healthcare
+($\{$Aspirin, Statin$\}$); causal sufficiency holds in all three, matching
+Prop.~\ref{prop:qsound}'s assumption. \QMCBO{} differs from MCBO \emph{only}
+in the model's graph view and the lifted targets --- a pure architecture
+ablation.
+
+\textbf{Invariance at machine precision (Table~\ref{tab:qmcbo-e2}).} Under an
+intra-cluster misspecification of the model's view (delete $X{\to}Z$ on
+\textsc{ToyGraph}; reverse it on \textsc{Synthetic\_2}; add a spurious
+Aspirin${\to}$Statin on \textsc{PSAGraph}), \QMCBO{}'s trajectories are
+byte-identical to their correct-graph runs on $15/15$ (env, seed) pairs ---
+Cor.~\ref{cor:qmcbo_invariance} realized --- while MCBO's shift on $14/15$
+(the one coincidence is chance: its node GPs did change parents). The
+direction of MCBO's shift is not predictable --- on these SCMs the wrong
+graph sometimes \emph{helped} --- which is precisely why the guarantee is
+stated about behavior, not about harm.
+
+\textbf{Soundness matters (Table~\ref{tab:qmcbo-e1}).} On \textsc{ToyGraph},
+whose $\{X,Z\}$ cluster contains the only intra-cluster edge, the joint
+cluster mechanism reaches the optimum exactly ($2.172{\pm}0.000$, every
+seed) where MCBO attains $1.42$ and the per-coordinate ablation $1.26$ ---
+the within-cluster residual correlation of Prop.~\ref{prop:qsound} is the
+missing ingredient, and it is aleatoric at fixed cluster inputs, so it must
+be carried by a full-rank task-noise model rather than the latent kernel. On
+\textsc{Synthetic\_2} the partition is lossy (the optimum is the sub-cluster
+arm $\doo(Z)$), and all quotient variants sit at the same $V(\Pi)$ plateau
+irrespective of mechanism quality --- Prop.~\ref{prop:price} through the
+model-based lens, and Prop.~\ref{prop:qexposure}'s floor in action. On
+\textsc{PSAGraph}, \QMCBO{} edges out MCBO ($-4.26$ vs $-4.34$,
+$y^\star{=}{-}4.13$) at a third of the wall-clock: coarsening the
+factorization also concentrates the model.
+
+\begin{table}[t]\centering
+  \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds,
+  $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit.
+  \QMCBO{}-ind is the per-coordinate ablation of Prop.~\ref{prop:qsound}.}
+  \label{tab:qmcbo-e1}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e1}}
+\end{table}
+
+\begin{table}[t]\centering
+  \caption{Invariance under an intra-cluster misspecification of the model's
+  graph view (same seeds, deterministic runs): trajectories byte-identical to
+  the correct-graph run, and mean $|\Delta \text{final}|$.
+  \QMCBO{} cannot move (Theorem~\ref{thm:contract}); MCBO does.}
+  \label{tab:qmcbo-e2}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e2}}
+\end{table}
+
 % =============================================================================
 \section{Related work}
 \label{sec:related}
@@ -1130,6 +1292,73 @@ a too-coarse commitment into a bounded transient instead of a permanent regret r
 
 \section{Proofs}\label{app:proofs}
 Notation is as in \S\ref{sec:setup} and \S\ref{sec:theory}.
+
+\begin{proof}[Proof of Theorem~\ref{thm:contract}]
+As in the proof of Prop.~\ref{prop:invariance} below, $(\Gg')^{\Pi}=\Gq$
+whenever $\Gg'$ differs from $\Gg$ by edits confined within clusters or
+redundant across them: the latent projection never uses an
+observable--observable edge as an interior path vertex, and the quotient
+keeps a cluster-level edge iff \emph{some} fine edge crosses the cluster
+pair. It remains to show trajectory equality. Write $\mathcal{A}$'s run as a
+sequence of decisions $d_1, d_2, \dots$ (which arm/action to evaluate,
+model refits, stopping); by hypothesis each $d_t$ is a deterministic function
+$d_t = f_t\big((\Pi,\Gq),\, \mathcal{D}_{t-1},\, \omega_t\big)$ of the
+quotient, the data collected so far, and the RNG stream. Under $\Gg$ and
+$\Gg'$ the first arguments coincide; the objective (the true SCM) and the
+seeds coincide by the fixed-objective protocol, so
+$\mathcal{D}_0, \omega_1$ coincide, hence $d_1$ coincides, hence
+$\mathcal{D}_1$ coincides; induction over $t$ gives equality of the entire
+trajectory.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:qsound}]
+Under causal sufficiency the fine SCM is Markov relative to $\Gg$ with
+mutually independent exogenous noises, so for any intervention
+$\doo(\mathbf{x}_S)$ on a union of clusters $S$ the fine truncated
+factorization gives
+$P(\mathbf{V}\mid\doo(\mathbf{x}_S))
+ = \prod_{k\notin S} P\big(X_k \mid \mathbf{X}_{\mathrm{pa}_{\Gg}(k)}\big)
+ \big|_{\mathbf{X}_S=\mathbf{x}_S}$.
+Group the factors by the clusters of $\Pi$. For a cluster $C\not\subseteq S$,
+the product of its members' factors is, by the chain rule applied in any
+topological order of $\Gg$ restricted to $C$, exactly the joint conditional
+$P\big(\mathbf{X}_C \mid \mathbf{X}_{\mathrm{pa}(C)}\big)$, where
+$\mathrm{pa}(C)$ --- the union of $C$'s parent clusters --- contains every
+out-of-cluster variable appearing in a member's conditioning set (validity of
+$\Pi$ guarantees the quotient is acyclic, so $\mathrm{pa}(C)$ is well defined
+and precedes $C$ in C-DAG order). The fine factorization therefore equals the
+product over clusters of the joint cluster mechanisms with the clusters of
+$S$ clamped at $\mathbf{x}_S$ --- the cluster-level truncated factorization.
+Note both uses of sufficiency: independent noises across clusters (no
+bidirected edges) and the absence of unobserved common causes that would make
+a member's conditional depend on variables outside
+$\mathrm{pa}(C)\cup C$. The per-coordinate variant replaces
+$P(\mathbf{X}_C\mid\mathbf{X}_{\mathrm{pa}(C)})$ by the product of its
+marginals, exact iff the members are conditionally independent given
+$\mathrm{pa}(C)$ --- in particular when $C$ contains no intra-cluster edges.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:qexposure}]
+Take $\mathbf{X}=\{X_2,X_3\}$ as one root cluster $C$, target
+$Y = X_2 + \varepsilon_Y$ its child, all noises standard normal and
+independent (sufficiency holds; any $\Pi$ clustering $\{X_2,X_3\}$ is valid).
+Let $M_1$: $X_2=\varepsilon_2$, $X_3 = a X_2 + \varepsilon_3$; and $M_2$:
+$X_3=\varepsilon_3'$, $X_2 = a' X_3 + \varepsilon_2'$, with
+$a' = a/(1+a^2)$, $\mathrm{Var}(\varepsilon_3') = 1+a^2$, and
+$\mathrm{Var}(\varepsilon_2') = 1 - a^2/(1+a^2)$. Both induce the same
+zero-mean Gaussian joint on $(X_2,X_3)$ --- covariance
+$\begin{psmallmatrix}1 & a\\ a & 1+a^2\end{psmallmatrix}$ --- hence the same
+joint cluster mechanism (here, the same root-cluster distribution), and the
+same $P(Y\mid\doo(\mathbf{x}_C))$ for the whole-cluster intervention (both
+set $X_2$ directly). But under the sub-cluster intervention $\doo(X_3=x)$:
+in $M_1$, $X_2=\varepsilon_2$ is unaffected, so
+$\mathbb{E}[Y\mid\doo(X_3{=}x)]=0$ for all $x$; in $M_2$,
+$X_2 = a'x$, so $\mathbb{E}[Y\mid\doo(X_3{=}x)] = a'x \neq 0$ for
+$x\neq 0$, $a\neq 0$. Every quotient-respecting input --- the C-DAG, the
+joint cluster mechanisms, all whole-cluster interventional distributions ---
+coincides between $M_1$ and $M_2$, yet the sub-cluster query differs;
+no function of those inputs can answer it.
+\end{proof}
 
 \begin{proof}[Proof of Prop.~\ref{prop:identity}]
 Singleton clusters make the quotient map the identity on $\Gg^{*}$, and unions of
