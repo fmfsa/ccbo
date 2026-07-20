@@ -29,7 +29,7 @@ import json
 IN = "results/clusterbench10_misspec.json"
 OUTDIR = "paper/tables"
 
-METHOD_ORDER = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
+METHOD_ORDER = ["BO", "CBO", "CEO", "QCBO-finest", "QCBO-coarse"]
 PERT_ORDER = ["P1", "P2", "P3", "P7", "S1", "S2", "S3", "P6", "P5", "Pic"]
 PERT_LABEL = {
     "P1": r"add $X_1\!\to\!X_2$ (bow)", "P2": r"del $X_3\!\to\!X_2$",
@@ -40,7 +40,7 @@ PERT_LABEL = {
 }
 LOCUS_TEX = {"intra": "intra", "inter": "inter", "inter-redundant": "inter (red.)"}
 MLABEL = {"QCBO-finest": r"\QCBO-finest", "QCBO-coarse": r"\QCBO-coarse",
-          "BO": r"\BO", "CBO": r"\CBO"}
+          "BO": r"\BO", "CBO": r"\CBO", "CEO": r"\CEO"}
 
 
 def _ms(pair, fmt="%+.3f"):
@@ -83,14 +83,26 @@ def emit_headline(data):
 
 
 def emit_taxonomy(data):
-    """T2: paired dGAP@100 and dPA-GAP@100 for finest vs coarse per perturbation."""
-    pair_methods = [m for m in ("QCBO-finest", "QCBO-coarse") if m in data["methods"]]
-    lines = [r"\begin{tabular}{@{}ll cc cc@{}}", r"\toprule",
-             r"\textbf{Perturbation} & \textbf{Locus} & "
-             r"\multicolumn{2}{c}{\textbf{\QCBO-finest}} & "
-             r"\multicolumn{2}{c}{\textbf{\QCBO-coarse}} \\",
-             r"\cmidrule(lr){3-4}\cmidrule(lr){5-6}",
-             r" & & $\Delta$GAP & $\Delta$PA-GAP & $\Delta$GAP & $\Delta$PA-GAP \\",
+    """T2: paired dGAP@100 and dPA-GAP@100 per perturbation, one column pair
+    per structure-reading method (CEO if present, then finest vs coarse).
+
+    A bold 0 marks QCBO-coarse's guaranteed byte-identity (Prop. 2). A
+    daggered 0 marks incidental invariance: CEO's DAG pool cannot represent a
+    confounder edit (P7), so its trajectory coincides with P0 by
+    representational blindness, not by a robustness guarantee.
+    """
+    pair_methods = [m for m in ("CEO", "QCBO-finest", "QCBO-coarse")
+                    if m in data["methods"]]
+    header = " & ".join(r"\multicolumn{2}{c}{\textbf{" + MLABEL.get(m, m) + "}}"
+                        for m in pair_methods)
+    cmid = "".join(r"\cmidrule(lr){%d-%d}" % (3 + 2 * i, 4 + 2 * i)
+                   for i in range(len(pair_methods)))
+    sub = " & ".join([r"$\Delta$GAP & $\Delta$PA-GAP"] * len(pair_methods))
+    lines = [r"\begin{tabular}{@{}ll" + " cc" * len(pair_methods) + r"@{}}",
+             r"\toprule",
+             r"\textbf{Perturbation} & \textbf{Locus} & " + header + r" \\",
+             cmid,
+             r" & & " + sub + r" \\",
              r"\midrule"]
     for pid in PERT_ORDER:
         ref = next((data["methods"][m][pid] for m in pair_methods
@@ -104,7 +116,10 @@ def emit_taxonomy(data):
             if c is None:
                 cells += ["--", "--"]
             elif c.get("byte_identical_to_P0"):
-                cells += [r"$\mathbf{0}$", r"$\mathbf{0}$"]   # exact byte-identity
+                if m == "QCBO-coarse":
+                    cells += [r"$\mathbf{0}$", r"$\mathbf{0}$"]  # exact byte-identity
+                else:
+                    cells += [r"$0^{\dagger}$", r"$0^{\dagger}$"]
             else:
                 cells += ["$" + _ms(c["dGAP"]) + "$",
                           "$" + _ms(c.get("dPAGAP", [0.0, 0.0])) + "$"]

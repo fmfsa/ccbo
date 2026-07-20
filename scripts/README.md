@@ -7,13 +7,18 @@ PYTHONPATH=$PWD conda run -n ccbo python scripts/<script>.py ...
 ```
 
 `third_party/CausalBO_Benchmark/` and `results/` are gitignored; in a worktree, symlink the
-benchmark from the main checkout: `ln -s /home/fmfsa/Repositories/ccbo/third_party third_party`.
+benchmark from the main checkout (`ln -s <main-checkout>/third_party/CausalBO_Benchmark
+third_party/CausalBO_Benchmark`). After every fresh benchmark download, re-apply the repo's
+local extension with **`patch_benchmark.py`** (adds the `quadratic` relationship type that
+ClusterBench10's target needs; the stock benchmark silently falls back to linear without it).
 
 ## DAG-misspecification stress test (ClusterBench10)
 
-The robustness experiment: the field (CBO/CEO/CoCaBO) degrades under a misspecified edge while
-QCBO-coarse is byte-identical, with the objective held fixed (only the *structure* each method
-reasons with is perturbed). Structural spec: [`ccbo/clusterbench10.py`](../ccbo/clusterbench10.py).
+The robustness experiment: the full-DAG field (CBO, and CEO via its authors' stack) shifts
+under a misspecified edge while QCBO-coarse is byte-identical, with the objective held fixed
+(only the *structure* each method reasons with is perturbed); CEO's rows come from
+`run_ceo_misspec.py` below. Structural spec:
+[`ccbo/clusterbench10.py`](../ccbo/clusterbench10.py).
 
 Run in order:
 
@@ -30,8 +35,14 @@ Run in order:
    `results/clusterbench10_misspec.json`.
    Example: `... run_misspec_fullfield.py --seeds 10 --trials 100 --cap 1` (Tier-2 headline);
    add `--cap 5` for the uncapped field comparison.
-4. **`emit_misspec_table.py`** — score + emit the paired-Δ head-to-head table and the conditions
-   taxonomy into `paper/tables/`. *(pending)*
+4. **CEO arm** (authors' stack, fetched by `fetch_ceo.sh`, bridged by `ceo_adapter.py`):
+   `python scripts/ceo_adapter.py` runs the CEO-side seam check; `run_ceo_misspec.py` runs one
+   (pid, seed) unit (`--pool hedge|committed`, `--es full|cluster`; P7←P0 and S1←P1 are
+   aliases); `lsf/submit_ceo_misspec.sh` submits the 90-unit bsub array;
+   `merge_ceo_from_csv.py` splices the scored CEO cells into the JSON via the shared
+   `aggregate()`.
+5. **`emit_misspec_table.py`** — score + emit the headline, taxonomy, full, and regret tables
+   into `paper/tables/`.
 
 Structural premise (no dataset needed): `pytest ccbo/tests/test_clusterbench10_structure.py`.
 

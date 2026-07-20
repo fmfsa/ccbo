@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Coarsened Causal Bayesian Optimization"
 requires-python = ">=3.9"
 dependencies = [
-    "numpy",
+    "numpy<2",  # third_party/CEO uses numpy.core.multiarray / np.PINF (removed in 2.x)
     "pandas",
     "scipy",
     "networkx",
@@ -22,6 +22,9 @@ dependencies = [
     "dcor",
     "ananke-causal",
     "causalchamber",
+    "statsmodels",     # third_party/CEO (KDE in the CES acquisition)
+    "scikit-learn",    # third_party/CEO
+    "tqdm",            # third_party/CEO
 ]
 
 [tool.setuptools.packages.find]

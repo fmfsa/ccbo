@@ -187,7 +187,8 @@ METHODS = {
     "QCBO-finest": _qcbo_runner(None),
     "QCBO-coarse": _qcbo_runner([list(c) for c in cb.COARSE_CLUSTERS]),
     "QCBO-wrongpi": _wrongpi_runner(),
-    # CEO runs through its authors' own stack (scripts/run_ceo_misspec.py);
+    # CEO runs through its authors' own stack -- scripts/run_ceo_misspec.py
+    # (adapter: scripts/ceo_adapter.py), merged via scripts/merge_ceo_from_csv.py;
     # CoCaBO remains benchmark-only (related-work discussion).
 }
 

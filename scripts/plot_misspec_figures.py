@@ -35,9 +35,9 @@ from ccbo import benchmark
 JSON = "results/clusterbench10_misspec.json"
 RUNDIR = os.path.join(benchmark.BENCH_ROOT, "results", "_misspec")
 OUTDIR = "paper/figures"
-METHODS = ["BO", "CBO", "QCBO-finest", "QCBO-coarse"]
+METHODS = ["BO", "CBO", "CEO", "QCBO-finest", "QCBO-coarse"]
 # Okabe-Ito (colorblind-safe), matching the paper's TikZ palette.
-COLORS = {"BO": "#999999", "CBO": "#0072B2",
+COLORS = {"BO": "#999999", "CBO": "#0072B2", "CEO": "#009E73",
           "QCBO-finest": "#E69F00", "QCBO-coarse": "#D55E00"}
 # Perturbations split at the Prop. 2 scope boundary.
 PROTECTED = ["P1", "P2", "P3", "P7", "S1", "S2", "S3", "P6"]   # quotient-invisible
