@@ -1,0 +1,105 @@
+% Family figure: the graph each method consumes (BO | CBO->QCBO | DCBO->QDCBO | MCBO->QMCBO).
+% \input this inside a figure* environment. Styles and macros are group-local.
+\begingroup
+\tikzset{
+  obsnode/.style={circle,draw=black!75,minimum size=3.6mm,inner sep=0.4pt,font=\tiny},
+  mannode/.style={obsnode,fill=okorange!45},
+  tgtnode/.style={obsnode,fill=okblue!45},
+  clnode/.style={rounded rectangle,draw=black!75,fill=okorange!45,minimum size=3.6mm,inner sep=1.6pt,font=\tiny},
+  clbox/.style={draw=black!55,dashed,rounded corners=2pt,inner sep=1.4mm},
+  diredge/.style={->,>=Stealth,thin,black!80},
+  transedge/.style={->,>=Stealth,thin,black!45,densely dotted},
+  qmap/.style={->,>=Stealth,thick,black!60},
+  panellab/.style={font=\scriptsize\bfseries,anchor=base},
+  sublab/.style={font=\tiny,black!60,anchor=base},
+}
+\begin{tikzpicture}
+
+% ============ static 5-node DAG macro: \dag{x}{y}{prefix} ============
+\providecommand{\statdag}{}\renewcommand{\statdag}[3]{
+  \node[mannode] (#3X1) at (#1,     #2+0.75) {$X_1$};
+  \node[mannode] (#3X2) at (#1+0.7, #2+0.75) {$X_2$};
+  \node[mannode] (#3X3) at (#1+1.4, #2+0.75) {$X_3$};
+  \node[mannode] (#3X4) at (#1+2.1, #2+0.75) {$X_4$};
+  \node[tgtnode] (#3Y)  at (#1+1.05,#2)      {$Y$};
+  \draw[diredge] (#3X1) -- (#3X2);
+  \draw[diredge] (#3X3) -- (#3X4);
+  \draw[diredge] (#3X1) to[bend right=12] (#3Y);
+  \draw[diredge] (#3X2) -- (#3Y);
+  \draw[diredge] (#3X3) -- (#3Y);
+  \draw[diredge] (#3X4) to[bend left=12] (#3Y);
+}
+% ============ quotient macro ============
+\providecommand{\quotdag}{}\renewcommand{\quotdag}[3]{
+  \node[clnode] (#3C1) at (#1+0.35,#2+0.75) {$C_1$};
+  \node[clnode] (#3C2) at (#1+1.75,#2+0.75) {$C_2$};
+  \node[tgtnode] (#3Y) at (#1+1.05,#2)      {$Y$};
+  \draw[diredge] (#3C1) -- (#3Y);
+  \draw[diredge] (#3C2) -- (#3Y);
+}
+
+% =================== BO (left, spans both rows) ===================
+\node[panellab] at (-2.55,2.95) {\textsc{BO}};
+\node[mannode] (bX1) at (-2.9,1.0) {$X_1$};
+\node[mannode] (bX2) at (-2.2,1.0) {$X_2$};
+\node[mannode] (bX3) at (-2.9,0.4) {$X_3$};
+\node[mannode] (bX4) at (-2.2,0.4) {$X_4$};
+\node[tgtnode] (bY)  at (-2.55,-0.25) {$Y$};
+\node[sublab] at (-2.55,-0.95) {no graph};
+\draw[black!30] (-1.35,-1.2) -- (-1.35,2.8);
+
+% =================== column 1: CBO / QCBO ===================
+\node[panellab] at (1.05,2.95) {\textsc{CBO}};
+\statdag{0}{1.0}{c}
+\begin{scope}[on background layer]
+  \node[clbox,fit=(cX1)(cX2)] {};
+  \node[clbox,fit=(cX3)(cX4)] {};
+\end{scope}
+\node[sublab] at (1.05,2.55) {full DAG};
+
+\draw[qmap] (1.05,0.25) -- node[right,font=\tiny] {$/\Pi$} (1.05,-0.15);
+
+\node[panellab] at (1.05,-2.30) {\textsc{QCBO}};
+\quotdag{0}{-1.55}{qc}
+\node[sublab] at (1.05,-2.62) {C-DAG};
+
+% =================== column 2: DCBO / QDCBO ===================
+\draw[black!30] (2.75,-1.2) -- (2.75,2.8);
+\node[panellab] at (5.75,2.95) {\textsc{DCBO}};
+\statdag{3.3}{1.0}{d}
+\statdag{6.05}{1.0}{e}
+\draw[transedge] (dX1) to[bend left=38] (eX1);
+\draw[transedge] (dY) to[bend right=24] (eY);
+\begin{scope}[on background layer]
+  \node[clbox,fit=(dX1)(dX2)] {};
+  \node[clbox,fit=(dX3)(dX4)] {};
+\end{scope}
+\node[sublab] at (4.35,2.55) {slice $t$};
+\node[sublab] at (7.10,2.55) {slice $t{+}1$};
+
+\draw[qmap] (5.75,0.25) -- node[right,font=\tiny] {$/\Pi$ per slice} (5.75,-0.15);
+
+\node[panellab] at (5.75,-2.30) {\textsc{QDCBO}};
+\quotdag{3.9}{-1.55}{qd}
+\quotdag{6.35}{-1.55}{qe}
+\draw[transedge] (qdC1) to[bend left=50] (qeC1);
+\draw[transedge] (qdY) to[bend right=24] (qeY);
+
+% =================== column 3: MCBO / QMCBO ===================
+\draw[black!30] (8.85,-1.2) -- (8.85,2.35);
+\node[panellab] at (10.45,2.95) {\textsc{MCBO}};
+\statdag{9.4}{1.0}{m}
+\begin{scope}[on background layer]
+  \node[clbox,fit=(mX1)(mX2)] {};
+  \node[clbox,fit=(mX3)(mX4)] {};
+\end{scope}
+\node[sublab,black!75] at (10.45,2.55) {one GP $\hat f_k$ per node};
+
+\draw[qmap] (10.45,0.25) -- node[right,font=\tiny] {$/\Pi$} (10.45,-0.15);
+
+\node[panellab] at (10.45,-2.30) {\textsc{QMCBO}};
+\quotdag{9.4}{-1.55}{qm}
+\node[sublab,black!75] at (10.45,-2.62) {one joint GP $\hat f_{C}$ per cluster};
+
+\end{tikzpicture}
+\endgroup
