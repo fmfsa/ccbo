@@ -355,6 +355,181 @@ build_gallery("Benchmark structures and their quotients  (3 / 3)", [
 ])
 
 
+# =============================================================================
+# DAG-misspecification slides (data-driven from the study JSON)
+# =============================================================================
+import json
+
+MISSPEC_JSON = "results/clusterbench10_misspec.json"
+# Okabe-Ito method colours, matching the paper's figures.
+C_FINEST = RGBColor(0xE6, 0x9F, 0x00)
+C_COARSE = RGBColor(0xD5, 0x5E, 0x00)
+C_CEO    = RGBColor(0x00, 0x9E, 0x73)
+PERT_ORDER = ["P1", "P2", "P3", "P7", "S2", "S3", "P6", "P5", "Pic"]
+PERT_SHORT = {
+    "P1": "add X1→X2 (bow)", "P2": "del X3→X2", "P3": "rev X3→X2",
+    "P7": "omit X1↔X2 conf.", "S2": "sweep k=2", "S3": "sweep k=3",
+    "P6": "del X1→M2 (red.)", "P5": "del X3→M1", "Pic": "inter bow X1→X5",
+}
+
+
+def _misspec_data():
+    with open(MISSPEC_JSON) as f:
+        return json.load(f)
+
+
+def build_misspec_headline():
+    """The paper's core result: quotient-invisible edits cannot move QCBO-coarse."""
+    d = _misspec_data()
+    s = prs.slides.add_slide(BLANK)
+    bg = s.background.fill; bg.solid(); bg.fore_color.rgb = WHITE
+
+    textbox(s, 0.6, 0.38, 12.1, 0.75,
+            [[("A wrong edge, held to the light  (ClusterBench10)", 31, NAVY, True, SERIF)]])
+    textbox(s, 0.62, 1.16, 12.1, 0.62,
+            [[("Objective held fixed; only the structure each method reasons with is "
+               "perturbed. ΔGAP@100 = misspecified − correct, paired by seed "
+               f"({d['seeds']} seeds, T={d['trials']}).", 15.5, MUTED, False, SANS)]],
+            line_spacing=1.08)
+
+    # ---- LEFT: mechanism + headline card ----
+    lx, lw = 0.6, 4.55
+    dot(s, lx, 2.02, 0.16, TEAL)
+    textbox(s, lx + 0.28, 1.91, lw - 0.28, 0.45,
+            [[("How a wrong graph does damage", 17.5, NAVY, True, SERIF)]])
+    textbox(s, lx + 0.28, 2.42, lw - 0.28, 1.6,
+            [[("Prior bias — ", 14.5, INK, True, SANS),
+              ("the do-calculus prior is a functional of the graph; a wrong edge "
+               "biases it and wastes evaluations.", 14.5, INK, False, SANS)],
+             [("Arm deletion — ", 14.5, INK, True, SANS),
+              ("a flipped identifiability verdict removes candidate arms — "
+               "sometimes the optimal one.", 14.5, INK, False, SANS)]],
+            space_after=7, line_spacing=1.1)
+
+    cy = 4.32
+    card(s, lx, cy, lw, 2.3, TEALLT, radius=0.07)
+    textbox(s, lx + 0.3, cy + 0.24, lw - 0.6, 0.4,
+            [[("The contract, kept", 14.5, TEAL, True, SANS)]])
+    n_prot = sum(1 for p in PERT_ORDER
+                 if d["methods"]["QCBO-coarse"].get(p, {}).get("byte_identical_to_P0"))
+    textbox(s, lx + 0.3, cy + 0.68, lw - 0.6, 1.5,
+            [[(f"QCBO-coarse is byte-identical to its correct-graph run on "
+               f"{n_prot} of {len(PERT_ORDER)} perturbations — exact zeros, "
+               "not small numbers. Full-DAG CBO (= QCBO-finest) shifts on every "
+               "edge it can see.", 14.5, INK, False, SANS)]],
+            line_spacing=1.12)
+
+    # ---- RIGHT: ΔGAP bar chart, one series per structure-reading method ----
+    series = [("QCBO-finest", C_FINEST), ("QCBO-coarse", C_COARSE)]
+    if "CEO" in d["methods"]:
+        series.insert(0, ("CEO", C_CEO))
+    cd = CategoryChartData()
+    cd.categories = [PERT_SHORT[p] for p in PERT_ORDER]
+    for name, _ in series:
+        cells = d["methods"][name]
+        cd.add_series(name, [cells.get(p, {}).get("dGAP", [0.0])[0]
+                             for p in PERT_ORDER])
+    gf = s.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED,
+                            Inches(5.5), Inches(1.86), Inches(7.2), Inches(4.9), cd)
+    ch = gf.chart
+    ch.has_title = False
+    ch.has_legend = True
+    ch.legend.position = 2  # top
+    ch.legend.include_in_layout = False
+    ch.legend.font.size = Pt(11); ch.legend.font.name = SANS
+    for (name, color), ser in zip(series, ch.plots[0].series):
+        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = color
+    va = ch.value_axis
+    va.has_major_gridlines = True
+    va.major_gridlines.format.line.color.rgb = GRID
+    va.major_gridlines.format.line.width = Pt(0.5)
+    va.tick_labels.font.size = Pt(9.5); va.tick_labels.font.color.rgb = MUTED
+    from pptx.enum.chart import XL_TICK_LABEL_POSITION
+    ca = ch.category_axis
+    ca.has_major_gridlines = False
+    ca.tick_labels.font.size = Pt(10); ca.tick_labels.font.color.rgb = INK
+    ca.tick_label_position = XL_TICK_LABEL_POSITION.LOW
+    textbox(s, 5.6, 6.82, 7.0, 0.5,
+            [[("ΔGAP@100 per perturbation (0 = unchanged). QCBO-coarse: exact "
+               "zeros everywhere except the inter-cluster bow — the guarantee's "
+               "precise boundary.", 11.5, MUTED, False, SANS, 'italic')]],
+            line_spacing=1.05)
+
+    s.notes_slide.notes_text_frame.text = (
+        "Core experiment. Fixed-objective protocol: same SCM, data, seeds, budget; "
+        "only the assumed structure varies. QCBO-coarse's zeros are byte-identity "
+        "(Prop. 2 / Theorem 1), verified at 1e-7 tolerance. The inter bow (right-"
+        "most) is the exact scope boundary: it completes a cluster-level bow, "
+        "do(C1) becomes non-identifiable, the guarantee is lost. Finest's shifts "
+        "can even help (decoy deletion) — the point is behavior moves, "
+        "unpredictably; coarse cannot move.")
+
+
+def build_field_slide():
+    """How each method meets the same wrong graphs; CEO row auto-fills."""
+    d = _misspec_data()
+    has_ceo = "CEO" in d["methods"]
+    s = prs.slides.add_slide(BLANK)
+    bg = s.background.fill; bg.solid(); bg.fore_color.rgb = WHITE
+
+    textbox(s, 0.6, 0.38, 12.1, 0.75,
+            [[("The field under the same wrong graphs", 31, NAVY, True, SERIF)]])
+    textbox(s, 0.62, 1.16, 12.1, 0.6,
+            [[("Four ways to hold a structural belief — and what each pays when "
+               "an edge inside a cluster is wrong.", 15.5, MUTED, False, SANS)]])
+
+    def _p0(m, key, fmt="%.2f"):
+        c = d["methods"].get(m, {}).get("P0")
+        return (fmt % c[key][0]) if c and key in c else "—"
+
+    rows = [
+        ("BO", RGBColor(0x99, 0x99, 0x99), "ignores structure",
+         "Invariant by blindness — and worst absolute Y "
+         f"(final {_p0('BO', 'finalY')}). Robustness is not ignoring structure."),
+        ("CBO ≡ QCBO-finest", C_FINEST, "trusts the full DAG",
+         "Complete ID on the assumed DAG: every visible edge feeds the prior "
+         "and the arm gate, so every visible edit moves GAP/PA-GAP "
+         "(final Y " + _p0('CBO', 'finalY') + " on the correct graph)."),
+        ("CEO", C_CEO, "hedges a graph posterior",
+         (("Entropy acquisition over a candidate pool (authors' stack; pool "
+           "contains the true DAG). A wrong edge is only diluted by posterior "
+           "mass — final Y " + _p0('CEO', 'finalY') + " at P0; and a confounder "
+           "omission (P7) it cannot even represent.") if has_ceo else
+          ("Entropy acquisition over a candidate pool (authors' stack; pool "
+           "contains the true DAG). Misspec sweep running — 90 LSF jobs; this "
+           "slide auto-fills from the results JSON on rebuild."))),
+        ("QCBO-coarse", C_COARSE, "commits to the quotient",
+         "Cannot represent intra-cluster structure, so intra-cluster errors "
+         "cannot reach it: byte-identical trajectories (final Y "
+         + _p0('QCBO-coarse', 'finalY') + ", best of the field at P0).")
+    ]
+    y = 1.9
+    for name, color, tag, body in rows:
+        card(s, 0.6, y, 12.1, 1.14, WHITE, line=BORDER, radius=0.06)
+        dot(s, 0.92, y + 0.45, 0.24, color)
+        textbox(s, 1.36, y + 0.15, 3.3, 0.5,
+                [[(name, 16.5, NAVY, True, SANS)]])
+        textbox(s, 1.36, y + 0.60, 3.3, 0.45,
+                [[(tag, 12.5, MUTED, False, SANS, 'italic')]])
+        textbox(s, 4.85, y + 0.12, 7.6, 0.92,
+                [[(body, 13, INK, False, SANS)]], line_spacing=1.1,
+                anchor=MSO_ANCHOR.MIDDLE)
+        y += 1.30
+    textbox(s, 0.6, 7.14, 12.1, 0.32,
+            [[("Same protocol for every row: true SCM fixed, structure injected, "
+               "seam checks assert the objective is untouched.",
+               11.5, MUTED, False, SANS, 'italic')]], align=PP_ALIGN.CENTER)
+
+    s.notes_slide.notes_text_frame.text = (
+        "Positioning slide. BO: robust but weak — the floor. CBO/finest: the "
+        "ceiling on a correct graph, brittle otherwise. CEO: the field's "
+        "graph-uncertainty answer — hedging dilutes rather than removes a wrong "
+        "edge, and DAG-only candidates cannot express a forgotten confounder "
+        "(P7 zero is representational blindness, daggered in the paper). "
+        "QCBO-coarse: invariance by construction, priced exactly by the "
+        "lossy-partition case (next slide).")
+
+
 def build_refine_wip():
     """WIP slide: hierarchical QCBO (plateau-triggered partition refinement)."""
     s = prs.slides.add_slide(BLANK)
@@ -443,6 +618,8 @@ def build_refine_wip():
         "never split. Rollback rule + hierarchy discovery = next paper.")
 
 
+build_misspec_headline()
+build_field_slide()
 build_refine_wip()
 
 # Speaker notes
