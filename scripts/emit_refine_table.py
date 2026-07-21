@@ -19,9 +19,6 @@ OUT = "paper/tables/refine_suite.tex"
 DATASETS = [
     ("ClusterBench10", r"\textsc{ClusterBench10}", "lossless, $y^\\star{=}0$"),
     ("ClusterBench10L", r"\textsc{ClusterBench10L}", "lossy, $y^\\star{=}0.10$"),
-    ("synthetic_2", r"\textsc{synthetic\_2}", "lossy, $y^\\star{=}-3.97$"),
-    ("ecology", r"\textsc{ecology}", "lossless, max, $y^\\star{=}9.27$"),
-    ("healthcare", r"\textsc{healthcare}", "lossless, $y^\\star{=}4.04$"),
 ]
 ROWS = ["BO", "CBO", "QCBO-coarse", "QCBO-refine"]
 MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-coarse": r"\QCBO{}",

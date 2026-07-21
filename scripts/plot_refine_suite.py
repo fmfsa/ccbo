@@ -26,9 +26,6 @@ OUTDIR = "paper/figures"
 DATASETS = [
     ("ClusterBench10", "ClusterBench10 (lossless)"),
     ("ClusterBench10L", "ClusterBench10L (lossy)"),
-    ("synthetic_2", "synthetic_2 (lossy)"),
-    ("ecology", "ecology (max)"),
-    ("healthcare", "healthcare"),
 ]
 # (json key, legend label, color); CBO falls back to QCBO-finest (Prop. 1).
 DRAW = [("BO", "BO", "#E69F00"),
