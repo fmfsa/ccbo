@@ -15,7 +15,7 @@ bsub <<EOF
 #BSUB -J ceo_misspec[1-90]
 #BSUB -q hpc
 #BSUB -n 1
-#BSUB -W 12:00
+#BSUB -W 72:00
 #BSUB -R "rusage[mem=8GB] span[hosts=1]"
 #BSUB -o $REPO/logs/ceo_%J_%I.out
 #BSUB -e $REPO/logs/ceo_%J_%I.err

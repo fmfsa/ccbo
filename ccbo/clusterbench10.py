@@ -38,7 +38,7 @@ from ccbo import coarsening
 NAME = "ClusterBench10"
 
 MANIPULATIVE: List[str] = ["X1", "X2", "X3", "X4", "X5"]
-NON_MANIPULATIVE: List[str] = ["M1", "M2", "M3", "Z"]
+NON_MANIPULATIVE: List[str] = ["M1", "M2", "M3", "M4"]
 TARGET = "Y"
 
 NODES: List[str] = MANIPULATIVE + NON_MANIPULATIVE + [TARGET]
@@ -71,10 +71,10 @@ TRUE_EDGES: List[Tuple[str, str]] = [
     # C2 -> non-manipulable mediators. NB there is intentionally NO directed
     # C1->C2 edge in truth: the only C1-C2 link is the bidirected X1<->X5 (U15),
     # so do(C1) is identifiable at the coarse level until `Pic` adds X1->X5.
-    ("X4", "M3"), ("X5", "M3"), ("X5", "Z"),
+    ("X4", "M3"), ("X5", "M3"), ("X5", "M4"),
     # parents of Y
     ("X1", "Y"), ("X2", "Y"), ("X3", "Y"),
-    ("M1", "Y"), ("M2", "Y"), ("M3", "Y"), ("Z", "Y"),
+    ("M1", "Y"), ("M2", "Y"), ("M3", "Y"), ("M4", "Y"),
 ]
 
 # Coarse partition (manipulable-only clusters; non-manip + Y are singletons).

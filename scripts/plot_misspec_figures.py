@@ -85,8 +85,11 @@ def fig_overlays(data):
     # hide one curve under the other, so the pair is drawn once. BO keeps the
     # yellow of the old per-method grid (gray reads as de-emphasized).
     DRAW = [("BO", "BO", "#E69F00"),
-            ("CBO", r"CBO $\equiv$ Q-finest", "#0072B2"),
-            ("QCBO-coarse", "Q-coarse", "#D55E00")]
+            ("CBO", "CBO", "#0072B2"),
+            ("CEO", "CEO", "#009E73"),
+            ("QCBO-coarse", "QCBO", "#D55E00")]
+    DRAW = [(m, lab, c) for m, lab, c in DRAW
+            if glob.glob(os.path.join(RUNDIR, f"{m}_P0_seed*.csv"))]
     for m, label, c in DRAW:
         m0, s0 = _traj_stats(m, "P0")
         m1, s1 = _traj_stats(m, "P1")

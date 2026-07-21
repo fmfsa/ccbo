@@ -25,9 +25,9 @@ LOSSY = "results/clusterbench10L.json"
 DAMAGE = "results/clusterbench10D.json"
 OUTDIR = "paper/tables"
 
-MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-finest": r"\QCBO-finest",
-          "QCBO-coarse": r"\QCBO-coarse", "QCBO-wrongpi": r"\QCBO-wrong$\Pi$",
-          "QCBO-refine": r"\QCBO-refine"}
+MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-finest": r"\CBO{}",
+          "QCBO-coarse": r"\QCBO{}", "QCBO-wrongpi": r"\QCBO{}-wrong$\Pi$",
+          "QCBO-refine": r"\HQCBO{}"}
 
 
 def _mp(pair, fmt="%.3f", fmt_s="%.3f"):

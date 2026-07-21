@@ -81,6 +81,25 @@ def ensure_ceo():
       4. ``GPy.priors.InverseGamma.from_EV``: an unimplemented stub in
          GPy>=1.13 (CEO's ``fit_gp`` lengthscale prior calls it); restore the
          moment-matching construction (mean b/(a-1), var b^2/((a-1)^2(a-2))).
+      5. ``gp_utils`` memo keys: the mean/variance closures cache SEM-hat
+         samples in dicts keyed by ``str(x)`` -- numpy's full array-formatting
+         machinery, run twice per lookup, dominates the acquisition loop
+         (py-spy showed the pilot pinned inside ``numpy.core.arrayprint``),
+         and 8-digit truncation can even alias distinct anchor points to one
+         cache entry. Shadow ``str`` inside that module only (its six ``str(``
+         call sites are all memo keys) with an exact ``ndarray.tobytes`` key:
+         faster and strictly more correct.
+      6. ``update_posterior_interventional``: upstream deepcopies the ENTIRE
+         fitted emission-GP dict once per (graph, emission-pair) iteration and
+         hands it to ``get_sem_emit_obs``, which never reads that argument;
+         each GPy deepcopy re-runs a full 500x500 kernel inversion, so with
+         our 16 emission edges and a 4-graph pool one CES anchor evaluation
+         costs thousands of Cholesky factorizations (a 20-trial pilot burned
+         18 CPU-hours inside this loop). The replacement is line-identical
+         minus the no-op deepcopy; it delegates to the module's own
+         ``get_sem_emit_obs``/``log_likelihood``, so semantics are unchanged.
+         Installed on ``src.utils.ceo_utils`` before ``ces_utils``/``ceo``
+         import it by name.
     """
     global _ceo_ready
     if _ceo_ready:
@@ -132,6 +151,39 @@ def ensure_ceo():
         InverseGamma.from_EV(1.0, 1.0)
     except NotImplementedError:
         InverseGamma.from_EV = staticmethod(_inverse_gamma_from_EV)
+
+    import src.utils.gp_utils as gp_utils
+    _builtin_str = str
+
+    def _memo_key(o):
+        return o.tobytes() if isinstance(o, np.ndarray) else _builtin_str(o)
+
+    gp_utils.str = _memo_key
+
+    import src.utils.ceo_utils as ceo_utils
+
+    def update_posterior_interventional(graphs, posterior, intervened_var,
+                                        all_emission_fncs,
+                                        interventional_samples,
+                                        total_timesteps=1, it=0, lr=0.05):
+        for graph_idx, emission_fncs in enumerate(all_emission_fncs):
+            for temporal_index in range(total_timesteps):
+                for pa in emission_fncs[temporal_index]:
+                    xx, yy, inputs, output = ceo_utils.get_sem_emit_obs(
+                        G=graphs[graph_idx], sem_emit_fncs=emission_fncs,
+                        observational_samples=interventional_samples,
+                        t=temporal_index, pa=pa, t_index_data=None)
+                    if isinstance(output, list):
+                        assert len(output) == 1
+                        output = output[0]
+                    if output in intervened_var:
+                        continue
+                    posterior[graph_idx] += lr * ceo_utils.log_likelihood(
+                        emission_fncs[temporal_index][pa], xx, yy, graph_idx,
+                        inputs, output, it)
+        return posterior
+
+    ceo_utils.update_posterior_interventional = update_posterior_interventional
     _ceo_ready = True
 
 

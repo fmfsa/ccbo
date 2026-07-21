@@ -29,7 +29,10 @@ import json
 IN = "results/clusterbench10_misspec.json"
 OUTDIR = "paper/tables"
 
-METHOD_ORDER = ["BO", "CBO", "CEO", "QCBO-finest", "QCBO-coarse"]
+# QCBO-finest is omitted from every table: it is byte-identical to CBO by
+# construction (Prop. identity), so one row stands for both. Display labels:
+# QCBO-coarse renders as plain QCBO.
+METHOD_ORDER = ["BO", "CBO", "QCBO-coarse"]
 PERT_ORDER = ["P1", "P2", "P3", "P7", "S1", "S2", "S3", "P6", "P5", "Pic"]
 PERT_LABEL = {
     "P1": r"add $X_1\!\to\!X_2$ (bow)", "P2": r"del $X_3\!\to\!X_2$",
@@ -39,8 +42,8 @@ PERT_LABEL = {
     "S1": "sweep $k{=}1$", "S2": "sweep $k{=}2$", "S3": "sweep $k{=}3$",
 }
 LOCUS_TEX = {"intra": "intra", "inter": "inter", "inter-redundant": "inter (red.)"}
-MLABEL = {"QCBO-finest": r"\QCBO-finest", "QCBO-coarse": r"\QCBO-coarse",
-          "BO": r"\BO", "CBO": r"\CBO", "CEO": r"\CEO"}
+MLABEL = {"QCBO-finest": r"\CBO{}", "QCBO-coarse": r"\QCBO{}",
+          "BO": r"\BO{}", "CBO": r"\CBO{}", "CEO": r"\CEO{}"}
 
 
 def _ms(pair, fmt="%+.3f"):
@@ -83,21 +86,22 @@ def emit_headline(data):
 
 
 def emit_taxonomy(data):
-    """T2: paired dGAP@100 and dPA-GAP@100 per perturbation, one column pair
-    per structure-reading method (CEO if present, then finest vs coarse).
+    """T2: paired dGAP@100 and dFinalY per perturbation, one column pair per
+    structure-reading method (CBO, CEO if present, QCBO). dPA-GAP appears only
+    in the appendix full table.
 
-    A bold 0 marks QCBO-coarse's guaranteed byte-identity (Prop. 2). A
-    daggered 0 marks incidental invariance: CEO's DAG pool cannot represent a
-    confounder edit (P7), so its trajectory coincides with P0 by
-    representational blindness, not by a robustness guarantee.
+    A bold 0 marks QCBO's guaranteed byte-identity (Prop. 2). A daggered 0
+    marks incidental invariance: CEO's DAG pool cannot represent a confounder
+    edit (P7), so its trajectory coincides with P0 by representational
+    blindness, not by a robustness guarantee.
     """
-    pair_methods = [m for m in ("CEO", "QCBO-finest", "QCBO-coarse")
+    pair_methods = [m for m in ("CBO", "QCBO-coarse")
                     if m in data["methods"]]
     header = " & ".join(r"\multicolumn{2}{c}{\textbf{" + MLABEL.get(m, m) + "}}"
                         for m in pair_methods)
     cmid = "".join(r"\cmidrule(lr){%d-%d}" % (3 + 2 * i, 4 + 2 * i)
                    for i in range(len(pair_methods)))
-    sub = " & ".join([r"$\Delta$GAP & $\Delta$PA-GAP"] * len(pair_methods))
+    sub = " & ".join([r"$\Delta$GAP & $\Delta Y_T$"] * len(pair_methods))
     lines = [r"\begin{tabular}{@{}ll" + " cc" * len(pair_methods) + r"@{}}",
              r"\toprule",
              r"\textbf{Perturbation} & \textbf{Locus} & " + header + r" \\",
@@ -122,7 +126,7 @@ def emit_taxonomy(data):
                     cells += [r"$0^{\dagger}$", r"$0^{\dagger}$"]
             else:
                 cells += ["$" + _ms(c["dGAP"]) + "$",
-                          "$" + _ms(c.get("dPAGAP", [0.0, 0.0])) + "$"]
+                          "$" + _ms(c.get("dFinalY", [0.0, 0.0])) + "$"]
         lines.append(f"{PERT_LABEL.get(pid, pid)} & {locus} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
@@ -131,10 +135,10 @@ def emit_taxonomy(data):
 def emit_fulltable(data):
     methods = _present(data)
     perts = ["P0"] + PERT_ORDER
-    lines = [r"\begin{tabular}{@{}ll ccc c cc c@{}}", r"\toprule",
+    lines = [r"\begin{tabular}{@{}ll ccc c ccc c@{}}", r"\toprule",
              r"\textbf{Method} & \textbf{Pert.} & \textbf{GAP@20} & \textbf{GAP@50} "
              r"& \textbf{GAP@100} & \textbf{PA-GAP} & $\Delta$\textbf{GAP} & "
-             r"$\Delta$\textbf{PA-GAP} & \textbf{b-id} \\", r"\midrule"]
+             r"$\Delta$\textbf{PA-GAP} & $\Delta Y_T$ & \textbf{b-id} \\", r"\midrule"]
     for m in methods:
         first = True
         for pid in perts:
@@ -146,10 +150,11 @@ def emit_fulltable(data):
             bid = r"\checkmark" if c["byte_identical_to_P0"] else "--"
             dg = "--" if pid == "P0" else "$" + _ms(c["dGAP"]) + "$"
             dp = "--" if pid == "P0" else "$" + _ms(c.get("dPAGAP", [0.0, 0.0])) + "$"
+            dy = "--" if pid == "P0" else "$" + _ms(c.get("dFinalY", [0.0, 0.0])) + "$"
             lines.append(
                 f"{name} & {pid} & ${_mp(c['GAP20'])}$ & ${_mp(c['GAP50'])}$ & "
                 f"${_mp(c['GAP100'])}$ & ${_mp(c.get('PAGAP100', [0.0, 0.0]))}$ & "
-                f"{dg} & {dp} & {bid} \\\\")
+                f"{dg} & {dp} & {dy} & {bid} \\\\")
         lines.append(r"\midrule")
     lines[-1] = r"\bottomrule"
     lines.append(r"\end{tabular}")

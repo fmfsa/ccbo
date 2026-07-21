@@ -24,8 +24,8 @@ DATASETS = [
     ("healthcare", r"\textsc{healthcare}", "lossless, $y^\\star{=}4.04$"),
 ]
 ROWS = ["BO", "CBO", "QCBO-coarse", "QCBO-refine"]
-MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-coarse": r"\QCBO-coarse",
-          "QCBO-refine": r"\textbf{\QCBO-refine}"}
+MLABEL = {"BO": r"\BO", "CBO": r"\CBO", "QCBO-coarse": r"\QCBO{}",
+          "QCBO-refine": r"\textbf{\HQCBO{}}"}
 
 
 def _mp(pair, fmt="%.3f"):

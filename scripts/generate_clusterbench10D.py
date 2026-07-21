@@ -10,7 +10,7 @@ do(X1,X2) / do(C1) that reach the same value more slowly -- a genuine
 convergence cost (dGAP < 0), not a prior bias the data can wash out.
 
 Mechanism. Y's centers are placed at the values do(X1=2) naturally induces in
-the noise-free SEM (X2=0.3*X3=0, X3=0, M1=0, M2=X1+X2=2, M3=0, Z=0), so:
+the noise-free SEM (X2=0.3*X3=0, X3=0, M1=0, M2=X1+X2=2, M3=0, M4=0), so:
 
   * do(X1=2) attains y* = 0 with a 1-dimensional search;
   * do(C1)=(2,0,0) attains the same 0, so the optimum is ALSO a union of
@@ -57,7 +57,7 @@ SEED = 0
 # only Y's centers move so that do(X1=2) is the global optimum).
 LIN_COEF = dict(gen.LIN_COEF)
 YA = dict(gen.YA)
-YC = {"X1": 2.0, "X2": 0.0, "X3": 0.0, "M1": 0.0, "M2": 2.0, "M3": 0.0, "Z": 0.0}
+YC = {"X1": 2.0, "X2": 0.0, "X3": 0.0, "M1": 0.0, "M2": 2.0, "M3": 0.0, "M4": 0.0}
 Y_INTERCEPT = 0.0
 
 

@@ -379,7 +379,7 @@ def _misspec_data():
 
 
 def build_misspec_headline():
-    """The paper's core result: quotient-invisible edits cannot move QCBO-coarse."""
+    """The paper's core result: quotient-invisible edits cannot move QCBO."""
     d = _misspec_data()
     s = prs.slides.add_slide(BLANK)
     bg = s.background.fill; bg.solid(); bg.fore_color.rgb = WHITE
@@ -413,22 +413,24 @@ def build_misspec_headline():
     n_prot = sum(1 for p in PERT_ORDER
                  if d["methods"]["QCBO-coarse"].get(p, {}).get("byte_identical_to_P0"))
     textbox(s, lx + 0.3, cy + 0.68, lw - 0.6, 1.5,
-            [[(f"QCBO-coarse is byte-identical to its correct-graph run on "
+            [[(f"QCBO is byte-identical to its correct-graph run on "
                f"{n_prot} of {len(PERT_ORDER)} perturbations — exact zeros, "
-               "not small numbers. Full-DAG CBO (= QCBO-finest) shifts on every "
+               "not small numbers. Full-DAG CBO shifts on every "
                "edge it can see.", 14.5, INK, False, SANS)]],
             line_spacing=1.12)
 
     # ---- RIGHT: ΔGAP bar chart, one series per structure-reading method ----
     series = [("QCBO-finest", C_FINEST), ("QCBO-coarse", C_COARSE)]
+    labels = {"QCBO-finest": "CBO", "QCBO-coarse": "QCBO", "CEO": "CEO"}
     if "CEO" in d["methods"]:
         series.insert(0, ("CEO", C_CEO))
     cd = CategoryChartData()
     cd.categories = [PERT_SHORT[p] for p in PERT_ORDER]
     for name, _ in series:
         cells = d["methods"][name]
-        cd.add_series(name, [cells.get(p, {}).get("dGAP", [0.0])[0]
-                             for p in PERT_ORDER])
+        cd.add_series(labels.get(name, name),
+                      [cells.get(p, {}).get("dGAP", [0.0])[0]
+                       for p in PERT_ORDER])
     gf = s.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED,
                             Inches(5.5), Inches(1.86), Inches(7.2), Inches(4.9), cd)
     ch = gf.chart
@@ -450,14 +452,14 @@ def build_misspec_headline():
     ca.tick_labels.font.size = Pt(10); ca.tick_labels.font.color.rgb = INK
     ca.tick_label_position = XL_TICK_LABEL_POSITION.LOW
     textbox(s, 5.6, 6.82, 7.0, 0.5,
-            [[("ΔGAP@100 per perturbation (0 = unchanged). QCBO-coarse: exact "
+            [[("ΔGAP@100 per perturbation (0 = unchanged). QCBO: exact "
                "zeros everywhere except the inter-cluster bow — the guarantee's "
                "precise boundary.", 11.5, MUTED, False, SANS, 'italic')]],
             line_spacing=1.05)
 
     s.notes_slide.notes_text_frame.text = (
         "Core experiment. Fixed-objective protocol: same SCM, data, seeds, budget; "
-        "only the assumed structure varies. QCBO-coarse's zeros are byte-identity "
+        "only the assumed structure varies. QCBO's zeros are byte-identity "
         "(Prop. 2 / Theorem 1), verified at 1e-7 tolerance. The inter bow (right-"
         "most) is the exact scope boundary: it completes a cluster-level bow, "
         "do(C1) becomes non-identifiable, the guarantee is lost. Finest's shifts "
@@ -486,19 +488,16 @@ def build_field_slide():
         ("BO", RGBColor(0x99, 0x99, 0x99), "ignores structure",
          "Invariant by blindness — and worst absolute Y "
          f"(final {_p0('BO', 'finalY')}). Robustness is not ignoring structure."),
-        ("CBO ≡ QCBO-finest", C_FINEST, "trusts the full DAG",
+        ("CBO", C_FINEST, "trusts the full DAG",
          "Complete ID on the assumed DAG: every visible edge feeds the prior "
          "and the arm gate, so every visible edit moves GAP/PA-GAP "
          "(final Y " + _p0('CBO', 'finalY') + " on the correct graph)."),
         ("CEO", C_CEO, "hedges a graph posterior",
-         (("Entropy acquisition over a candidate pool (authors' stack; pool "
-           "contains the true DAG). A wrong edge is only diluted by posterior "
-           "mass — final Y " + _p0('CEO', 'finalY') + " at P0; and a confounder "
-           "omission (P7) it cannot even represent.") if has_ceo else
-          ("Entropy acquisition over a candidate pool (authors' stack; pool "
-           "contains the true DAG). Misspec sweep running — 90 LSF jobs; this "
-           "slide auto-fills from the results JSON on rebuild."))),
-        ("QCBO-coarse", C_COARSE, "commits to the quotient",
+         ("Entropy acquisition over a candidate DAG pool. Hedging only dilutes "
+         "a wrong edge in proportion to posterior mass, and a confounder "
+         "omission is outside a DAG pool's hypothesis space. Compared on "
+         "correct graphs in the appendix head-to-head.")),
+        ("QCBO", C_COARSE, "commits to the quotient",
          "Cannot represent intra-cluster structure, so intra-cluster errors "
          "cannot reach it: byte-identical trajectories (final Y "
          + _p0('QCBO-coarse', 'finalY') + ", best of the field at P0).")
@@ -526,7 +525,7 @@ def build_field_slide():
         "graph-uncertainty answer — hedging dilutes rather than removes a wrong "
         "edge, and DAG-only candidates cannot express a forgotten confounder "
         "(P7 zero is representational blindness, daggered in the paper). "
-        "QCBO-coarse: invariance by construction, priced exactly by the "
+        "QCBO: invariance by construction, priced exactly by the "
         "lossy-partition case (next slide).")
 
 

@@ -61,11 +61,11 @@ SEED = 0
 LIN_COEF = {
     ("X3", "X2"): 0.3,                                   # intra-C1 (P2/P3 target)
     ("X1", "M2"): 1.0, ("X2", "M2"): 1.0, ("X3", "M1"): 1.0,
-    ("X4", "M3"): 1.0, ("X5", "M3"): 1.0, ("X5", "Z"): 1.0,
+    ("X4", "M3"): 1.0, ("X5", "M3"): 1.0, ("X5", "M4"): 1.0,
 }
 # Y = Y_INTERCEPT + sum_p YA[p] * (parent_p - YC[p])**2  over Y's parents.
-YA = {"X1": 3.0, "X2": 1.5, "X3": 1.0, "M1": 0.5, "M2": 0.8, "M3": 0.3, "Z": 0.3}
-YC = {"X1": 2.0, "X2": 1.0, "X3": 1.0, "M1": 1.0, "M2": 3.0, "M3": 0.0, "Z": 0.0}
+YA = {"X1": 3.0, "X2": 1.5, "X3": 1.0, "M1": 0.5, "M2": 0.8, "M3": 0.3, "M4": 0.3}
+YC = {"X1": 2.0, "X2": 1.0, "X3": 1.0, "M1": 1.0, "M2": 3.0, "M3": 0.0, "M4": 0.0}
 Y_INTERCEPT = 0.0
 
 # Exogenous Gaussian noise std per node (observational sampler only).

@@ -62,10 +62,10 @@ POLICY_BOX = {v: (-2.0, 2.0) for v in cb.MANIPULATIVE}
 LIN_COEF = dict(gen.LIN_COEF)
 LIN_COEF[("X3", "X2")] = 1.5          # strong mechanism: X2 responds to X3
 
-YA = {"X1": 3.0, "X2": 2.0, "X3": 1.0, "M1": 0.4, "M2": 0.3, "M3": 0.3, "Z": 0.3}
+YA = {"X1": 3.0, "X2": 2.0, "X3": 1.0, "M1": 0.4, "M2": 0.3, "M3": 0.3, "M4": 0.3}
 # X2's center 2.7 is OUTSIDE the policy box but reachable as 1.5 * X3 with
 # X3 ~ 1.8 inside it; M2's center sits at the natural optimum X1 + X2 ~ 4.
-YC = {"X1": 1.5, "X2": 2.7, "X3": 1.5, "M1": 1.5, "M2": 4.0, "M3": 0.0, "Z": 0.0}
+YC = {"X1": 1.5, "X2": 2.7, "X3": 1.5, "M1": 1.5, "M2": 4.0, "M3": 0.0, "M4": 0.0}
 Y_INTERCEPT = 0.0
 
 

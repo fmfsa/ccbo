@@ -32,9 +32,9 @@ DATASETS = [
 ]
 # (json key, legend label, color); CBO falls back to QCBO-finest (Prop. 1).
 DRAW = [("BO", "BO", "#E69F00"),
-        ("CBO", r"CBO $\equiv$ Q-finest", "#0072B2"),
-        ("QCBO-coarse", "Q-coarse", "#D55E00"),
-        ("QCBO-refine", "Q-refine", "#009E73")]
+        ("CBO", "CBO", "#0072B2"),
+        ("QCBO-coarse", "QCBO", "#D55E00"),
+        ("QCBO-refine", "HQCBO", "#009E73")]
 
 
 def main():
