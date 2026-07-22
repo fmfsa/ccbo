@@ -424,11 +424,11 @@ A single controlled contrast delimits the scope: the \emph{same} operation, addi
 
 \subsection{The contract in the model-based family}
 \label{sec:exp-qmcbo}
-We run \QMCBO{} against MCBO through MCBO's own harness and protocol ($T{=}100$, $5$ seeds) on three of its environments (\textsc{ToyGraph}, \textsc{Synthetic\_2}, \textsc{PSAGraph}; causal sufficiency holds in all three). \QMCBO{} differs from MCBO only in the model's graph view and the lifted targets.
+We run \QMCBO{} against MCBO through MCBO's own harness and protocol ($T{=}100$, $5$ seeds) on its two CBO-lineage tasks (\textsc{ToyGraph} and \textsc{PSAGraph}; causal sufficiency holds in both). \QMCBO{} differs from MCBO only in the model's graph view and the lifted targets.
 
-\textbf{Invariance (Table~\ref{tab:qmcbo-e2}, App.~\ref{app:fulltables}).} Under an intra-cluster misspecification of the model's view, \QMCBO{}'s trajectories are byte-identical to their correct-graph runs on $15/15$ (env, seed) pairs (Cor.~\ref{cor:qmcbo_invariance} realized), while MCBO's shift on $14/15$, in a direction that is not predictable: on these SCMs the wrong graph sometimes \emph{helped}.
+\textbf{Invariance (Table~\ref{tab:qmcbo-e2}, App.~\ref{app:fulltables}).} Under an intra-cluster misspecification of the model's view, \QMCBO{}'s trajectories are byte-identical to their correct-graph runs on $10/10$ (env, seed) pairs (Cor.~\ref{cor:qmcbo_invariance} realized), while MCBO's shift on $8/10$, in a direction that is not predictable: on these SCMs the wrong graph sometimes \emph{helped}.
 
-\textbf{Soundness matters (Table~\ref{tab:qmcbo-e1}).} On \textsc{ToyGraph}, whose cluster contains the only intra-cluster edge, the joint cluster mechanism reaches the optimum exactly ($2.172{\pm}0.000$) where MCBO attains $1.42$ and the independent-outputs ablation $1.26$: the within-cluster correlation of Prop.~\ref{prop:qsound} is the missing ingredient. On \textsc{Synthetic\_2} the partition is lossy and all quotient variants sit at the same plateau (Prop.~\ref{prop:qexposure}'s floor). On \textsc{PSAGraph}, \QMCBO{} edges out MCBO ($-4.26$ vs $-4.34$) at a third of the wall-clock.
+\textbf{Soundness matters (Table~\ref{tab:qmcbo-e1}).} On \textsc{ToyGraph}, whose cluster contains the only intra-cluster edge, the joint cluster mechanism reaches the optimum exactly ($2.172{\pm}0.000$) where MCBO attains $1.42$ and the independent-outputs ablation $1.26$: the within-cluster correlation of Prop.~\ref{prop:qsound} is the missing ingredient. On \textsc{PSAGraph}, \QMCBO{} edges out MCBO ($-4.27$ vs $-4.35$) at a quarter of the wall-clock.
 
 \begin{table}[t]\centering
   \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds, $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit. \QMCBO{}-ind is the independent-outputs ablation of Prop.~\ref{prop:qsound}.}
@@ -446,7 +446,7 @@ We compare each quotient method with its base on the experiments the base method
 \caption{Each quotient method against its base on the base paper's own experiments and metric (mean$\pm$s.e.). Top: \CBO{} vs \QCBO{} (best $\E[Y\mid\doo]$, minimization). Middle: DCBO vs \QDCBO{} (best $Y$ per time slice, trials concatenated across slices). Bottom: MCBO vs \QMCBO{} (best reward, maximization). Dashed line: oracle optimum where known.}
 \label{fig:family}
 \end{figure*}
- The realized price of coarsening is zero to negative on every experiment, and \QDCBO{} improves on DCBO on all three of its own setups: where the partition is lossless, coarsening's budget concentration pays for its resolution loss outright.
+ The quotient matches or beats its base on six of the eight experiments, including \QDCBO{} on all three of DCBO's own setups and \QMCBO{} reaching ToyGraph's optimum exactly where MCBO does not. The two positive prices are exactly where Prop.~\ref{prop:price} predicts them: Synthetic, whose optimum $\doo(B,D)$ splits the domain partition, and, mildly, Coral. On Toy the coarse arm is not even identifiable from the C-DAG (the cluster forms a bow with $Y$ through the confounder), so \QCBO{} runs it under the uninformative prior and still matches \CBO{}.
 
 \begin{table}[t]\centering
   \caption{Realized price of coarsening per family, each pair on the base

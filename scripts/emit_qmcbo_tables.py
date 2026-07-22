@@ -27,7 +27,7 @@ QDIR = "third_party/CausalBO_Benchmark/results/_qmcbo"
 OUTJSON = "results/qmcbo_pilot.json"
 OUTDIR = "paper/tables"
 
-ENVS = [("ToyGraph", 2.172), ("Synthetic_2", 2.152), ("PSAGraph", -4.13)]
+ENVS = [("ToyGraph", 2.172), ("PSAGraph", -4.13)]
 ALGOS = ["MCBO", "QMCBOJ", "QMCBO"]
 ALABEL = {"MCBO": "MCBO", "QMCBOJ": r"\QMCBO{}",
           "QMCBO": r"\QMCBO{}-ind {\footnotesize(ablation)}"}
