@@ -38,7 +38,7 @@ from ccbo.cbo.utils import compute_coverage, define_initial_data_CBO
 # One protocol per benchmark, applied to EVERY method (BO, CBO, all CCBO
 # partitions). `max_intervention_size` — the cap on how many C-DAG *cluster*
 # vertices may be jointly intervened on — is a property of the benchmark, never
-# of the method. All three benchmarks here are run UNCAPPED (cap = |M|, i.e. 3):
+# of the method. All benchmarks here are run UNCAPPED (cap = |M|):
 # the cap counts clusters, not variables, so a small cap would let a coarse
 # partition reach a joint arm the fine partition is forbidden — an unfair
 # cross-partition artifact. Uncapped, the coarse exploration set is a subset of
@@ -46,9 +46,11 @@ from ccbo.cbo.utils import compute_coverage, define_initial_data_CBO
 # not a cross-partition final-Y "win".
 
 PROTOCOL = {
+    'ToyGraph':             {'max_intervention_size': 2},
     'CompleteGraph':        {'max_intervention_size': 3},
     'Tier1Graph':           {'max_intervention_size': 3},
     'ConfoundedCluster':    {'max_intervention_size': 3},
+    'SimplifiedCoralGraph': {'max_intervention_size': 5},
 }
 
 
@@ -637,7 +639,8 @@ def main():
     parser = argparse.ArgumentParser(
         description='Unified CCBO experiment runner')
     parser.add_argument('--benchmark', default='CompleteGraph',
-                        choices=['CompleteGraph', 'Tier1Graph', 'ConfoundedCluster'],
+                        choices=['ToyGraph', 'CompleteGraph', 'Tier1Graph',
+                                 'ConfoundedCluster', 'SimplifiedCoralGraph'],
                         help='Which benchmark to run')
     parser.add_argument('--condition', default='main',
                         choices=['main', 'wrong_edge', 'sweep'],

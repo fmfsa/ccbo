@@ -339,7 +339,7 @@ def run_all(experiment, num_trials=40, num_interventions=10, type_cost=1,
 def main():
     parser = argparse.ArgumentParser(description='Coarsened Causal Bayesian Optimization')
     parser.add_argument('--experiment', default='CompleteGraph', type=str,
-                        choices=['ToyGraph', 'CompleteGraph'],
+                        choices=['ToyGraph', 'CompleteGraph', 'SimplifiedCoralGraph'],
                         help='Which graph to use')
     parser.add_argument('--num_trials', default=40, type=int,
                         help='Number of optimization trials')
