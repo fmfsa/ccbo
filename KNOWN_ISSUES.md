@@ -20,6 +20,21 @@ tables. Two porting prerequisites are tracked here:
 2. Until the rerun, the paper carries a provenance note on the
    ClusterBench10 numbers (App. D).
 
+**ES-change audit (`scripts/audit_es_change.py`) — partial result, 2026-07-22.**
+The audit scoping this rerun OOM-killed twice on LSF (at 8GB and at 32GB,
+both times somewhere after the `Pic coarse` cell), while the individually
+probed stages of the suspect finest-partition cell (MIS, per-arm ananke ID
+checks, POMIS) each finish in seconds under 1GB — so some later (variant,
+partition) cell has a pathological memory blowup in the coarsening/ID
+machinery that the release-time rerun will hit too. Partial output
+(`results/es_audit.txt`, 17/44 cells: P0–P3 complete + Pic/coarse) already
+gives the qualitative answer: most cells are SAME (checked-in trajectories
+provably unchanged under the MIS rule); the DIFFs so far — P3/wrongpi and
+Pic/coarse — are cells where the old gate deleted a non-identifiable arm
+that the MIS rule keeps on the uninformative tier. When resuming: split the
+audit into one subprocess per cell (resumable, memory-isolated) and profile
+whichever cell blows up.
+
 Queued alongside the rerun — a **sharpened arm-deletion variant**: add a
 misspecification whose edge edits change the *fine-graph MIS* (e.g. delete
 X1's outgoing edges so `do(X1)`-containing arms become non-minimal) while

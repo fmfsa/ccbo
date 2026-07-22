@@ -494,7 +494,7 @@ We run \QMCBO{} against MCBO through MCBO's own harness and protocol ($T{=}100$,
 
 \textbf{Invariance (Table~\ref{tab:qmcbo-e2}, App.~\ref{app:fulltables}).} Under an intra-cluster misspecification of the model's view, \QMCBO{}'s trajectories are identical to their correct-graph runs on $10/10$ (env, seed) pairs (Cor.~\ref{cor:qmcbo_invariance} realized), while MCBO's shift on $8/10$, in a direction that is not predictable: on these SCMs the wrong graph sometimes \emph{helped}.
 
-\textbf{Soundness matters (Table~\ref{tab:qmcbo-e1}).} On \textsc{ToyGraph}, whose cluster contains the only intra-cluster edge, the joint cluster mechanism reaches the optimum exactly ($2.172{\pm}0.000$) where MCBO attains $1.42$: the within-cluster correlation of Prop.~\ref{prop:qsound} is the missing ingredient. On \textsc{PSAGraph}, \QMCBO{} edges out MCBO ($-4.27$ vs $-4.35$) at about a third of the wall-clock.
+\textbf{Soundness matters (Table~\ref{tab:qmcbo-e1}).} On \textsc{ToyGraph}, whose cluster contains the only intra-cluster edge, the joint cluster mechanism reaches $2.150{\pm}0.013$ against the $2.172$ optimum — hitting it exactly on three of five seeds — where MCBO never improves on its initial design ($1.14{\pm}0.27$): the within-cluster correlation of Prop.~\ref{prop:qsound} is the missing ingredient. On \textsc{PSAGraph} both methods converge to the same plateau ($-5.15{\pm}0.00$), \QMCBO{} in $3.0\times$ less wall-clock ($2266$ vs $6830$\,s per unit).
 
 \begin{table}[t]\centering
   \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds, $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit.}
@@ -512,7 +512,7 @@ We compare each quotient method with its base on the experiments the base method
 \caption{Each quotient method against its base on the base paper's own experiments and metric (mean$\pm$s.e.). Top: \CBO{} vs \QCBO{} (best $\E[Y\mid\doo]$, minimization). Middle: DCBO vs \QDCBO{} (best $Y$ per time slice, trials concatenated across slices). Bottom: MCBO vs \QMCBO{} (best reward, maximization). Dashed line: oracle optimum where known.}
 \label{fig:family}
 \end{figure*}
- The quotient matches or beats its base on six of the eight experiments, including \QDCBO{} on all three of DCBO's own setups and \QMCBO{} reaching ToyGraph's optimum exactly where MCBO does not. The two positive prices are exactly where Prop.~\ref{prop:price} predicts them: Synthetic, whose optimum $\doo(B,D)$ splits the domain partition, and, mildly, Coral. On Toy the single coarse arm is not identifiable from the C-DAG — the bow of Fig.~\ref{fig:toybow} — so, per the declared two-tier rule (Eq.~\ref{eq:two_tier_prior}), \QCBO{} keeps the arm and runs it on the uninformative prior, learning the response from interventional data alone, and still matches \CBO{}.
+ The quotient matches or beats its base on six of the eight experiments, including \QDCBO{} on all three of DCBO's own setups and \QMCBO{} essentially reaching ToyGraph's optimum ($2.15{\pm}0.01$ vs $2.172$) where MCBO never improves on its initial design. The two material positive prices are exactly where Prop.~\ref{prop:price} predicts them: Synthetic, whose optimum $\doo(B,D)$ splits the domain partition, and, mildly, Coral. On Toy the single coarse arm is not identifiable from the C-DAG — the bow of Fig.~\ref{fig:toybow} — so, per the declared two-tier rule (Eq.~\ref{eq:two_tier_prior}), \QCBO{} keeps the arm and runs it on the uninformative prior, learning the response from interventional data alone, and still matches \CBO{} ($-2.13{\pm}0.03$ vs $-2.16{\pm}0.00$).
 
 \begin{table}[t]\centering
   \caption{Realized price of coarsening per family, each pair on the base
@@ -1059,7 +1059,8 @@ priors, but not the objective. By construction it is invariant to the
 fine-structure perturbations of \S\ref{sec:exp-scope}, so it has a single
 cost, reported in Table~\ref{tab:wrongpi}: final quality degrades
 ($Y=0.49$ vs $0.13$ correct-partition, $0.29$ \CBO{}) while GAP
-stays within $0.06$ of the correct-partition \QCBO{} run and \BO{}.
+stays within $0.06$ of the correct-partition \QCBO{} run ($0.71$ vs
+$0.77$), well above \CBO{} ($0.56$) and \BO{} ($0.18$).
 
 \begin{table}[h]\centering
   \caption{Cost of a \emph{wrong} partition on \textsc{ClusterBench10} (correct
