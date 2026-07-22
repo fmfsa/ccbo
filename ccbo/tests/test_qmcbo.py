@@ -88,6 +88,27 @@ def test_lift_targets():
 # ---------------------------------------------------------------------------
 # Joint cluster mechanisms (WP1)
 # ---------------------------------------------------------------------------
+# These need the MCBO authors' stack (scripts/fetch_mcbo.sh) AND a botorch
+# contemporary with it (FixedNoiseGP / botorch.sampling.samplers — see the
+# `mcbo` conda env); on a newer botorch they skip rather than error.
+
+def _mcbo_available():
+    import os as _os
+    from ccbo.qmcbo.quotient import _MCBO_ROOT
+    if not _os.path.isdir(_MCBO_ROOT):
+        return False, "third_party/mcbo missing — run scripts/fetch_mcbo.sh"
+    try:
+        import botorch.sampling.samplers  # noqa: F401  (removed in >=0.8)
+        from botorch.models import FixedNoiseGP  # noqa: F401
+    except ImportError:
+        return False, ("installed botorch too new for the MCBO authors' "
+                       "stack — use the era-pinned `mcbo` env")
+    return True, ""
+
+
+_MCBO_OK, _MCBO_SKIP_REASON = _mcbo_available()
+joint_net = pytest.mark.skipif(not _MCBO_OK, reason=_MCBO_SKIP_REASON)
+
 
 def _toy_joint_net(parent_nodes, partition, n=60, seed=0, intra_coef=0.9):
     """Fit a JointQuotientGPNetwork on synthetic ToyGraph-shaped data where
@@ -114,6 +135,7 @@ def _toy_joint_net(parent_nodes, partition, n=60, seed=0, intra_coef=0.9):
     return JointQuotientGPNetwork(train_X, train_Y, algo, profile, partition)
 
 
+@joint_net
 def test_joint_cluster_posterior_covariance():
     """The 2-member cluster mechanism must learn the within-cluster residual
     correlation (X1 = 0.9 X0 + small noise ⇒ predictive correlation near
@@ -129,6 +151,7 @@ def test_joint_cluster_posterior_covariance():
     assert float(corr) > 0.5, f"residual correlation not learned: {float(corr)}"
 
 
+@joint_net
 def test_joint_singleton_reduces_to_per_node():
     """All-singleton partition: cluster inputs == fine parents and every
     mechanism is a stock single-output GP (Q-Identity at the model level)."""
@@ -138,6 +161,7 @@ def test_joint_singleton_reduces_to_per_node():
     assert all(isinstance(g, SingleTaskGP) for g in net.cluster_GPs)
 
 
+@joint_net
 def test_joint_invariance_to_intra_cluster_edits():
     """The joint network's structure (cluster parents + inputs) is identical
     under intra-cluster edits of the fine DAG — Theorem-1 factoring for the

@@ -1,10 +1,10 @@
-"""Validate QCBO applicability on the curated CausalBO_Benchmark datasets.
+"""Validate QCBO applicability on the curated benchmark datasets.
 
 For each dataset: load the benchmark graph (reusing DiscoveredGraph), build
 CoarsenedGraph at the finest (=CBO) and the chosen coarse partition, print the
-identifiability-gated exploration set, and sanity-check that our (noise-free)
-SEM evaluation at the benchmark's best intervention matches the benchmark's
-reference optimum y*.
+MIS exploration set with per-arm prior tiers, and sanity-check that our
+(noise-free) SEM evaluation at the benchmark's best intervention matches the
+benchmark's reference optimum y*.
 
 Run:  PYTHONPATH=. python scripts/validate_benchmark_qcbo.py
 """
@@ -48,16 +48,12 @@ def main():
         print(f"  target=Y  task={config['task']}  manip={manip}  "
               f"y*={ystar:.4f}  n_obs={len(obs)}")
 
-        # Match the benchmark CBO's own exploration set: DiscoveredGraph.get_sets
-        # enumerates every variable subset up to size min(5, n_manip), so the
-        # finest partition is the Prop. 1 CBO anchor only at this cap (a cap of
-        # 1 would silently drop all joint-intervention arms).
-        max_size = min(5, len(manip))
+        # Exploration set = MIS of the (C-)DAG; the finest partition is the
+        # Prop. 1 CBO anchor (same MIS rule on the full DAG).
         for label, partition in [('finest(=CBO)', _finest(manip)),
                                  ('coarse', _part(coarse_clusters))]:
             try:
                 cg = CoarsenedGraph(dg, partition, ds, obs,
-                                    max_intervention_size=max_size,
                                     num_mc_samples=200,
                                     assumed_graph_name=ds)
                 es = cg.get_exploration_set_description()

@@ -1,17 +1,18 @@
-"""Standardized efficiency metrics for CBO trajectories: GAP, PA-GAP, regret.
+"""Standardized metrics for CBO trajectories: regret (primary) and GAP.
 
-These follow the definitions in the CBO survey of Anonymous (TMLR 2026),
-"Causal Bayesian Optimization: Foundations, Methods, and Applications"
-(GAP originally from DCBO, Aglietti et al. 2021), so our numbers are
-comparable to that benchmark's common scoring protocol.
+Primary metrics are final Y, simple regret, and cumulative regret — direct
+functions of the trajectory and the oracle optimum. GAP (originally from
+DCBO, Aglietti et al. 2021) is kept as a secondary diagnostic; it is
+sensitive to the method-specific initial incumbent, so regret and final Y
+carry the headline comparisons.
 
-Both metrics are computed from a best-so-far trajectory ``traj`` (length
+All metrics are computed from a best-so-far trajectory ``traj`` (length
 ``T + 1``: one initial incumbent ``traj[0]`` followed by ``T`` post-trial
 best-so-far values) and a reference optimum ``y_star`` (the offline oracle
-optimum of the benchmark). Larger is better for both.
+optimum of the benchmark).
 
-Definitions (minimization shown; maximization flips the improvement sign)
-------------------------------------------------------------------------
+GAP definition (minimization shown; maximization flips the sign)
+----------------------------------------------------------------
 Improvement ratio at trial ``t`` (clipped to [0, 1]):
 
     R_t = min( (y_init - traj[t]) / (y_init - y_star), 1 )
@@ -20,10 +21,6 @@ GAP combines final improvement with discovery speed (t* = first trial that
 attains the final ratio R_T; t* = T if no improvement):
 
     GAP = ( R_T + (T - t*) / T ) / ( 1 + (T - 1) / T )       in [0, 1]
-
-PA-GAP weights every trial's improvement by a decaying efficiency factor:
-
-    PA-GAP = (1/T) * sum_{t=1..T} R_t * (T - (t - 1)) / T     in [0, (T+1)/(2T)]
 """
 
 import numpy as np
@@ -67,15 +64,6 @@ def gap(traj, y_star, task='min'):
         # first trial (1-indexed) attaining the final ratio
         t_star = int(np.argmax(ratios >= R_T - 1e-9)) + 1
     return (R_T + (T - t_star) / T) / (1.0 + (T - 1) / T)
-
-
-def pa_gap(traj, y_star, task='min'):
-    """Survey Path-Aware GAP (raw, trajectory-weighted; in [0, (T+1)/(2T)])."""
-    ratios, T = _improvement_ratios(traj, y_star, task)
-    if T <= 0:
-        return float('nan')
-    weights = np.array([(T - (t - 1)) / T for t in range(1, T + 1)])
-    return float(np.mean(ratios * weights))
 
 
 def simple_regret(traj, y_star, task='min'):

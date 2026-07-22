@@ -1,10 +1,11 @@
 """Structural validation of the ClusterBench10 misspecification benchmark.
 
 These tests prove the experimental premise *before* any SCM coefficient tuning
-or CBO runs, and need no dataset files: the coarsened C-DAG and the gated
-exploration set are derived purely from the (registered) assumed structure +
-partition (see CoarsenedGraph._build_coarsened_structure). We feed a stub
-original graph that only has to expose get_interventional_ranges().
+or CBO runs, and need no dataset files: the coarsened C-DAG, the MIS
+exploration set, and the per-arm prior tiers are derived purely from the
+(registered) assumed structure + partition (see
+CoarsenedGraph._build_coarsened_structure). We feed a stub original graph that
+only has to expose get_interventional_ranges().
 
 Claims checked (these ARE the conditions-characterization):
   1. Coarse partition {X1,X2,X3}|{X4,X5}: the C-DAG signature is IDENTICAL
@@ -12,9 +13,9 @@ Claims checked (these ARE the conditions-characterization):
      the sweep S1/S2/S3) -> QCBO-coarse is provably invariant (Delta==0).
   2. Coarse partition: the C-DAG signature DIFFERS under the *inter*-cluster
      controls (P4/P5) -> QCBO-coarse is NOT immune (Prop. 2's scope).
-  3. Finest partition: the bow P1 (add X1->X2) is visible and deletes the
-     best singleton arm do(X1) from the gated exploration set (Tier-2,
-     unrecoverable) -- non-vacuity of claim (1).
+  3. Finest partition: the bow P1 (add X1->X2) is visible and flips the best
+     singleton arm do(X1) from the do-calculus prior to the uninformative
+     tier -- non-vacuity of claim (1).
 """
 
 import numpy as np
@@ -52,11 +53,11 @@ def _admg_signature(admg):
     return (vs, di, bi)
 
 
-def _build(partition, perturbation_id, max_size):
+def _build(partition, perturbation_id):
     cb.register_variants()
     cg = CoarsenedGraph(
         _StubGraph(), partition, cb.NAME, _obs(),
-        max_intervention_size=max_size, num_mc_samples=50,
+        num_mc_samples=50,
         assumed_graph_name=cb.variant_name(perturbation_id),
     )
     return cg
@@ -69,56 +70,71 @@ def test_coarse_invariance_matches_predicted_protection():
       * inter & redundant (P6: X2->M2 alive) -> invariant
       * inter & non-redundant (P4/P5)        -> C-DAG changes
     """
-    sig0 = _admg_signature(_build(COARSE, "P0", max_size=2)._coarsened_admg)
+    sig0 = _admg_signature(_build(COARSE, "P0")._coarsened_admg)
     for p in cb.PERTURBATIONS:
         if p["id"] == "P0":
             continue
-        sig = _admg_signature(_build(COARSE, p["id"], max_size=2)._coarsened_admg)
+        sig = _admg_signature(_build(COARSE, p["id"])._coarsened_admg)
         invariant = (sig == sig0)
         assert invariant == p["protected"], (
             f"{p['id']} ({p['locus']}): predicted protected={p['protected']} but "
             f"coarse C-DAG invariant={invariant}")
 
 
-def test_intercluster_bow_deletes_cluster_arm_at_coarse():
+def test_intercluster_bow_corrupts_cluster_arm_prior_at_coarse():
     """The inter-cluster bow Pic (add X1->X5 on the X1<->X5 confounded pair)
     forms a cluster-level bow C1->C2 + C1<->C2 -> do(C1) is non-identifiable at
-    the COARSE level and is dropped from the exploration set, while the *intra*
-    bow P1 leaves the coarse ES untouched. This is the exact scope of Prop. 2:
-    QCBO-coarse is protected iff the bow is abstracted away (intra), not when it
-    spans clusters (inter)."""
+    the COARSE level and drops to the uninformative prior tier, while the
+    *intra* bow P1 leaves the coarse tiers untouched. This is the exact scope
+    of Prop. 2: QCBO-coarse is protected iff the bow is abstracted away
+    (intra), not when it spans clusters (inter)."""
     C1 = sorted(cb.COARSE_CLUSTERS[0])  # ['X1','X2','X3']
-    es_p0 = _build(COARSE, "P0", max_size=2)._exploration_set
-    es_intra = _build(COARSE, "P1", max_size=2)._exploration_set
-    es_inter = _build(COARSE, "Pic", max_size=2)._exploration_set
-    assert C1 in es_p0, f"do(C1) should be identifiable under the true DAG; ES={es_p0}"
-    assert C1 in es_intra, (
-        f"intra bow must NOT remove do(C1) from the coarse ES; ES={es_intra}")
-    assert C1 not in es_inter, (
-        f"inter-cluster bow must delete do(C1) from the coarse ES; ES={es_inter}")
+    cg_p0 = _build(COARSE, "P0")
+    cg_intra = _build(COARSE, "P1")
+    cg_inter = _build(COARSE, "Pic")
+    key = tuple(C1)
+    assert C1 in cg_p0._exploration_set, (
+        f"do(C1) must be a coarse MIS arm under the true DAG; "
+        f"ES={cg_p0._exploration_set}")
+    assert cg_p0._arm_identifiable[key], (
+        "do(C1) should be identifiable under the true DAG")
+    assert cg_intra._arm_identifiable.get(key), (
+        "intra bow must NOT flip do(C1)'s prior tier at the coarse level")
+    assert C1 in cg_inter._exploration_set, (
+        f"do(C1) must remain a coarse MIS arm under the inter bow "
+        f"(membership is never gated); ES={cg_inter._exploration_set}")
+    assert not cg_inter._arm_identifiable[key], (
+        "inter-cluster bow must make do(C1) non-identifiable at the coarse "
+        "level (uninformative prior tier)")
 
 
-def test_finest_bow_deletes_best_singleton():
-    """At the finest partition the bow P1 deletes do(X1) from the gated ES."""
-    cg_true = _build(FINEST, "P0", max_size=5)
-    cg_bow = _build(FINEST, "P1", max_size=5)
+def test_finest_bow_corrupts_best_singleton_prior():
+    """At the finest partition the bow P1 flips do(X1) to the uninformative
+    prior tier (membership is never gated)."""
+    cg_true = _build(FINEST, "P0")
+    cg_bow = _build(FINEST, "P1")
 
     sig_true = _admg_signature(cg_true._coarsened_admg)
     sig_bow = _admg_signature(cg_bow._coarsened_admg)
     assert sig_true != sig_bow, "Finest partition should see the X1->X2 edge"
 
     assert ["X1"] in cg_true._exploration_set, (
-        f"do(X1) should be identifiable under the correct DAG; "
+        f"do(X1) should be a MIS arm under the correct DAG; "
         f"ES={cg_true._exploration_set}")
-    assert ["X1"] not in cg_bow._exploration_set, (
-        f"do(X1) should be deleted under the bow (X1->X2 + X1<->X2); "
+    assert ["X1"] in cg_bow._exploration_set, (
+        f"do(X1) should remain a MIS arm under the bow; "
         f"ES={cg_bow._exploration_set}")
+    assert cg_true._arm_identifiable[("X1",)], (
+        "do(X1) should be identifiable under the correct DAG")
+    assert not cg_bow._arm_identifiable[("X1",)], (
+        "do(X1) should be non-identifiable under the bow (X1->X2 + X1<->X2), "
+        "i.e. on the uninformative prior tier")
 
 
 if __name__ == "__main__":
     test_coarse_invariance_matches_predicted_protection()
     print("PASS: coarse C-DAG invariance matches predicted protection (3-way)")
-    test_intercluster_bow_deletes_cluster_arm_at_coarse()
-    print("PASS: inter-cluster bow deletes do(C1) at coarse; intra bow does not")
-    test_finest_bow_deletes_best_singleton()
-    print("PASS: finest bow deletes best singleton do(X1)")
+    test_intercluster_bow_corrupts_cluster_arm_prior_at_coarse()
+    print("PASS: inter bow flips do(C1)'s tier at coarse; intra bow does not")
+    test_finest_bow_corrupts_best_singleton_prior()
+    print("PASS: finest bow flips best singleton do(X1) to uninformative tier")

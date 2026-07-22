@@ -17,7 +17,7 @@ from ccbo.cbo.utils import fit_single_GP_model
 from .adjustment import make_cdag_do_function, _ananke_id_check
 from .coarsening import (get_dag_edges_from_sem, get_hidden_confounders,
                           project_out_hidden, build_coarsened_admg,
-                          compute_POMIS, _admg_is_acyclic)
+                          compute_MIS, compute_POMIS, _admg_is_acyclic)
 
 
 class CoarsenedGraph(GraphStructure):
@@ -38,39 +38,33 @@ class CoarsenedGraph(GraphStructure):
         Name of the graph ('ToyGraph' or 'CompleteGraph').
     observational_samples : pd.DataFrame
         Observational data.
-    max_intervention_size : int, optional
-        Maximum number of coarsened manipulative nodes to intervene on
-        simultaneously. Defaults to 3.
     num_mc_samples : int, optional
         Number of MC samples for do-calculus. Defaults to 10000.
     assumed_graph_name : str, optional
         Name of the assumed graph structure for adjustment formulas.
         If None, uses graph_name (correct graph). Set to a different
         name (e.g., 'CompleteGraph_NoCD') to simulate graph misspecification.
-    gating : bool, optional
-        When True (default), the exploration set keeps only the subsets
-        whose interventional effect is identifiable from the C-DAG (the
-        identifiability gate). When False, every non-empty subset up to
-        ``max_intervention_size`` is kept regardless of identifiability;
-        non-identifiable arms fall back to the uninformative prior in
-        ``get_all_do``. ``gating=False`` at the identity partition is the
-        non-gating CBO baseline: on a correct DAG (where the gate passes
-        everything) it coincides with the gated run trajectory-for-
-        trajectory, and under misspecification it keeps every arm but
-        pays with a corrupted prior (Tier-1) instead of arm deletion
-        (Tier-2).
+
+    Notes
+    -----
+    The exploration set is the MIS of the C-DAG (Lee & Bareinboim 2018)
+    over the manipulable cluster vertices — the same rule CBO applies to
+    the full DAG, so at the identity partition the two coincide. Every
+    MIS arm is kept; identifiability from the C-DAG decides the *prior
+    tier*, not membership: arms whose interventional effect is
+    identifiable get the do-calculus prior, the rest share the common
+    uninformative prior (observational mean/variance of Y) and are
+    learned from experimental data alone.
     """
 
     def __init__(self, original_graph, partition, graph_name,
-                 observational_samples, max_intervention_size=3,
-                 num_mc_samples=10000, assumed_graph_name=None, gating=True):
+                 observational_samples,
+                 num_mc_samples=10000, assumed_graph_name=None):
         self.original_graph = original_graph
         self.partition = partition
         self.graph_name = graph_name
         self.assumed_graph_name = assumed_graph_name or graph_name
         self.num_mc_samples = num_mc_samples
-        self.max_intervention_size = max_intervention_size
-        self.gating = gating
 
         # Store observational data columns
         self._obs_samples = observational_samples
@@ -87,7 +81,7 @@ class CoarsenedGraph(GraphStructure):
     def _build_coarsened_structure(self):
         """
         Derive the exploration set from a manipulable-only partition via the
-        Lee-2019 latent projection + POMIS pipeline.
+        Lee-2019 latent projection + MIS pipeline.
 
         Steps
         -----
@@ -99,11 +93,15 @@ class CoarsenedGraph(GraphStructure):
         3. Build the coarsened ADMG ``G^π`` as the quotient of ``G*`` under
            ``π``, lifting non-manipulable observables to singleton atomic
            vertices.  Verify acyclicity.
-        4. Compute POMIS on ``G^π`` with the manipulable cluster vertices
-           as the action space.  Each POMIS element is a set of cluster
-           vertices that are *jointly* intervened on.
-        5. Flatten each POMIS element to its fine-grained manipulable
-           members (``do(C_k) =`` joint assignment over all of ``C_k``).
+        4. Compute MIS on ``G^π`` with the manipulable cluster vertices as
+           the action space — CBO's exploration rule applied to the C-DAG.
+           Each MIS element is a set of cluster vertices that are *jointly*
+           intervened on.  POMIS is also computed (POMIS ⊆ MIS) for
+           diagnostics and refinement heuristics.
+        5. Flatten each MIS element to its fine-grained manipulable
+           members (``do(C_k) =`` joint assignment over all of ``C_k``),
+           recording per-arm identifiability from the C-DAG (the prior
+           tier — membership is never gated).
         """
         # (1) Validate: non-singleton clusters must be manipulable-only
         self._manip_coarsened_nodes = []
@@ -143,49 +141,22 @@ class CoarsenedGraph(GraphStructure):
             raise ValueError(
                 f"Coarsening {self.partition} induces a cyclic C-DAG.")
 
-        # (4) POMIS on the coarsened ADMG (for theoretical guarantees)
+        # (4) MIS on the coarsened ADMG: the exploration set. POMIS kept
+        #     alongside for diagnostics (always a subset of MIS).
         target_node = frozenset({'Y'})
+        self._mis_sets = compute_MIS(
+            self._coarsened_admg, self._manip_coarsened_nodes, target_node)
         self._pomis_sets = compute_POMIS(
             self._coarsened_admg, self._manip_coarsened_nodes, target_node)
 
-        # (5) Exploration set = all identifiable non-empty subsets of
-        #     manipulable clusters (up to max_intervention_size).
-        #     POMIS gives the optimality guarantee; the broader identifiable
-        #     set speeds up convergence by also exploring cheaper 1-cluster
-        #     and 2-cluster interventions that ananke confirms are identified.
-        seen = set()
-        exploration_tuples = []
-
-        def _add_combo(combo):
-            key = frozenset(combo)
-            if key in seen or len(key) == 0 or len(key) > self.max_intervention_size:
-                return
-            if self.gating:
-                ok, _, _ = _ananke_id_check(self._coarsened_admg, set(combo),
-                                            target_node)
-                if not ok:
-                    return
-            seen.add(key)
-            exploration_tuples.append(combo)
-
-        M = self._manip_coarsened_nodes
-        for r in range(1, min(len(M), self.max_intervention_size) + 1):
-            for combo in itertools.combinations(M, r):
-                _add_combo(frozenset(combo))
-
-        # Also consider every POMIS element. NOTE: the same
-        # max_intervention_size budget applies via _add_combo — a POMIS element
-        # whose size exceeds the cap is intentionally dropped, not force-added.
-        # This is deliberate: under a single/limited-lever intervention budget
-        # the corresponding multi-cluster arm is simply out of budget, and it is
-        # exactly this cap that isolates the Tier-2 arm-deletion demonstration
-        # (cap=1 makes the optimum a singleton so its deletion is unrecoverable).
-        # If the cap is >= |M| the cap is inert and all POMIS elements are kept.
-        for combo in self._pomis_sets:
-            _add_combo(combo)
-
+        # (5) Flatten to fine variables; record the prior tier per arm.
+        #     Identifiability never removes an arm — a non-identifiable arm
+        #     runs on the common uninformative prior (see get_all_do).
         self._exploration_set = []
-        for combo in exploration_tuples:
+        self._arm_identifiable = {}
+        for combo in self._mis_sets:
+            ok, _, _ = _ananke_id_check(self._coarsened_admg, set(combo),
+                                        target_node)
             fine_vars = []
             for node in combo:
                 fine_vars.extend(self._node_to_manip_vars[node])
@@ -198,6 +169,7 @@ class CoarsenedGraph(GraphStructure):
                 f"ES entry {fine_vars} is not a union of full clusters "
                 f"{[sorted(c) for c in combo]}")
             self._exploration_set.append(fine_vars)
+            self._arm_identifiable[tuple(fine_vars)] = bool(ok)
 
         # Full manipulable variable list for standard BO
         all_manip = set()
@@ -210,8 +182,13 @@ class CoarsenedGraph(GraphStructure):
         return self.original_graph.define_SEM()
 
     def get_sets(self):
-        """Return (MIS, POMIS, manipulative_variables) for the coarsened graph."""
-        # MIS computed on the coarsened DAG; POMIS ≈ MIS (safe over-approximation)
+        """Return (MIS, POMIS, manipulative_variables) for the coarsened graph.
+
+        Both slots carry the MIS-based exploration set: the CBO loop treats
+        the first entry as its arm list, and returning MIS in both keeps the
+        interface of the vendored graphs. The true POMIS (⊆ MIS) is kept in
+        ``self._pomis_sets`` for diagnostics.
+        """
         return self._exploration_set, self._exploration_set, self._manipulative_variables
 
     def get_set_BO(self):

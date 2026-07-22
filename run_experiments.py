@@ -36,26 +36,8 @@ from ccbo.cbo.utils import compute_coverage, define_initial_data_CBO
 # Unified experiment protocol
 # ---------------------------------------------------------------------------
 # One protocol per benchmark, applied to EVERY method (BO, CBO, all CCBO
-# partitions). `max_intervention_size` — the cap on how many C-DAG *cluster*
-# vertices may be jointly intervened on — is a property of the benchmark, never
-# of the method. All benchmarks here are run UNCAPPED (cap = |M|):
-# the cap counts clusters, not variables, so a small cap would let a coarse
-# partition reach a joint arm the fine partition is forbidden — an unfair
-# cross-partition artifact. Uncapped, the coarse exploration set is a subset of
-# the fine one, so robustness is read off paired within-partition comparisons,
-# not a cross-partition final-Y "win".
-
-PROTOCOL = {
-    'ToyGraph':             {'max_intervention_size': 2},
-    'CompleteGraph':        {'max_intervention_size': 3},
-    'Tier1Graph':           {'max_intervention_size': 3},
-    'ConfoundedCluster':    {'max_intervention_size': 3},
-    'SimplifiedCoralGraph': {'max_intervention_size': 5},
-}
-
-
-def _max_intervention_size(benchmark):
-    return PROTOCOL[benchmark]['max_intervention_size']
+# partitions). Exploration sets are the MIS of each partition's (C-)DAG —
+# no size cap: every MIS arm is available to every method.
 
 
 def check_fairness(results, context=''):
@@ -183,7 +165,7 @@ def _load_graph(benchmark, initial_num_obs_samples=100):
 
 def _run_ccbo_partition(graph, obs, full_obs, benchmark, partition, label,
                         seed, trials, num_interventions, type_cost,
-                        initial_num_obs_samples, max_size):
+                        initial_num_obs_samples):
     """Run one CCBO partition through the unified complete-ID estimator
     pipeline (CoarsenedGraph + CBO).
 
@@ -194,7 +176,6 @@ def _run_ccbo_partition(graph, obs, full_obs, benchmark, partition, label,
     hygiene.
     """
     cg = CoarsenedGraph(graph, partition, benchmark, obs,
-                        max_intervention_size=max_size,
                         num_mc_samples=2000)
     functions = cg.fit_all_models()
     MIS, _, manip_vars = cg.get_sets()
@@ -238,7 +219,6 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
     a convergence gap at the identity partition.
     """
     results = {s: {} for s in range(seeds)}
-    max_size = _max_intervention_size(benchmark)
 
     for seed in range(seeds):
         print(f"\n{'#'*60}  SEED {seed}  {'#'*60}")
@@ -264,7 +244,7 @@ def run_main_condition(benchmark, seeds, trials, k_phase, output_dir,
                 res = _run_ccbo_partition(
                     graph, obs, full_obs, benchmark, partition, run_label,
                     seed, trials, num_interventions, type_cost,
-                    initial_num_obs_samples, max_size)
+                    initial_num_obs_samples)
                 results[seed][run_label] = res
                 print(f"  Final Y: {res['global_opt'][-1]:.4f}")
             except Exception as e:
@@ -307,10 +287,8 @@ def _run_wrong_edge_condition(original_graph, obs, full_obs, benchmark,
                                initial_num_obs_samples, seed):
     np.random.seed(seed)
     label = f'{partition_label}/{misspec_label}/seed{seed}'
-    max_size = _max_intervention_size(benchmark)
     try:
         cg = CoarsenedGraph(original_graph, partition, benchmark, obs,
-                            max_intervention_size=max_size,
                             num_mc_samples=2000,
                             assumed_graph_name=assumed_graph)
         functions = cg.fit_all_models()
@@ -511,7 +489,6 @@ def run_sweep_condition(benchmark, seeds, trials, output_dir,
         print(f"  [{nparts} parts] {label}")
 
     results = {s: {} for s in range(seeds)}
-    max_size = _max_intervention_size(benchmark)
 
     for seed in range(seeds):
         print(f"\n{'#'*60}  SEED {seed}  {'#'*60}")
@@ -522,7 +499,6 @@ def run_sweep_condition(benchmark, seeds, trials, output_dir,
             np.random.seed(seed)
             try:
                 cg = CoarsenedGraph(graph, partition, benchmark, obs,
-                                    max_intervention_size=max_size,
                                     num_mc_samples=2000)
                 functions = cg.fit_all_models()
                 MIS, _, manip_vars = cg.get_sets()

@@ -1,5 +1,5 @@
 """
-Numerical demonstration of the ConfoundedCluster (Tier-2) misspecification gap.
+Numerical demonstration of the ConfoundedCluster misspecification gap.
 
 What we show
 ------------
@@ -7,10 +7,12 @@ Under the coarse partition `{A} | {B,C} | {Y}`, the spurious B->C edge in
 `ConfoundedCluster_WrongBC` is dropped by Lee-2019 latent projection. Two
 observable consequences follow:
 
-  1.  Exploration set: finest/correct includes `{B}`; finest/WrongBC drops it
-      because the bow (B -> C plus the U-induced B <-> C bidirected edge)
-      breaks do-calculus identification at the fine level. At the coarse level
-      both DAGs yield the same exploration set.
+  1.  Prior tier: the exploration set is the MIS of the assumed graph and
+      does not change (membership is never gated), but at the fine level
+      the WrongBC bow (B -> C plus the U-induced B <-> C bidirected edge)
+      breaks do-calculus identification of `do(B)`, so the `{B}` arm falls
+      from the do-calculus prior to the common uninformative prior. At the
+      coarse level both DAGs yield the same C-DAG, hence identical tiers.
 
   2.  Adjustment: at the coarse level the {B,C}-cluster intervention yields
       byte-identical do-effects under both DAGs (the C-DAG is invariant).
@@ -42,10 +44,9 @@ def _load_obs(n=200):
     return pd.read_pickle(data_path).iloc[:n].reset_index(drop=True)
 
 
-def _build_cg(g, obs, partition, assumed, max_size):
+def _build_cg(g, obs, partition, assumed):
     return CoarsenedGraph(
         g, partition, 'ConfoundedCluster', obs,
-        max_intervention_size=max_size,
         num_mc_samples=200,
         assumed_graph_name=assumed,
     )
@@ -67,16 +68,16 @@ def test_confoundedcluster_misspec_gap():
     finest = [frozenset({v}) for v in ('A', 'B', 'C', 'Y')]
     coarse = [frozenset({'A'}), frozenset({'B', 'C'}), frozenset({'Y'})]
 
-    cg_fine_true = _build_cg(g, obs, finest, 'ConfoundedCluster', 1)
-    cg_fine_wrong = _build_cg(g, obs, finest, 'ConfoundedCluster_WrongBC', 1)
-    cg_coarse_true = _build_cg(g, obs, coarse, 'ConfoundedCluster', 1)
-    cg_coarse_wrong = _build_cg(g, obs, coarse, 'ConfoundedCluster_WrongBC', 1)
+    cg_fine_true = _build_cg(g, obs, finest, 'ConfoundedCluster')
+    cg_fine_wrong = _build_cg(g, obs, finest, 'ConfoundedCluster_WrongBC')
+    cg_coarse_true = _build_cg(g, obs, coarse, 'ConfoundedCluster')
+    cg_coarse_wrong = _build_cg(g, obs, coarse, 'ConfoundedCluster_WrongBC')
 
     print(f"corr(B, C) in observational data = "
           f"{obs['B'].corr(obs['C']):.3f}\n")
 
     # ----------------------------------------------------------------------
-    # (a) Exploration-set effect of the misspec at the fine level
+    # (a) Prior-tier effect of the misspec at the fine level
     # ----------------------------------------------------------------------
     es_fine_true = cg_fine_true._exploration_set
     es_fine_wrong = cg_fine_wrong._exploration_set
@@ -90,22 +91,32 @@ def test_confoundedcluster_misspec_gap():
     print(f"  coarse / ConfoundedCluster_WrongBC: {es_coarse_wrong}")
     print()
 
-    assert es_fine_true != es_fine_wrong, (
-        "Expected the WrongBC misspec to remove at least one entry from "
-        "the fine-level exploration set (B becomes non-identifiable via "
-        "the B->C + B<->C bow)."
+    assert ['B'] in es_fine_true and ['B'] in es_fine_wrong, (
+        "{B} must be a MIS arm under both assumed DAGs -- membership is "
+        "never gated on identifiability."
     )
-    assert ['B'] in es_fine_true and ['B'] not in es_fine_wrong, (
-        "The lost target must be {B} -- the optimal singleton -- for the "
-        "misspecification to carry a performance cost."
+    assert cg_fine_true._arm_identifiable[('B',)], (
+        "Under the correct DAG do(B) must be identifiable (do-calculus "
+        "prior tier)."
+    )
+    assert not cg_fine_wrong._arm_identifiable[('B',)], (
+        "Under WrongBC the B->C + B<->C bow must break identification of "
+        "do(B): the arm stays but drops to the uninformative prior tier."
     )
     assert es_coarse_true == es_coarse_wrong, (
         "Cluster invariance broken: coarse exploration sets differ between "
         "correct and WrongBC DAGs."
     )
-    es_lost = {tuple(s) for s in es_fine_true} - {tuple(s) for s in es_fine_wrong}
-    print(f"  Misspec cost (fine ES entries CBO can no longer intervene on): "
-          f"{[list(e) for e in es_lost]}\n")
+    assert (cg_coarse_true._arm_identifiable
+            == cg_coarse_wrong._arm_identifiable), (
+        "Cluster invariance broken: coarse prior tiers differ between "
+        "correct and WrongBC DAGs."
+    )
+    tier_flips = {k for k in cg_fine_true._arm_identifiable
+                  if cg_fine_true._arm_identifiable[k]
+                  != cg_fine_wrong._arm_identifiable.get(k)}
+    print(f"  Misspec cost (fine arms whose prior tier flips): "
+          f"{sorted(tier_flips)}\n")
 
     # ----------------------------------------------------------------------
     # (b) Cluster-level do-effect: byte-identical across correct / WrongBC
@@ -137,8 +148,8 @@ def test_confoundedcluster_misspec_gap():
         f"C-DAG and yield identical adjustments."
     )
 
-    print("PASS: WrongBC drops {B} from the fine ES; coarse ES is "
-          "invariant; coarse adjustments match exactly.")
+    print("PASS: WrongBC flips {B} to the uninformative prior tier; coarse "
+          "ES, tiers, and adjustments are invariant.")
 
 
 if __name__ == '__main__':

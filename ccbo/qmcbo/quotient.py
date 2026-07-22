@@ -39,14 +39,18 @@ from typing import Dict, List, Sequence
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
-_MCBO_ROOT = os.path.join(_REPO_ROOT, 'third_party', 'CausalBO_Benchmark',
-                          'baselines', 'mcbo')
+_MCBO_ROOT = os.path.join(_REPO_ROOT, 'third_party', 'mcbo')
 
 
 def ensure_mcbo_on_path():
-    """Make ``import mcbo`` and ``import functions`` (the env module) work."""
+    """Make ``import mcbo`` and ``import functions`` (the env module) work.
+
+    The MCBO authors' stack (github.com/ssethz/mcbo) is fetched by
+    ``scripts/fetch_mcbo.sh`` into ``third_party/mcbo``.
+    """
     if not os.path.isdir(_MCBO_ROOT):
-        raise FileNotFoundError(f"vendored MCBO not found at {_MCBO_ROOT}")
+        raise FileNotFoundError(
+            f"MCBO not found at {_MCBO_ROOT}; run scripts/fetch_mcbo.sh")
     for p in (_MCBO_ROOT, os.path.join(_MCBO_ROOT, 'scripts')):
         if p not in sys.path:
             sys.path.insert(0, p)

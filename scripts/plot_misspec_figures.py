@@ -1,13 +1,13 @@
 """Generate the two ClusterBench10 misspecification figures for the paper.
 
 F1  figures/clusterbench10_overlays.pdf -- two panels, all methods overlaid
-    (one color per method; CBO and QCBO-finest are byte-identical so the pair
+    (one color per method; CBO and QCBO-finest are identical so the pair
     is drawn once). Left: best-so-far Y (mean +/- s.e. band over seeds),
     correct DAG (solid) vs intra-cluster bow P1 (dashed). Right: simple regret
     of the incumbent (best-so-far - y*) on a log scale, so early and late
     behaviour are both legible. QCBO-coarse's two curves coincide exactly --
     the visual counterpart of Prop. 2.
-F2  figures/clusterbench10_dial.pdf -- dPA-GAP for the whole perturbation
+F2  figures/clusterbench10_dial.pdf -- dFinalY for the whole perturbation
     field, split at the exact scope boundary of Prop. 2: left panel = the
     quotient-invisible (protected) perturbations, right panel = the
     quotient-visible controls where the guarantee is allowed to break.
@@ -81,7 +81,7 @@ def fig_overlays(data):
     # Stacked panels sized for a single column of the two-column layout;
     # kept short enough to share a page with a full-width float on top.
     fig, (axY, axR) = plt.subplots(2, 1, figsize=(3.5, 3.8), sharex=True)
-    # CBO and QCBO-finest are byte-identical (Prop. 1): drawing both would
+    # CBO and QCBO-finest are identical (Prop. 1): drawing both would
     # hide one curve under the other, so the pair is drawn once. BO keeps the
     # yellow of the old per-method grid (gray reads as de-emphasized).
     DRAW = [("BO", "BO", "#E69F00"),
@@ -94,7 +94,7 @@ def fig_overlays(data):
         m0, s0 = _traj_stats(m, "P0")
         m1, s1 = _traj_stats(m, "P1")
         x0, x1 = np.arange(len(m0)), np.arange(len(m1))
-        bid = _cell(data, m, "P1")["byte_identical_to_P0"]
+        bid = _cell(data, m, "P1").get("identical_to_P0", _cell(data, m, "P1").get("byte_identical_to_P0"))
         tag = "invariant" if bid else "perturbed"
 
         # Left: best-so-far Y, full range, +/- s.e. band.
@@ -136,9 +136,9 @@ def fig_dial(data):
     def _panel(ax, pids):
         for m in METHODS:
             xs = np.arange(len(pids)) + OFF[m]
-            ys = [_cell(data, m, p)["dPAGAP"][0] for p in pids]
-            es = [_cell(data, m, p)["dPAGAP"][1] for p in pids]
-            bids = [_cell(data, m, p)["byte_identical_to_P0"] for p in pids]
+            ys = [_cell(data, m, p)["dFinalY"][0] for p in pids]
+            es = [_cell(data, m, p)["dFinalY"][1] for p in pids]
+            bids = [_cell(data, m, p).get("identical_to_P0", _cell(data, m, p).get("byte_identical_to_P0")) for p in pids]
             c = COLORS[m]
             mk, ms = MARKER[m]
             ax.errorbar(xs, ys, yerr=es, color=c, fmt="none",
@@ -161,7 +161,7 @@ def fig_dial(data):
         print(f"  fig_dial: skipping {missing} (not in JSON yet)")
     _panel(axL, prot)
     _panel(axR, vis)
-    axL.set_ylabel(r"$\Delta$PA-GAP (misspecified $-$ correct)", fontsize=10)
+    axL.set_ylabel(r"$\Delta Y_T$ (misspecified $-$ correct)", fontsize=10)
     axL.set_title("Quotient-invisible edits (Prop. 2: guarantee holds)",
                   fontsize=10)
     axR.set_title("Quotient-visible edits\n(guarantee out of scope)",
@@ -173,7 +173,7 @@ def fig_dial(data):
         if l not in seen:
             seen.add(l); hs.append(h); ls.append(l)
     axL.legend(hs, ls, fontsize=8, frameon=False, loc="upper left", ncol=2)
-    axL.annotate("filled marker = trajectory byte-identical to correct DAG",
+    axL.annotate("filled marker = trajectory identical to correct DAG",
                  xy=(0.01, 0.02), xycoords="axes fraction", fontsize=8,
                  style="italic")
     fig.tight_layout()
@@ -183,11 +183,14 @@ def fig_dial(data):
 
 
 def main():
+    global METHODS
     with open(JSON) as f:
         data = json.load(f)
     os.makedirs(OUTDIR, exist_ok=True)
-    for m in METHODS:
-        assert m in data["methods"], f"method {m} missing from {JSON}"
+    missing = [m for m in METHODS if m not in data["methods"]]
+    if missing:
+        print(f"  skipping methods not in {JSON}: {missing}")
+    METHODS = [m for m in METHODS if m in data["methods"]]
     fig_overlays(data)
     fig_dial(data)
 

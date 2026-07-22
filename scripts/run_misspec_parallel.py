@@ -12,7 +12,7 @@ perturbation (Delta == 0 by construction), avoiding redundant BO runs.
 
 Run:
     PYTHONPATH=. python scripts/run_misspec_parallel.py \
-        --seeds 10 --trials 100 --cap 5 --jobs 30
+        --seeds 10 --trials 100 --jobs 30
 """
 
 import os
@@ -45,7 +45,7 @@ RUNDIR = drv.RUNDIR
 OUTDIR = drv.OUTDIR
 
 
-def run_unit(method, pid, seed, cap, trials, ninit):
+def run_unit(method, pid, seed, trials, ninit):
     """One (method, perturbation, seed) run; returns its best-so-far trajectory.
 
     Resumable: if a complete per-run CSV already exists (>= trials points), it is
@@ -63,7 +63,7 @@ def run_unit(method, pid, seed, cap, trials, ninit):
         except Exception:
             pass
     try:
-        traj = drv.METHODS[method](pid, seed, cap, trials, ninit)
+        traj = drv.METHODS[method](pid, seed, trials, ninit)
         return dict(method=method, pid=pid, seed=seed, ok=True, traj=traj,
                     secs=time.time() - t0)
     except Exception as e:
@@ -78,8 +78,6 @@ def main():
     ap.add_argument("--seeds", type=int, default=10)
     ap.add_argument("--trials", type=int, default=100)
     ap.add_argument("--ninit", type=int, default=5)
-    ap.add_argument("--cap", type=int, default=5,
-                    help="max intervention size; 5 = uncapped for ClusterBench10")
     ap.add_argument("--methods", default=",".join(drv.METHODS))
     ap.add_argument("--perturbations",
                     default="P0,P1,P2,P3,Pic,P5,P6,P7,S1,S2,S3")
@@ -102,10 +100,10 @@ def main():
         run_pids = ["P0"] if m == "BO" else [p for p in pids if p != "S1"]
         for pid in run_pids:
             for s in range(args.seeds):
-                units.append((m, pid, s, args.cap, args.trials, args.ninit))
+                units.append((m, pid, s, args.trials, args.ninit))
 
     print(f"parallel misspec: {len(units)} units | methods={methods} "
-          f"cap={args.cap} T={args.trials} seeds={args.seeds} jobs={args.jobs} "
+          f"T={args.trials} seeds={args.seeds} jobs={args.jobs} "
           f"y*={ystar:.3f}", flush=True)
 
     traj = {m: {p: {} for p in pids} for m in methods}

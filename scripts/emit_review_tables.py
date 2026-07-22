@@ -39,16 +39,17 @@ def emit_wrongpi(data):
     """Cost of a wrong partition: 4-way at P0 (correct objective).
 
     Rows: BO, CBO (=QCBO-finest, Prop.1), QCBO-coarse (correct pi), QCBO-wrong-pi.
-    Cols: Final Y (lower better), GAP@100, PA-GAP@100 (higher better).
+    Cols: Final Y and r_T (lower better, primary), GAP@100 (secondary).
     """
     rows = ["BO", "CBO", "QCBO-coarse", "QCBO-wrongpi"]
     note = {"QCBO-coarse": r"\;{\footnotesize(correct $\Pi$)}",
             "QCBO-wrongpi": r"\;{\footnotesize(wrong $\Pi$)}"}
     lines = [r"\begin{tabular}{@{}lccc@{}}", r"\toprule",
-             r"\textbf{Method} & \textbf{Final $Y$} & \textbf{GAP@100} & "
-             r"\textbf{PA-GAP@100} \\",
-             r"\multicolumn{1}{c}{} & {\footnotesize $\downarrow$, $y^\star{=}0$} & "
-             r"\multicolumn{2}{c}{\footnotesize $\uparrow$ closer to optimum} \\",
+             r"\textbf{Method} & \textbf{Final $Y$} & $r_T$ & "
+             r"\textbf{GAP@100} \\",
+             r"\multicolumn{1}{c}{} & \multicolumn{2}{c}{\footnotesize "
+             r"$\downarrow$, $y^\star{=}0$} & "
+             r"{\footnotesize $\uparrow$ secondary} \\",
              r"\midrule"]
     for m in rows:
         c = data["methods"].get(m, {}).get("P0")
@@ -57,9 +58,10 @@ def emit_wrongpi(data):
         label = MLABEL.get(m, m) + note.get(m, "")
         if m == "QCBO-coarse":
             label = r"\textbf{" + MLABEL[m] + r"}" + note.get(m, "")
+        rt = ("$" + _mp(c["regretT"]) + "$") if "regretT" in c else "--"
         lines.append(
-            f"{label} & ${_mp(c['finalY'])}$ & ${_mp(c['GAP100'])}$ & "
-            f"${_mp(c['PAGAP100'])}$ \\\\")
+            f"{label} & ${_mp(c['finalY'])}$ & {rt} & "
+            f"${_mp(c['GAP100'])}$ \\\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
@@ -102,7 +104,7 @@ def emit_damage(data):
     """Deleted-optimal-arm damage on ClusterBench10D.
 
     Rows: QCBO-finest (=CBO) under the correct DAG and the intra bow P1, then
-    QCBO-coarse (byte-identical across both). Cols: Final Y, cumulative
+    QCBO-coarse (identical across both). Cols: Final Y, cumulative
     incumbent regret R_T, GAP@100 -- R_T is the metric that registers the
     slowdown; GAP saturates and misses it.
     """
@@ -120,7 +122,7 @@ def emit_damage(data):
             rf"${_mp(c['cumRegret'], fmt='%.1f', fmt_s='%.1f')}$ & ${_mp(c['GAP100'])}$ \\")
     c = data["methods"]["QCBO-coarse"]["P0"]
     lines.append(
-        rf"\textbf{{\QCBO-coarse}} & either {{\footnotesize(byte-identical)}} & "
+        rf"\textbf{{\QCBO-coarse}} & either {{\footnotesize(identical)}} & "
         rf"${_mp(c['finalY'])}$ & ${_mp(c['cumRegret'], fmt='%.1f', fmt_s='%.1f')}$ & "
         rf"${_mp(c['GAP100'])}$ \\")
     lines += [r"\bottomrule", r"\end{tabular}"]

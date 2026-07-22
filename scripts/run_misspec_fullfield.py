@@ -4,11 +4,11 @@ Runs each method under the correct DAG (P0) and each perturbation variant, with
 the *objective fixed* at the true SCM (only the structure each method reasons
 with is perturbed). Reports the paired-by-seed degradation
     Delta = metric(perturbation, seed) - metric(P0, seed)
-for final Y and GAP, and asserts QCBO-coarse byte-identity on the protected
+for final Y and regret, and asserts QCBO-coarse invariance on the protected
 (quotient-invisible) perturbations.
 
-Wired methods: BO (non-causal control, via misspec_inject), CBO (non-gating
-QCBO backend at the identity partition), QCBO-finest, QCBO-coarse.
+Wired methods: BO (non-causal control, via misspec_inject), CBO (QCBO
+backend at the identity partition, Prop. 1), QCBO-finest, QCBO-coarse.
 
 Run (quick):  PYTHONPATH=. python scripts/run_misspec_fullfield.py --seeds 3 --trials 40
 """
@@ -32,37 +32,31 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 from ccbo import benchmark, clusterbench10 as cb
-from ccbo.metrics import simple_regret, cumulative_regret
+from ccbo.metrics import gap, simple_regret, cumulative_regret
 import misspec_inject
-
-sys.path.insert(0, benchmark.BENCH_ROOT)
-from metrics.GAP import GAP            # noqa: E402
-from metrics.PA_GAP import PA_GAP      # noqa: E402
 
 DS = cb.NAME
 OUTDIR = "results"
-RUNDIR = os.path.join(benchmark.BENCH_ROOT, "results", "_misspec")
+RUNDIR = os.path.join("results", "_misspec")
 
 
 def score(traj, ystar, task, n):
+    """(GAP, final Y) at horizon n. GAP is secondary; Y/regret primary."""
     t = traj[: n + 1]
-    g = GAP(ystar); g.calculate_GAP(t, task)
-    p = PA_GAP(ystar); p.calculate_PA_GAP(t, task)
-    return g.GAP_value, p.PA_GAP_value, t[-1]
+    return gap(t, ystar, task), t[-1]
 
 
-# --- Method runners: (perturbation_id, seed, cap, trials, ninit) -> trajectory ---
+# --- Method runners: (perturbation_id, seed, trials, ninit) -> trajectory ---
 
-def _qcbo_runner(clusters, gating=True, label=None):
-    def run(pid, seed, cap, trials, ninit):
+def _qcbo_runner(clusters, label=None):
+    def run(pid, seed, trials, ninit):
         name = label or ("QCBO-coarse" if clusters else "QCBO-finest")
         csv = os.path.join(RUNDIR, f"{name}_{pid}_seed{seed}.csv")
         os.makedirs(os.path.dirname(csv), exist_ok=True)
         benchmark.run_qcbo_benchmark(
             DS, coarse_clusters=clusters, seed=seed, num_trials=trials,
-            num_interventions=ninit, max_intervention_size=cap, out_csv=csv,
-            method_label=name, assumed_graph_name=cb.variant_name(pid),
-            gating=gating)
+            num_interventions=ninit, out_csv=csv,
+            method_label=name, assumed_graph_name=cb.variant_name(pid))
         return pd.read_csv(csv)["current_optimal"].tolist()
     return run
 
@@ -77,16 +71,16 @@ def _cbo_runner():
     diverge through uncontrolled execution nondeterminism (set-iteration order
     across processes amplified by near-ties in the acquisition argmax), which
     would spuriously suggest CBO and QCBO-finest differ. Reusing the finest
-    trajectory makes the rows byte-identical by construction, the exact content
+    trajectory makes the rows identical by construction, the exact content
     of Prop. 1: CBO and QCBO-finest coincide on every graph, and both shift under
     a misspecified assumed graph (the "different graph => different result"
     requirement) because full-DAG identification reads the perturbed edges.
     """
-    def run(pid, seed, cap, trials, ninit):
+    def run(pid, seed, trials, ninit):
         fin_csv = os.path.join(RUNDIR, f"QCBO-finest_{pid}_seed{seed}.csv")
         cbo_csv = os.path.join(RUNDIR, f"CBO_{pid}_seed{seed}.csv")
         if not os.path.exists(fin_csv):
-            _qcbo_runner(None)(pid, seed, cap, trials, ninit)
+            _qcbo_runner(None)(pid, seed, trials, ninit)
         shutil.copyfile(fin_csv, cbo_csv)
         return pd.read_csv(cbo_csv)["current_optimal"].tolist()
     return run
@@ -103,27 +97,33 @@ def _bo_runner():
     """
     _cache: dict = {}
 
-    def run(pid, seed, cap, trials, ninit):
+    def run(pid, seed, trials, ninit):
         csv = os.path.join(RUNDIR, f"BO_{pid}_seed{seed}.csv")
         os.makedirs(os.path.dirname(csv), exist_ok=True)
         if seed not in _cache:
-            from baselines.BO_CBO.BO import NonCausal_BO
+            from ccbo.cbo.bo import NonCausal_BO
             np.random.seed(seed)
             graph, obs, functions, config = misspec_inject.build_cbo_graph(
                 DS, seed, "P0")
             manip = list(config["intervention"])
             task = config["task"]
+            if task != "min":
+                raise NotImplementedError(
+                    "vendored NonCausal_BO is minimization-only")
             ranges = graph.get_interventional_ranges()
             dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}
             costs = graph.get_cost_structure(1)
             # Single joint arm over all manipulable variables.
             dxl, dyl, bx, oy, _ = benchmark._initial_interventional_data(
                 graph, [manip], ninit, task, seed)
+            _, _, best_y, _ = NonCausal_BO(
+                trials, graph, dict_ranges, dxl[0], dyl[0], costs,
+                obs, functions, bx, oy, manip, Causal_prior=False)
+            traj0 = np.minimum.accumulate(
+                np.asarray(best_y, dtype=float).ravel()).tolist()
             run_csv = os.path.join(RUNDIR, f"BO_P0_seed{seed}.csv")
-            NonCausal_BO(trials, graph, dict_ranges, dxl[0], dyl[0], costs,
-                         obs, functions, bx, oy, manip, Causal_prior=False,
-                         task=task, csv_log_file=run_csv)
-            _cache[seed] = pd.read_csv(run_csv)["current_optimal"].tolist()
+            benchmark._write_progress_csv(run_csv, traj0)
+            _cache[seed] = traj0
         traj = _cache[seed]
         if not os.path.exists(csv):
             pd.DataFrame({"trial_number": list(range(len(traj))),
@@ -162,16 +162,16 @@ def _wrongpi_runner():
     """
     _cache: dict = {}
 
-    def run(pid, seed, cap, trials, ninit):
+    def run(pid, seed, trials, ninit):
         csv = os.path.join(RUNDIR, f"QCBO-wrongpi_{pid}_seed{seed}.csv")
         os.makedirs(os.path.dirname(csv), exist_ok=True)
         if seed not in _cache:
             run_csv = os.path.join(RUNDIR, f"QCBO-wrongpi_P0_seed{seed}.csv")
             benchmark.run_qcbo_benchmark(
                 DS, coarse_clusters=WRONG_CLUSTERS, seed=seed, num_trials=trials,
-                num_interventions=ninit, max_intervention_size=cap, out_csv=run_csv,
+                num_interventions=ninit, out_csv=run_csv,
                 method_label="QCBO-wrongpi",
-                assumed_graph_name=cb.variant_name("P0"), gating=True)
+                assumed_graph_name=cb.variant_name("P0"))
             _cache[seed] = pd.read_csv(run_csv)["current_optimal"].tolist()
         traj = _cache[seed]
         if not os.path.exists(csv):
@@ -211,28 +211,27 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
     for m in methods:
         if "S1" in pids and "P1" in pids and traj[m].get("P1"):
             traj[m]["S1"] = traj[m]["P1"]
-    out = {"dataset": DS, "y_star": ystar, "task": task, "cap": args.cap,
+    out = {"dataset": DS, "y_star": ystar, "task": task,
            "trials": args.trials, "seeds": args.seeds, "methods": {}}
-    print(f"\n{'='*78}\nClusterBench10 misspecification  (cap={args.cap}, "
+    print(f"\n{'='*78}\nClusterBench10 misspecification  ("
           f"T={args.trials}, {args.seeds} seeds, y*={ystar:.2f})\n{'='*78}")
     hdr = f"{'method':12s} {'pert':4s} {'locus':16s} {'protected':9s} " \
-          f"{'finalY':>9s} {'dFinalY':>9s} {'dGAP':>8s} {'byte-id':>7s}"
+          f"{'finalY':>9s} {'dFinalY':>9s} {'dGAP':>8s} {'ident':>7s}"
     print(hdr)
     for m in methods:
         out["methods"][m] = {}
         base = {s: traj[m]["P0"][s] for s in traj[m]["P0"]}
         for pid in pids:
-            finals, dfin, dgap, dpag, ident = [], [], [], [], []
-            g20s, g50s, g100s, pag100s = [], [], [], []  # absolute GAP@T / PA-GAP
+            finals, dfin, dgap, ident = [], [], [], []
+            g20s, g50s, g100s = [], [], []  # absolute GAP@T (secondary)
             rTs, cums = [], []  # simple / cumulative (incumbent) regret
             for s in range(args.seeds):
                 if s not in traj[m][pid] or s not in base:
                     continue
                 t, t0 = traj[m][pid][s], base[s]
-                g, pag, fin = score(t, ystar, task, args.trials)
-                g0, pag0, fin0 = score(t0, ystar, task, args.trials)
+                g, fin = score(t, ystar, task, args.trials)
+                g0, fin0 = score(t0, ystar, task, args.trials)
                 finals.append(fin); dfin.append(fin - fin0); dgap.append(g - g0)
-                dpag.append(pag - pag0)
                 rTs.append(float(simple_regret(
                     t[: args.trials + 1], ystar, task)[-1]))
                 cums.append(cumulative_regret(
@@ -248,26 +247,24 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
                     (abs(a - b) for a, b in zip(t, t0)), default=0.0) < 1e-7)
                 g20s.append(score(t, ystar, task, min(20, args.trials))[0])
                 g50s.append(score(t, ystar, task, min(50, args.trials))[0])
-                g100s.append(g); pag100s.append(pag)
+                g100s.append(g)
             if not finals:
                 continue
             meta = pmeta.get(pid, {})
             byte_id = all(ident)
             out["methods"][m][pid] = {
                 "locus": meta.get("locus"), "protected": meta.get("protected"),
+                # Primary metrics: final Y and regret.
                 "finalY": [float(np.mean(finals)), _sem(finals)],
                 "dFinalY": [float(np.mean(dfin)), _sem(dfin)],
+                "regretT": [float(np.mean(rTs)), _sem(rTs)],
+                "cumRegret": [float(np.mean(cums)), _sem(cums)],
+                # Secondary: GAP@T (sensitive to the initial incumbent).
                 "dGAP": [float(np.mean(dgap)), _sem(dgap)],
-                "dPAGAP": [float(np.mean(dpag)), _sem(dpag)],
-                # Absolute GAP/PA-GAP@T (correct DAG = sample efficiency).
                 "GAP20": [float(np.mean(g20s)), _sem(g20s)],
                 "GAP50": [float(np.mean(g50s)), _sem(g50s)],
                 "GAP100": [float(np.mean(g100s)), _sem(g100s)],
-                "PAGAP100": [float(np.mean(pag100s)), _sem(pag100s)],
-                # Standard regret (incumbent-based; see ccbo/metrics.py).
-                "regretT": [float(np.mean(rTs)), _sem(rTs)],
-                "cumRegret": [float(np.mean(cums)), _sem(cums)],
-                "byte_identical_to_P0": byte_id}
+                "identical_to_P0": byte_id}
             print(f"{m:12s} {pid:4s} {str(meta.get('locus')):16s} "
                   f"{str(meta.get('protected')):9s} "
                   f"{np.mean(finals):+9.3f} {np.mean(dfin):+9.3f} "
@@ -280,13 +277,13 @@ def aggregate(traj, methods, pids, pmeta, ystar, task, args):
     for pid, cell in coarse.items():
         if pid == "P0":
             continue
-        prot, bid = cell["protected"], cell["byte_identical_to_P0"]
+        prot, bid = cell["protected"], cell.get("identical_to_P0", cell.get("byte_identical_to_P0"))
         if prot:
             status = "OK" if bid else "VIOLATION"
             if not bid:
                 failures.append(pid)
             print(f"  [protected]  {pid:4s} ({cell['locus']:16s}) "
-                  f"byte-identical={bid!s:5s}  [{status}]  <- Prop.2 guarantee")
+                  f"identical={bid!s:5s}  [{status}]  <- Prop.2 guarantee")
         else:
             print(f"  [inter ctrl] {pid:4s} ({cell['locus']:16s}) "
                   f"trajectory-differs={(not bid)!s:5s}  (informational; "
@@ -301,8 +298,6 @@ def main():
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--trials", type=int, default=40)
     ap.add_argument("--ninit", type=int, default=5)
-    ap.add_argument("--cap", type=int, default=5,
-                    help="max intervention size (clusters)")
     ap.add_argument("--methods", default=",".join(METHODS))
     ap.add_argument("--perturbations", default="P0,P1,P2,P3,Pic,P5,P6,P7,S1,S2,S3")
     args = ap.parse_args()
@@ -323,7 +318,7 @@ def main():
                 continue
             for s in range(args.seeds):
                 try:
-                    traj[m][pid][s] = METHODS[m](pid, s, args.cap,
+                    traj[m][pid][s] = METHODS[m](pid, s,
                                                  args.trials, args.ninit)
                 except Exception as e:
                     import traceback

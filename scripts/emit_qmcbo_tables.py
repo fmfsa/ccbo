@@ -1,16 +1,18 @@
 """Emit the QMCBO pilot tables + JSON for the paper.
 
-Reads trial CSVs from third_party/.../results/_qmcbo (E1, correct model view)
-and _qmcbo/_e2 (intra-cluster misspecification of the model view) and writes:
+Reads trial CSVs from results/qmcbo (E1, correct model view) and
+results/qmcbo/_e2 (intra-cluster misspecification of the model view) and
+writes:
 
   results/qmcbo_pilot.json      -- stats + trajectories summary
-  paper/tables/qmcbo_e1.tex     -- MCBO vs QMCBO-joint (vs -ind ablation):
-                                   final Y, wall-clock per unit, per env
-  paper/tables/qmcbo_e2.tex     -- invariance: byte-identical trajectory
-                                   counts + mean |Dfinal| correct-vs-perturbed
+  paper/tables/qmcbo_e1.tex     -- MCBO vs QMCBO: final Y, wall-clock per
+                                   unit, per env
+  paper/tables/qmcbo_e2.tex     -- invariance: identical-trajectory counts
+                                   + mean |Dfinal| correct-vs-perturbed
 
-Algo labels in filenames: MCBO (stock), QMCBO (v1 per-coordinate = ind
-ablation), QMCBOJ (joint cluster mechanisms — the paper's QMCBO).
+Algo labels in filenames: MCBO (stock), QMCBO (joint cluster mechanisms —
+the paper's QMCBO); QMCBO-ind files (per-coordinate dev ablation) are
+ignored.
 
 Run:  PYTHONPATH=. conda run -n ccbo python scripts/emit_qmcbo_tables.py
 """
@@ -23,22 +25,22 @@ import re
 import numpy as np
 import pandas as pd
 
-QDIR = "third_party/CausalBO_Benchmark/results/_qmcbo"
+QDIR = "results/qmcbo"
 OUTJSON = "results/qmcbo_pilot.json"
 OUTDIR = "paper/tables"
 
 ENVS = [("ToyGraph", 2.172), ("PSAGraph", -4.13)]
-ALGOS = ["MCBO", "QMCBOJ", "QMCBO"]
-ALABEL = {"MCBO": "MCBO", "QMCBOJ": r"\QMCBO{}",
-          "QMCBO": r"\QMCBO{}-ind {\footnotesize(ablation)}"}
+ALGOS = ["MCBO", "QMCBO"]
+ALABEL = {"MCBO": "MCBO", "QMCBO": r"\QMCBO{}"}
 
 
 def _collect(d):
     out = {}
     for p in sorted(glob.glob(os.path.join(d, "trial_results_*.csv"))):
-        m = re.match(r"trial_results_(MCBO|QMCBOJ|QMCBO)_([A-Za-z_0-9]+)_(\d+)\.csv",
-                     os.path.basename(p))
-        if not m:
+        m = re.match(
+            r"trial_results_(MCBO|QMCBO-ind|QMCBO)_([A-Za-z_0-9]+)_(\d+)\.csv",
+            os.path.basename(p))
+        if not m or m.group(1) == "QMCBO-ind":
             continue
         algo, env, seed = m.group(1), m.group(2), int(m.group(3))
         tr = pd.read_csv(p)["current_optimal"].astype(float).tolist()
@@ -120,11 +122,11 @@ def main():
     # ---- E2 table ----------------------------------------------------------
     lines = [r"\begin{tabular}{@{}llcc@{}}", r"\toprule",
              r"\textbf{Env} & \textbf{Method} & "
-             r"\textbf{byte-identical} & $\overline{|\Delta \text{final}|}$ \\",
+             r"\textbf{identical} & $\overline{|\Delta \text{final}|}$ \\",
              r"\midrule"]
     for env, _ in ENVS:
         first = True
-        for algo in ["MCBO", "QMCBOJ"]:
+        for algo in ["MCBO", "QMCBO"]:
             c = identity.get((env, algo))
             if c is None:
                 continue

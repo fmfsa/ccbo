@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# QDCBO pilot: E1 (DCBO vs QDCBO on DCBO's own setups, 5 seeds, T=3) and
+# QDCBO suite: E1 (DCBO vs QDCBO on DCBO's own setups, 20 seeds, T=3) and
 # E2 (intra-cluster misspecification of the ASSUMED graph: correct vs
 # perturbed model view; objective fixed).
+# Requires third_party/DCBO (scripts/fetch_dcbo.sh).
 # Usage: PYTHONPATH=. bash scripts/run_qdcbo_pilot.sh [outroot] [jobs]
 set -u
-DCBO_ROOT=third_party/CausalBO_Benchmark/baselines/DCBO
-OUTROOT=${1:-$DCBO_ROOT/results/_qdcbo}
+OUTROOT=${1:-results/qdcbo}
 JOBS=${2:-6}
-SEEDS="0 1 2 3 4 5 6 7 8 9"
+SEEDS=$(seq 0 19)
 SETUPS="stat ind nonstat"
 T=3
 TRIALS=10
-PY=${PY:-$HOME/venvs/ccbo/bin/python}
+PY=${PY:-python}
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 mkdir -p "$OUTROOT" "$OUTROOT/_e2"
 
@@ -40,4 +40,4 @@ for setup in $SETUPS; do for algo in DCBO QDCBO; do for s in $SEEDS; do
 done; done; done
 
 wait
-echo "QDCBO PILOT DONE"
+echo "QDCBO SUITE DONE"

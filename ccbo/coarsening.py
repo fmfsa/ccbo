@@ -12,9 +12,10 @@ Two vintages of API coexist during the Lee-2019 refactor:
   hidden nodes out of the DAG, yielding an ADMG over ``M ∪ {Y}``.
   ``enumerate_valid_coarsenings_manip`` then partitions ``M`` only, and each
   partition induces a coarsened ADMG whose bidirected edges absorb the
-  projected-out confounding structure.  ``compute_POMIS`` (Lee-Bareinboim
-  2018 Thm 6) runs on that ADMG and replaces structural MIS as the default
-  exploration set.
+  projected-out confounding structure.  ``compute_MIS`` (Lee-Bareinboim
+  2018) runs on that ADMG and is the exploration set — CBO's own rule
+  applied to the quotient; ``compute_POMIS`` (Thm 6, POMIS ⊆ MIS) is kept
+  for diagnostics and refinement heuristics.
 """
 
 import itertools
@@ -189,7 +190,7 @@ def enumerate_valid_coarsenings(dag_edges, nodes, target='Y', hidden_nodes=None,
 # Graph metadata
 # ---------------------------------------------------------------------------
 
-# Runtime registry for externally-defined graphs (e.g. CausalBO_Benchmark
+# Runtime registry for externally-defined graphs (e.g. ClusterBench10
 # datasets registered by ccbo.benchmark). Each entry maps a graph name to a
 # dict with keys: dag_edges, nodes, hidden_nodes, manipulative_variables,
 # confounders (list of (latent, [vars...])).
@@ -894,6 +895,65 @@ def compute_POMIS(admg, manipulable_vertices, target):
             if ib & M_set == X:
                 pomis.append(frozenset(X))
     return pomis
+
+
+def compute_MIS(admg, manipulable_vertices, target):
+    """
+    Enumerate Minimal Intervention Sets (Lee & Bareinboim 2018, Prop. 1),
+    restricted to the manipulable set M.
+
+    A non-empty subset X ⊆ M is an M-MIS for ``target`` iff
+
+        X ⊆ An(target)  in the mutilated graph G_X̄
+
+    (all incoming directed edges to X removed). Intuition: if some member
+    of X is not an ancestor of the target once the whole set is intervened
+    on, intervening on it is redundant — do(X) induces the same
+    interventional distribution as do(X') for a strict subset X', so X is
+    not minimal. Bidirected edges are irrelevant to directed ancestry and
+    do not enter the check.
+
+    This is the exploration-set rule of CBO (Aglietti & González 2020),
+    which searches over the MIS of the assumed graph. The empty set (the
+    observational baseline) is excluded by convention, matching the
+    vendored CBO graphs' ``get_sets()`` lists. POMIS ⊆ MIS always: a
+    POMIS X satisfies IB(G_X̄) ∩ M = X, and IB members are parents of
+    MUCT ⊆ An(target) in G_X̄, hence X ⊆ An(target) there.
+
+    Parameters
+    ----------
+    admg : dict
+        ADMG (typically the coarsened one).
+    manipulable_vertices : iterable
+        Vertices available for intervention (for C-DAG: manipulable cluster
+        nodes).
+    target : hashable
+        Target vertex (for C-DAG: frozenset({'Y'})).
+
+    Returns
+    -------
+    list of frozenset
+        Every M-MIS, in deterministic order (by size, then by sorted
+        member representation).
+    """
+    M = sorted((v for v in set(manipulable_vertices) if v != target),
+               key=_vertex_sort_key)
+    mis = []
+    for r in range(1, len(M) + 1):
+        for combo in itertools.combinations(M, r):
+            X = set(combo)
+            di_mut = {(u, v) for u, v in admg['di'] if v not in X}
+            g_mut = _admg(admg['vertices'], di=di_mut, bi=admg['bi'])
+            if X <= _ancestors_di(g_mut, {target}):
+                mis.append(frozenset(X))
+    return mis
+
+
+def _vertex_sort_key(v):
+    """Stable sort key for ADMG vertices (strings or frozenset clusters)."""
+    if isinstance(v, frozenset):
+        return tuple(sorted(v))
+    return (v,)
 
 
 def admg_to_ananke(admg, name_map=None):

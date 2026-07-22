@@ -1,4 +1,4 @@
-"""Run QCBO (finest = CBO; and coarse) on the curated CausalBO_Benchmark
+"""Run QCBO (finest = CBO; and coarse) on the curated benchmark
 datasets, scored by the benchmark's own GAP / PA-GAP against its shipped y*.
 
 Writes results/qcbo_benchmark_results.json and prints a summary table.

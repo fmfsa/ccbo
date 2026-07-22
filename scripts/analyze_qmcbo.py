@@ -39,7 +39,7 @@ def collect(d):
 
 
 def main():
-    dirs = sys.argv[1:] or ["third_party/CausalBO_Benchmark/results/_qmcbo"]
+    dirs = sys.argv[1:] or ["results/qmcbo"]
     all_rows = {}
     for d in dirs:
         all_rows.update(collect(d))

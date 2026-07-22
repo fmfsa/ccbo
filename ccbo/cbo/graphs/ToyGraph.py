@@ -81,10 +81,16 @@ class ToyGraph(graph.GraphStructure):
     # Exploration / interventional metadata
     # ------------------------------------------------------------------
     def get_sets(self):
-        # MIS as in the CBO-2020 paper.  POMIS = {{Z}} on the projected ADMG
+        # MIS per Lee & Bareinboim 2018: X ⊆ M is a MIS iff X ⊆ An(Y) in
+        # G_X̄.  {X, Z} fails the test: mutilating both cuts X -> Z, so X is
+        # no longer an ancestor of Y and do(X, Z) ≡ do(Z) — the joint arm is
+        # redundant, not minimal.  (The CBO-2020 authors' code shipped
+        # MIS = [['X'], ['Z'], ['X', 'Z']], which includes that non-minimal
+        # set; we use the definition-correct list and disclose the deviation
+        # in the paper's appendix.)  POMIS = {{Z}} on the projected ADMG
         # (X -> Z -> Y, X <-> Y): X's effect on Y is fully mediated by Z, so
-        # both {X} and {X, Z} are dominated by {Z}.
-        MIS = [['X'], ['Z'], ['X', 'Z']]
+        # {X} is dominated by {Z}.
+        MIS = [['X'], ['Z']]
         POMIS = [['Z']]
         manipulative_variables = ['X', 'Z']
         return MIS, POMIS, manipulative_variables

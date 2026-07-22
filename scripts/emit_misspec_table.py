@@ -3,22 +3,20 @@
 Reads results/clusterbench10_misspec.json and writes three tabulars into
 paper/tables/:
 
-  clusterbench10_headline.tex  -- T1 (sample efficiency, CORRECT DAG): per method,
-                                  absolute Final Y and GAP@{20,50,100}. Non-causal
-                                  BO is far worse; the causal methods exploit the
-                                  prior.
+  clusterbench10_headline.tex  -- T1 (CORRECT DAG): per method, absolute
+                                  Final Y and regret (primary), GAP@{20,50,100}
+                                  (secondary). Non-causal BO is far worse; the
+                                  causal methods exploit the prior.
   clusterbench10_taxonomy.tex  -- T2 (invariance under misspecification): per
-                                  perturbation, the paired dGAP@100 and dPA-GAP@100
-                                  for QCBO-finest vs QCBO-coarse. Coarse is exactly
-                                  0 on quotient-invisible perturbations (byte-id);
-                                  finest is not -- a misspecified edge perturbs its
-                                  GAP/PA-GAP even when the final value converges.
+                                  perturbation, the paired dGAP@100 and dFinalY
+                                  for CBO vs QCBO-coarse. Coarse is exactly
+                                  0 on quotient-invisible perturbations (identical).
   clusterbench10_fulltable.tex -- appendix: every method x perturbation, all metrics.
   clusterbench10_regret.tex    -- appendix: simple regret @T and cumulative
                                   (incumbent) regret per method x perturbation.
 
-GAP/PA-GAP in [0,1], higher = faster convergence. Final Y: lower = better (y*=0).
-Regret: lower = better (0 = oracle optimum found).
+Final Y: lower = better (y*=0). Regret: lower = better (0 = oracle optimum
+found). GAP in [0,1], higher = faster convergence (secondary).
 
 Run:  PYTHONPATH=. python scripts/emit_misspec_table.py
 """
@@ -29,7 +27,7 @@ import json
 IN = "results/clusterbench10_misspec.json"
 OUTDIR = "paper/tables"
 
-# QCBO-finest is omitted from every table: it is byte-identical to CBO by
+# QCBO-finest is omitted from every table: it is identical to CBO by
 # construction (Prop. identity), so one row stands for both. Display labels:
 # QCBO-coarse renders as plain QCBO.
 METHOD_ORDER = ["BO", "CBO", "QCBO-coarse"]
@@ -64,11 +62,11 @@ def emit_headline(data):
     """T1: sample efficiency on the correct DAG (P0)."""
     methods = _present(data)
     lines = [r"\begin{tabular}{@{}lcccccc@{}}", r"\toprule",
-             r"\textbf{Method} & \textbf{Final $Y$} & \textbf{GAP@20} & "
-             r"\textbf{GAP@50} & \textbf{GAP@100} & $r_T$ & $R_T$ \\",
+             r"\textbf{Method} & \textbf{Final $Y$} & $r_T$ & $R_T$ & "
+             r"\textbf{GAP@20} & \textbf{GAP@50} & \textbf{GAP@100} \\",
              r"\multicolumn{1}{c}{} & {\footnotesize $\downarrow$, $y^\star{=}0$} & "
-             r"\multicolumn{3}{c}{\footnotesize $\uparrow$ more sample-efficient} & "
-             r"\multicolumn{2}{c}{\footnotesize $\downarrow$ regret} \\",
+             r"\multicolumn{2}{c}{\footnotesize $\downarrow$ regret} & "
+             r"\multicolumn{3}{c}{\footnotesize $\uparrow$ secondary} \\",
              r"\midrule"]
     for m in methods:
         p0 = data["methods"][m].get("P0")
@@ -80,17 +78,16 @@ def emit_headline(data):
         cr = ("$" + _mp(p0["cumRegret"], fmt="%.1f", fmt_s="%.1f") + "$"
               if "cumRegret" in p0 else "--")
         name = (r"\textbf{" + MLABEL[m] + r"}") if m == "QCBO-coarse" else MLABEL.get(m, m)
-        lines.append(f"{name} & ${fy}$ & ${g20}$ & ${g50}$ & ${g100}$ & {rT} & {cr} \\\\")
+        lines.append(f"{name} & ${fy}$ & {rT} & {cr} & ${g20}$ & ${g50}$ & ${g100}$ \\\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 
 def emit_taxonomy(data):
     """T2: paired dGAP@100 and dFinalY per perturbation, one column pair per
-    structure-reading method (CBO, CEO if present, QCBO). dPA-GAP appears only
-    in the appendix full table.
+    structure-reading method (CBO, CEO if present, QCBO).
 
-    A bold 0 marks QCBO's guaranteed byte-identity (Prop. 2). A daggered 0
+    A bold 0 marks QCBO's guaranteed invariance (Prop. 2). A daggered 0
     marks incidental invariance: CEO's DAG pool cannot represent a confounder
     edit (P7), so its trajectory coincides with P0 by representational
     blindness, not by a robustness guarantee.
@@ -119,9 +116,9 @@ def emit_taxonomy(data):
             c = data["methods"][m].get(pid)
             if c is None:
                 cells += ["--", "--"]
-            elif c.get("byte_identical_to_P0"):
+            elif c.get("identical_to_P0", c.get("byte_identical_to_P0")):
                 if m == "QCBO-coarse":
-                    cells += [r"$\mathbf{0}$", r"$\mathbf{0}$"]  # exact byte-identity
+                    cells += [r"$\mathbf{0}$", r"$\mathbf{0}$"]  # exact invariance
                 else:
                     cells += [r"$0^{\dagger}$", r"$0^{\dagger}$"]
             else:
@@ -135,10 +132,10 @@ def emit_taxonomy(data):
 def emit_fulltable(data):
     methods = _present(data)
     perts = ["P0"] + PERT_ORDER
-    lines = [r"\begin{tabular}{@{}ll ccc c ccc c@{}}", r"\toprule",
+    lines = [r"\begin{tabular}{@{}ll ccc cc c@{}}", r"\toprule",
              r"\textbf{Method} & \textbf{Pert.} & \textbf{GAP@20} & \textbf{GAP@50} "
-             r"& \textbf{GAP@100} & \textbf{PA-GAP} & $\Delta$\textbf{GAP} & "
-             r"$\Delta$\textbf{PA-GAP} & $\Delta Y_T$ & \textbf{b-id} \\", r"\midrule"]
+             r"& \textbf{GAP@100} & $\Delta$\textbf{GAP} & "
+             r"$\Delta Y_T$ & \textbf{ident.} \\", r"\midrule"]
     for m in methods:
         first = True
         for pid in perts:
@@ -147,14 +144,13 @@ def emit_fulltable(data):
                 continue
             name = MLABEL.get(m, m) if first else ""
             first = False
-            bid = r"\checkmark" if c["byte_identical_to_P0"] else "--"
+            bid = r"\checkmark" if c.get("identical_to_P0", c.get("byte_identical_to_P0")) else "--"
             dg = "--" if pid == "P0" else "$" + _ms(c["dGAP"]) + "$"
-            dp = "--" if pid == "P0" else "$" + _ms(c.get("dPAGAP", [0.0, 0.0])) + "$"
             dy = "--" if pid == "P0" else "$" + _ms(c.get("dFinalY", [0.0, 0.0])) + "$"
             lines.append(
                 f"{name} & {pid} & ${_mp(c['GAP20'])}$ & ${_mp(c['GAP50'])}$ & "
-                f"${_mp(c['GAP100'])}$ & ${_mp(c.get('PAGAP100', [0.0, 0.0]))}$ & "
-                f"{dg} & {dp} & {dy} & {bid} \\\\")
+                f"${_mp(c['GAP100'])}$ & "
+                f"{dg} & {dy} & {bid} \\\\")
         lines.append(r"\midrule")
     lines[-1] = r"\bottomrule"
     lines.append(r"\end{tabular}")

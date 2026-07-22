@@ -6,33 +6,38 @@ Run everything from the repo root with the `ccbo` conda env and the repo on the 
 PYTHONPATH=$PWD conda run -n ccbo python scripts/<script>.py ...
 ```
 
-`third_party/CausalBO_Benchmark/` and `results/` are gitignored; in a worktree, symlink the
-benchmark from the main checkout (`ln -s <main-checkout>/third_party/CausalBO_Benchmark
-third_party/CausalBO_Benchmark`). After every fresh benchmark download, re-apply the repo's
-local extension with **`patch_benchmark.py`** (adds the `quadratic` relationship type that
-ClusterBench10's target needs; the stock benchmark silently falls back to linear without it).
+`third_party/` and `results/` are gitignored. Fetch the base stacks with the
+pinned fetch scripts: **`fetch_dcbo.sh`** (neildhir/DCBO → `third_party/DCBO`),
+**`fetch_mcbo.sh`** (ssethz/mcbo → `third_party/mcbo`), `fetch_ceo.sh`
+(nicola144/CEO). The CBO stack is vendored in-repo (`ccbo/cbo`).
 
 ## DAG-misspecification stress test (ClusterBench10)
 
 The robustness experiment: full-DAG CBO shifts under a misspecified edge while QCBO is
-byte-identical, with the objective held fixed (only the *structure* each method reasons
+invariant, with the objective held fixed (only the *structure* each method reasons
 with is perturbed). Structural spec:
 [`ccbo/clusterbench10.py`](../ccbo/clusterbench10.py). An optional CEO arm
 (authors' stack, not used in the paper) is kept as working infrastructure, see step 4.
+
+**Rerun status**: the checked-in ClusterBench10 results predate the MIS/two-tier
+exploration rule and the retirement of the CausalBO_Benchmark loop; the release-time
+rerun (and the remaining dataset-loader port) is tracked in
+[KNOWN_ISSUES.md](../KNOWN_ISSUES.md). Datasets live under `data/benchmarks`
+(`CCBO_BENCH_DATA` to override).
 
 Run in order:
 
 1. **`generate_clusterbench10.py`** — build the 10-variable benchmark dataset (SEM equations,
    adjacency, observational CSV, feature params, theoretical-best, BO/CBO interventional pkls)
-   into `third_party/CausalBO_Benchmark/`, and run the Monte-Carlo **oracle checks** (do(X1) is the
+   into `data/benchmarks/`, and run the Monte-Carlo **oracle checks** (do(X1) is the
    strongest singleton; global optimum is a union of clusters ⇒ coarse partition lossless).
 2. **`misspec_inject.py`** — structure-injection shim: perturbs `adjacency_matrix` for the external
    baselines while leaving the objective untouched. `python scripts/misspec_inject.py` runs the
-   `seam_ok` guard (objective must be byte-identical under every perturbation).
+   `seam_ok` guard (objective must be identical under every perturbation).
 3. **`run_misspec_fullfield.py`** — the driver. Runs each method (QCBO-finest/coarse, CBO, …) under
-   the correct DAG and every perturbation, computes paired-by-seed Δ (final-Y, GAP), asserts
-   QCBO-coarse byte-identity on the protected (quotient-invisible) perturbations, and writes
-   `results/clusterbench10_misspec.json`.
+   the correct DAG and every perturbation, computes paired-by-seed Δ (final Y, regret; GAP
+   secondary), asserts QCBO-coarse invariance on the protected (quotient-invisible)
+   perturbations, and writes `results/clusterbench10_misspec.json`.
    Example: `... run_misspec_fullfield.py --seeds 10 --trials 100 --cap 1` (Tier-2 headline);
    add `--cap 5` for the uncapped field comparison.
 4. **CEO arm, optional** (not in the paper; authors' stack, fetched by `fetch_ceo.sh`, bridged by `ceo_adapter.py`):

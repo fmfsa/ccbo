@@ -73,10 +73,11 @@ def _parse_misspec(spec):
 def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
              outdir: str, noise_scale: float = 0.0, beta: float = 10.0,
              misspec: str = "", initial_obs_samples: int = 5,
-             initial_int_samples: int = 2, mechanism: str = "ind") -> dict:
+             initial_int_samples: int = 2, mechanism: str = "joint") -> dict:
     """One (env, algo, seed) run. algo in {MCBO, QMCBO}; for QMCBO,
-    mechanism in {ind, joint} (joint = JointQuotientGPNetwork; files are
-    labeled QMCBOJ so the ind ablation keeps its QMCBO name)."""
+    mechanism in {joint, ind}. joint (JointQuotientGPNetwork, the paper's
+    QMCBO) keeps the QMCBO label; the per-coordinate ind ablation is
+    labeled QMCBO-ind and is a dev/debug tool only."""
     ensure_mcbo_on_path()
     import torch
     import numpy as np
@@ -177,33 +178,75 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
         "batch_size": 2,
     }
 
-    # mcbo_trial writes its CSV to the CWD under a stock name that collides
-    # across concurrent units (QMCBO runs as algo "MCBO"); isolate each unit
-    # in its own scratch subdir, then move the CSV to its final name.
-    label = algo if not (algo == "QMCBO" and mechanism == "joint") else "QMCBOJ"
+    # The authors' mcbo_trial persists nothing itself — it only calls
+    # wandb.log once per BO iteration with the running best_score (the
+    # noiseless objective mean at the best point found). Record those calls
+    # through a shim and write the trajectory CSV ourselves, in the same
+    # (trial_number, current_optimal) format every downstream consumer
+    # reads. Each unit runs in its own scratch subdir so any stray files
+    # cannot collide across concurrent units.
+    label = algo if not (algo == "QMCBO" and mechanism == "ind") else "QMCBO-ind"
     os.makedirs(outdir, exist_ok=True)
     unit_dir = os.path.join(outdir, f".unit_{label}_{env_name}_{seed}")
     os.makedirs(unit_dir, exist_ok=True)
+
+    class _WandbRecorder:
+        """Stands in for the wandb module inside mcbo_trial: swallows
+        every call, keeps the best_score trajectory."""
+
+        def __init__(self):
+            self.best_scores = []
+
+        def log(self, payload, *a, **k):
+            if "best_score" in payload:
+                self.best_scores.append(float(payload["best_score"]))
+
+        def __getattr__(self, name):          # init/config/etc.: no-ops
+            return lambda *a, **k: None
+
+    recorder = _WandbRecorder()
+    stock_wandb = getattr(trial_mod, "wandb", None)
+    trial_mod.wandb = recorder
     cwd = os.getcwd()
     os.chdir(unit_dir)
     try:
-        trial_mod.mcbo_trial(
+        # The authors' mcbo_trial takes exactly four arguments; benchmark
+        # forks added a theoretical_optimum kwarg — pass it only if present.
+        import inspect
+        trial_kwargs = dict(
             algo_profile=algo_profile,
             env_profile=profile,
             function_network=function_network,
             network_to_objective_transform=objective,
-            theoretical_optimum=getattr(env, "theoretical_optimum", None),
         )
+        if "theoretical_optimum" in inspect.signature(
+                trial_mod.mcbo_trial).parameters:
+            trial_kwargs["theoretical_optimum"] = getattr(
+                env, "theoretical_optimum", None)
+        trial_mod.mcbo_trial(**trial_kwargs)
     finally:
         os.chdir(cwd)
+        if stock_wandb is not None:
+            trial_mod.wandb = stock_wandb
         if stock_get_model is not None:
             trial_mod.get_model = stock_get_model
 
-    stock_csv = os.path.join(unit_dir,
-                             f"trial_results_{run_algo}_{env_name}_{seed}.csv")
     final_csv = os.path.join(outdir,
                              f"trial_results_{label}_{env_name}_{seed}.csv")
-    os.replace(stock_csv, final_csv)
+    stock_csv = os.path.join(unit_dir,
+                             f"trial_results_{run_algo}_{env_name}_{seed}.csv")
+    if os.path.exists(stock_csv):        # benchmark-fork compatibility
+        os.replace(stock_csv, final_csv)
+    else:
+        if not recorder.best_scores:
+            raise RuntimeError(
+                "mcbo_trial produced no best_score log entries — cannot "
+                "write the trajectory CSV")
+        import pandas as pd
+        pd.DataFrame({
+            "trial_number": list(range(len(recorder.best_scores))),
+            "current_optimal": recorder.best_scores,
+        }).to_csv(final_csv, index=False)
     with contextlib.suppress(OSError):
         os.rmdir(unit_dir)
 
@@ -229,11 +272,11 @@ def main():
     ap.add_argument("--misspec", default="",
                     help="edge ops on the model view, e.g. 'del:0:1' or 'e2' "
                          "for the env's canonical intra-cluster perturbation")
-    ap.add_argument("--mechanism", default="ind", choices=["ind", "joint"],
-                    help="QMCBO cluster mechanism: per-coordinate (ind, v1) "
-                         "or joint multi-output GP (Q-Soundness formulation)")
-    ap.add_argument("--outdir", default="third_party/CausalBO_Benchmark/"
-                                        "results/_qmcbo")
+    ap.add_argument("--mechanism", default="joint", choices=["joint", "ind"],
+                    help="QMCBO cluster mechanism: joint multi-output GP "
+                         "(the paper's QMCBO; default) or per-coordinate "
+                         "(ind; dev/debug ablation only)")
+    ap.add_argument("--outdir", default="results/qmcbo")
     args = ap.parse_args()
     misspec = args.misspec
     if misspec == "e2":

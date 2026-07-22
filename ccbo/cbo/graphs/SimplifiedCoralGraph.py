@@ -153,19 +153,20 @@ class SimplifiedCoralGraph(graph.GraphStructure):
 
 
     def get_sets(self):
-        MIS_1 = [['N'], ['O'], ['C'], ['T'], ['D']]
-        MIS_2 = [['N', 'O'], ['N', 'C'], ['N', 'T'], ['N', 'D'], ['O', 'C'], ['O', 'T'], ['O', 'D'], ['T', 'C'], ['T', 'D'], ['C', 'D']]
-        MIS_3 = [['N', 'O', 'C'], ['N', 'O', 'T'], ['N', 'O', 'D'], ['N', 'C', 'T'], ['N', 'C', 'D'], ['N','T', 'D'], 
-         ['O', 'C', 'T'], ['O', 'C', 'D'], ['C', 'T', 'D'], ['O','T', 'D']]
-        MIS_4 = [['N','O','C','T'], ['N','O','C','D'], ['N','O','T','D'], ['N','T','D','C'], ['T','D','C','O']]
-        MIS_5 = [['N','O','C','T','D']]
-
-        MIS = MIS_1 + MIS_2 + MIS_3
+        # MIS per Lee & Bareinboim 2018: every manipulable variable keeps a
+        # directed path to Y through never-intervened non-manipulables under
+        # any mutilation, so ALL 31 non-empty subsets of M are minimal.
+        # (The CBO-2020 authors' code truncated the list at size 3 — an
+        # ad-hoc cap, not the MIS definition; we use the complete list and
+        # disclose the deviation in the paper's appendix.)
+        from itertools import combinations
+        manipulative_variables = ['N', 'O', 'C', 'T', 'D']
+        MIS = [list(c) for r in range(1, len(manipulative_variables) + 1)
+               for c in combinations(manipulative_variables, r)]
 
         ## To change
         POMIS = MIS
 
-        manipulative_variables = ['N', 'O', 'C', 'T', 'D']
         return MIS, POMIS, manipulative_variables
 
 

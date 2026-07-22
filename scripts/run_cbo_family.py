@@ -23,21 +23,16 @@ QCBO  : the benchmark's domain coarse partition (mirrors the representative
           CompleteGraph         {B} | {D,E} | {Y}
           SimplifiedCoralGraph  {C,N,O} | {D,T} | {Y}
 
-Identifiability gating: arms are built with the default gate (``gating=True``).
-If the gate empties the exploration set — this happens exactly for ToyGraph's
-QCBO arm, where the {X,Z} cluster forms a bow with Y through the latent U so
-``do({X,Z})`` is not identifiable from the C-DAG — the arm is rebuilt with
-``gating=False``: every cluster arm is kept and non-identifiable arms use the
-principled uninformative prior (observational mean/var of Y) from
-``CoarsenedGraph.get_all_do``.  On identifiable arms the two modes coincide
-trajectory-for-trajectory, so this fallback only ever changes runs that would
-otherwise be empty.
+Exploration sets are the MIS of each arm's (C-)DAG; identifiability from
+that graph decides each arm's *prior tier*, never its membership.  On
+ToyGraph's QCBO arm the {X,Z} cluster forms a bow with Y through the latent
+U, so ``do({X,Z})`` is not identifiable from the C-DAG and the arm runs on
+the common uninformative prior (observational mean/var of Y) from
+``CoarsenedGraph.get_all_do``; identifiable arms get do-calculus priors.
 
 Protocol: unit costs (type_cost=1), 100 initial observational samples,
 10 initial interventional points per arm, task = min — matching
-run_experiments.py's main condition.  ``max_intervention_size`` counts C-DAG
-clusters and is uncapped per benchmark (= |M|), mirroring
-run_experiments.PROTOCOL.
+run_experiments.py's main condition.
 
 Run (from repo root):
     PYTHONPATH=. python scripts/run_cbo_family.py \
@@ -74,14 +69,6 @@ warnings.filterwarnings("ignore")
 
 DATASETS = ("ToyGraph", "CompleteGraph", "SimplifiedCoralGraph")
 ARMS = ("CBO", "QCBO")
-
-# Cluster-count cap per benchmark: uncapped (= |M|), keep in sync with
-# run_experiments.PROTOCOL (not imported to keep workers light).
-MAX_INTERVENTION_SIZE = {
-    "ToyGraph": 2,
-    "CompleteGraph": 3,
-    "SimplifiedCoralGraph": 5,
-}
 
 # Partitions per (dataset, arm). CBO = identity on M (Prop. 1); QCBO = the
 # domain coarse partition (the representative coarsenings in
@@ -154,21 +141,9 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         graph, obs, full_obs = _load_graph(dataset, initial_num_obs_samples)
 
         partition = PARTITIONS[(dataset, arm)]
-        max_size = MAX_INTERVENTION_SIZE[dataset]
         cg = CoarsenedGraph(graph, partition, dataset, obs,
-                            max_intervention_size=max_size,
                             num_mc_samples=2000)
         MIS, _, manip_vars = cg.get_sets()
-        gating_off = False
-        if len(MIS) == 0:
-            # The identifiability gate deleted every cluster arm (ToyGraph
-            # QCBO: the {X,Z}<->{Y} bow).  Rebuild without the gate so the
-            # arm survives with the uninformative prior (see module docstring).
-            gating_off = True
-            cg = CoarsenedGraph(graph, partition, dataset, obs,
-                                max_intervention_size=max_size,
-                                num_mc_samples=2000, gating=False)
-            MIS, _, manip_vars = cg.get_sets()
 
         functions = cg.fit_all_models()
         dict_ranges = cg.get_interventional_ranges()
@@ -209,11 +184,14 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         best_arm = min(current_best_y, key=lambda k: np.min(current_best_y[k]))
         best_idx = int(np.argmin(current_best_y[best_arm]))
         best_x = np.ravel(current_best_x[best_arm][best_idx]).tolist()
+        uninformative = sorted(
+            "".join(arm_vars) for arm_vars, ok_id
+            in cg._arm_identifiable.items() if not ok_id)
         unit.update(
             ok=True, resumed=False, secs=time.time() - t0,
             final_y=float(global_opt[-1]), final_cost=float(current_cost[-1]),
             observed=int(observed), best_arm=best_arm, best_x=best_x,
-            gating_off=gating_off,
+            uninformative_arms=uninformative,
             partition=cg.get_partition_description(),
             es=cg.get_exploration_set_description())
         return unit
@@ -278,7 +256,9 @@ def main():
             print(f"[{done:3d}/{len(units)}] SKIP {tag} (complete CSV exists)",
                   flush=True)
         else:
-            note = " [gating-off fallback]" if r.get("gating_off") else ""
+            uninf = r.get("uninformative_arms") or []
+            note = (f" [uninformative prior: {','.join(uninf)}]"
+                    if uninf else "")
             bx = ",".join(f"{v:.2f}" for v in r["best_x"])
             print(f"[{done:3d}/{len(units)}] OK   {tag} "
                   f"finalY={r['final_y']:+.3f} cost={r['final_cost']:.1f} "

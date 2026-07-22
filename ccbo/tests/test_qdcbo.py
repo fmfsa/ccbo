@@ -10,6 +10,9 @@
 Both algorithms in a comparison run inside the SAME process, so the stock
 code's hash-order-dependent set iteration (see runner docstring) cannot
 differ between them.
+
+Requires the DCBO authors' stack in third_party/DCBO — run
+``scripts/fetch_dcbo.sh`` first; otherwise this module is skipped.
 """
 
 import os
@@ -21,9 +24,14 @@ import numpy as np
 import pytest
 
 from ccbo.qdcbo.quotient_dbn import (build_quotient_dbn, ensure_dcbo_on_path,
-                                     perturb_temporal_edges)
+                                     perturb_temporal_edges, _DCBO_ROOT)
 
-ensure_dcbo_on_path()
+pytestmark = pytest.mark.skipif(
+    not os.path.isdir(_DCBO_ROOT),
+    reason="third_party/DCBO missing — run scripts/fetch_dcbo.sh")
+
+if os.path.isdir(_DCBO_ROOT):
+    ensure_dcbo_on_path()
 
 FAST = dict(setup="stat", T=2, trials=5, seed=0, n_obs=20,
             num_anchor_points=25)
@@ -32,8 +40,8 @@ FINEST = [["X"], ["Z"]]
 
 
 def _stat_graph(T=3):
-    from dcbo.utils.dag_utils.graph_functions import make_graphical_model
-    return make_graphical_model(0, T - 1, topology="dependent",
+    from ccbo.qdcbo.quotient_dbn import make_temporal_graph
+    return make_temporal_graph(0, T - 1, topology="dependent",
                                 nodes=["X", "Z", "Y"])
 
 

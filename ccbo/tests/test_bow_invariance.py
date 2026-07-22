@@ -1,11 +1,11 @@
 """
-Direct test of the headline ConfoundedCluster (Tier-2) claim:
+Direct test of the headline ConfoundedCluster invariance claim:
 
 Under the coarse partition {A} | {B,C} | {Y}, the spurious intra-cluster edge
 B -> C in ConfoundedCluster_WrongBC is dropped by Lee-2019 latent projection
 and the resulting C-DAG is byte-identical to ConfoundedCluster's. Therefore
-the exploration set and the adjustment formulas QCBO derives are the same
-whether the assumed fine DAG is correct or misspecified.
+the exploration set, prior tiers, and adjustment formulas QCBO derives are
+the same whether the assumed fine DAG is correct or misspecified.
 
 This test bypasses the (expensive) CBO loop and proves the structural
 invariance directly. The full CBO regression is the multi-seed run launched
@@ -48,12 +48,12 @@ def test_coarse_cdag_invariant_to_intra_cluster_edge():
 
     cg_true = CoarsenedGraph(
         g, COARSE_PARTITION, 'ConfoundedCluster', obs,
-        max_intervention_size=1, num_mc_samples=200,
+        num_mc_samples=200,
         assumed_graph_name='ConfoundedCluster',
     )
     cg_wrong = CoarsenedGraph(
         g, COARSE_PARTITION, 'ConfoundedCluster', obs,
-        max_intervention_size=1, num_mc_samples=200,
+        num_mc_samples=200,
         assumed_graph_name='ConfoundedCluster_WrongBC',
     )
 
@@ -65,21 +65,29 @@ def test_coarse_cdag_invariant_to_intra_cluster_edge():
         f"  wrong: {sig_wrong}"
     )
 
-    # Identification machinery should also agree on which exploration-set
-    # entries are identifiable from the C-DAG.
+    # Identification machinery should also agree arm-for-arm: same
+    # exploration set, same prior tiers.
     assert cg_true._exploration_set == cg_wrong._exploration_set, (
         f"Exploration sets differ:\n"
         f"  true:  {cg_true._exploration_set}\n"
         f"  wrong: {cg_wrong._exploration_set}"
     )
+    assert cg_true._arm_identifiable == cg_wrong._arm_identifiable, (
+        f"Prior tiers differ:\n"
+        f"  true:  {cg_true._arm_identifiable}\n"
+        f"  wrong: {cg_wrong._arm_identifiable}"
+    )
 
 
-def test_finest_partition_deletes_best_arm():
-    """With the finest partition, the wrong edge IS visible and deletes {B}.
+def test_finest_partition_corrupts_best_arm_prior():
+    """With the finest partition, the wrong edge IS visible: it flips {B}'s
+    prior tier.
 
     This is the converse direction: if both partitions hid the misspec, the
-    invariance test above would be vacuous. It also pins down the Tier-2
-    cost: the deleted target {B} is the optimal singleton.
+    invariance test above would be vacuous. The exploration set itself is
+    the MIS of the assumed graph and keeps {B} under both DAGs (membership
+    is never gated); the misspecification's cost is that do(B) — the
+    optimal singleton — loses its do-calculus prior and runs uninformative.
     """
     obs = _load_obs()
     g = ConfoundedCluster(obs)
@@ -87,12 +95,12 @@ def test_finest_partition_deletes_best_arm():
 
     cg_true = CoarsenedGraph(
         g, finest, 'ConfoundedCluster', obs,
-        max_intervention_size=1, num_mc_samples=200,
+        num_mc_samples=200,
         assumed_graph_name='ConfoundedCluster',
     )
     cg_wrong = CoarsenedGraph(
         g, finest, 'ConfoundedCluster', obs,
-        max_intervention_size=1, num_mc_samples=200,
+        num_mc_samples=200,
         assumed_graph_name='ConfoundedCluster_WrongBC',
     )
 
@@ -103,19 +111,24 @@ def test_finest_partition_deletes_best_arm():
         f"  {sig_true}"
     )
 
-    # Tier-2: the bow (B->C plus the U-induced B<->C) makes do(B) non-
-    # identifiable, so {B} -- the best singleton -- is dropped at the fine
-    # level but present under the correct DAG.
+    # The bow (B->C plus the U-induced B<->C) makes do(B) non-identifiable
+    # under WrongBC: {B} stays in the MIS exploration set but drops to the
+    # uninformative prior tier.
     assert ['B'] in cg_true._exploration_set, (
-        f"{{B}} should be identifiable under the correct DAG; "
+        f"{{B}} should be a MIS arm under the correct DAG; "
         f"ES={cg_true._exploration_set}")
-    assert ['B'] not in cg_wrong._exploration_set, (
-        f"{{B}} should be deleted under WrongBC (bow non-identifiability); "
+    assert ['B'] in cg_wrong._exploration_set, (
+        f"{{B}} should remain a MIS arm under WrongBC; "
         f"ES={cg_wrong._exploration_set}")
+    assert cg_true._arm_identifiable[('B',)], (
+        "do(B) should be identifiable under the correct DAG")
+    assert not cg_wrong._arm_identifiable[('B',)], (
+        "do(B) should be non-identifiable under WrongBC (bow), i.e. on the "
+        "uninformative prior tier")
 
 
 if __name__ == "__main__":
     test_coarse_cdag_invariant_to_intra_cluster_edge()
     print("PASS: coarse C-DAG invariant under B->C misspecification")
-    test_finest_partition_deletes_best_arm()
-    print("PASS: finest partition deletes the best arm {B} under WrongBC")
+    test_finest_partition_corrupts_best_arm_prior()
+    print("PASS: finest partition flips {B} to the uninformative tier under WrongBC")

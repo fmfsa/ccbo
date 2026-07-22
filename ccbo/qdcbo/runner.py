@@ -45,7 +45,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning,
 
 import numpy as np
 
-from ccbo.qdcbo.quotient_dbn import (ensure_dcbo_on_path, _DCBO_ROOT,
+from ccbo.qdcbo.quotient_dbn import (ensure_dcbo_on_path, _REPO_ROOT,
                                      perturb_temporal_edges)
 from ccbo.qdcbo.qdcbo_base import QDCBO
 
@@ -70,14 +70,14 @@ E2_OPS = {
 
 FINEST = [["X"], ["Z"]]
 
-DEFAULT_OUTDIR = os.path.join(_DCBO_ROOT, "results", "_qdcbo")
+DEFAULT_OUTDIR = os.path.join(_REPO_ROOT, "results", "qdcbo")
 
 
 def get_setup(name: str, T: int):
     """(sem_class, G, exploration_sets, intervention_domain, base_target,
     change_points) — identical to dcbo/examples/example_setups.py minus the
     ground-truth sweep."""
-    from dcbo.utils.dag_utils.graph_functions import make_graphical_model
+    from ccbo.qdcbo.quotient_dbn import make_temporal_graph
     from dcbo.utils.utilities import powerset
     from dcbo.utils.sem_utils.toy_sems import (
         StationaryDependentSEM, StationaryIndependentSEM,
@@ -87,17 +87,17 @@ def get_setup(name: str, T: int):
     intervention_domain = {"X": [-4, 1], "Z": [-3, 3]}
     change_points = None
     if name == "stat":
-        G = make_graphical_model(0, T - 1, topology="dependent",
-                                 nodes=["X", "Z", "Y"])
+        G = make_temporal_graph(0, T - 1, topology="dependent",
+                                nodes=["X", "Z", "Y"])
         sem_class = StationaryDependentSEM
     elif name == "ind":
-        G = make_graphical_model(0, T - 1, topology="independent",
-                                 nodes=["X", "Z", "Y"], target_node="Y")
+        G = make_temporal_graph(0, T - 1, topology="independent",
+                                nodes=["X", "Z", "Y"], target_node="Y")
         sem_class = StationaryIndependentSEM
     elif name == "nonstat":
         assert T >= 2, "nonstat needs a change point"
-        G = make_graphical_model(0, T - 1, topology="dependent",
-                                 nodes=["X", "Z", "Y"])
+        G = make_temporal_graph(0, T - 1, topology="dependent",
+                                nodes=["X", "Z", "Y"])
         sem_class = NonStationaryDependentSEM
         change_points = [False, True] + [False] * (T - 2)
     else:

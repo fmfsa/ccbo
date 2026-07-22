@@ -19,8 +19,8 @@ import pandas as pd
 
 OUT = "paper/tables/family_price.tex"
 CBO_DIR = "results/family_cbo"
-QDCBO_DIR = "third_party/CausalBO_Benchmark/baselines/DCBO/results/_qdcbo"
-QMCBO_DIR = "third_party/CausalBO_Benchmark/results/_qmcbo"
+QDCBO_DIR = "results/qdcbo"
+QMCBO_DIR = "results/qmcbo"
 
 CBO_ROWS = [("ToyGraph", "Toy", "min"), ("CompleteGraph", "Synthetic", "min"),
             ("SimplifiedCoralGraph", "Coral", "min")]
@@ -91,7 +91,7 @@ def main():
                      rf"{_price(task, mb, mq)} & {task} \\")
     lines.append(r"\midrule")
     for env, task in MCBO_ROWS:
-        b, q = mcbo_finals(env, "MCBO"), mcbo_finals(env, "QMCBOJ")
+        b, q = mcbo_finals(env, "MCBO"), mcbo_finals(env, "QMCBO")
         if not (b and q):
             print(f"  skip {env}: {len(b)}/{len(q)} runs")
             continue

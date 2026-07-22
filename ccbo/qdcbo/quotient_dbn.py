@@ -41,13 +41,14 @@ from typing import Dict, List, Sequence, Tuple
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
-_DCBO_ROOT = os.path.join(_REPO_ROOT, 'third_party', 'CausalBO_Benchmark',
-                          'baselines', 'DCBO')
+_DCBO_ROOT = os.path.join(_REPO_ROOT, 'third_party', 'DCBO')
 
 
 def ensure_dcbo_on_path():
-    """Make ``import dcbo`` (and ``import run_dcbo``) resolve to the vendored
-    authors' stack. Same bootstrap pattern as scripts/ceo_adapter.ensure_ceo.
+    """Make ``import dcbo`` resolve to the authors' stack
+    (github.com/neildhir/DCBO, fetched by ``scripts/fetch_dcbo.sh`` into
+    ``third_party/DCBO``). Same bootstrap pattern as
+    scripts/ceo_adapter.ensure_ceo.
 
     No monkeypatches are needed: unlike CEO, DCBO's ``fit_gp`` uses a plain
     RBF kernel with no ``InverseGamma.from_EV`` prior (checked against
@@ -55,9 +56,32 @@ def ensure_dcbo_on_path():
     ``priors.Gamma(a, b)`` which is implemented in GPy 1.13.
     """
     if not os.path.isdir(_DCBO_ROOT):
-        raise FileNotFoundError(f"vendored DCBO not found at {_DCBO_ROOT}")
+        raise FileNotFoundError(
+            f"DCBO not found at {_DCBO_ROOT}; run scripts/fetch_dcbo.sh")
     if _DCBO_ROOT not in sys.path:
         sys.path.insert(0, _DCBO_ROOT)
+
+
+def make_temporal_graph(start_time, stop_time, topology, nodes,
+                        target_node=None):
+    """Authors' ``make_graphical_model`` + their DOT→networkx conversion.
+
+    Upstream ``make_graphical_model`` returns a DOT string (or a graphviz
+    ``Source``), while every DCBO consumer (``Root`` asserts it) needs a
+    ``MultiDiGraph``.  The authors convert in their examples via
+    ``nx_agraph.from_agraph(pygraphviz.AGraph(dot.source))``
+    (dcbo/examples/example_setups.py); we reproduce exactly that call so
+    the graph object matches theirs node-order for node-order.
+    """
+    ensure_dcbo_on_path()
+    import pygraphviz
+    from networkx.drawing import nx_agraph
+    from dcbo.utils.dag_utils.graph_functions import make_graphical_model
+
+    dot = make_graphical_model(start_time, stop_time, topology=topology,
+                               nodes=list(nodes), target_node=target_node)
+    source = dot if isinstance(dot, str) else dot.source
+    return nx_agraph.from_agraph(pygraphviz.AGraph(source))
 
 
 def _split_node(node: str) -> Tuple[str, int]:

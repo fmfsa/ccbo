@@ -1,7 +1,7 @@
 """QDCBO: quotient Dynamic Causal Bayesian Optimisation.
 
 Quotient transformation of the vendored DCBO stack
-(third_party/CausalBO_Benchmark/baselines/DCBO): the model's temporal graph,
+(third_party/DCBO, the authors' stack): the model's temporal graph,
 arc mechanisms and SEM-hat all live on the cluster-level quotient of the
 assumed DAG, while the optimisation runs on whole-cluster arms in member
 coordinates. See quotient_dbn.py (structure), qdcbo_base.py (method) and

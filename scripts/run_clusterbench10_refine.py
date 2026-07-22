@@ -36,9 +36,7 @@ warnings.filterwarnings("ignore")
 from ccbo import benchmark, clusterbench10 as cb
 from ccbo.metrics import simple_regret, cumulative_regret
 
-sys.path.insert(0, benchmark.BENCH_ROOT)
-from metrics.GAP import GAP            # noqa: E402
-from metrics.PA_GAP import PA_GAP      # noqa: E402
+from ccbo.metrics import gap
 
 COARSE = [list(c) for c in cb.COARSE_CLUSTERS]
 REFINE_MAP = {tuple(cb.COARSE_CLUSTERS[0]):
@@ -79,9 +77,7 @@ HEALTHCARE = _suite("healthcare", [["Aspirin", "Statin"]],
 
 def score(traj, ystar, task, n):
     t = list(traj)[: n + 1]
-    g = GAP(ystar); g.calculate_GAP(t, task)
-    p = PA_GAP(ystar); p.calculate_PA_GAP(t, task)
-    return g.GAP_value, p.PA_GAP_value, float(t[-1])
+    return gap(t, ystar, task), float(t[-1])
 
 
 def run_unit(setting, seed, trials, ninit):
@@ -102,8 +98,8 @@ def run_unit(setting, seed, trials, ninit):
         _, _, info = benchmark.run_qcbo_refine_benchmark(
             setting["ds"], setting["coarse"], setting["rmap"], seed=seed,
             num_trials=trials, num_interventions=ninit,
-            max_intervention_size=5, out_csv=csv,
-            assumed_graph_name=setting["assumed"], gating=True,
+            out_csv=csv,
+            assumed_graph_name=setting["assumed"],
             coarse_csv=coarse_csv, **TRIGGER)
         with open(info_path, "w") as f:
             json.dump(info, f)
@@ -130,16 +126,15 @@ def _baseline_traj(setting, label, seed):
 
 
 def _stats(trajs, ystar, task, trials):
-    fin, g100, pag, rT, RT = [], [], [], [], []
+    fin, g100, rT, RT = [], [], [], []
     for tr in trajs:
         t = tr[: trials + 1]
-        g, p, f_ = score(t, ystar, task, trials)
-        fin.append(f_); g100.append(g); pag.append(p)
+        g, f_ = score(t, ystar, task, trials)
+        fin.append(f_); g100.append(g)
         rT.append(float(simple_regret(t, ystar, task)[-1]))
         RT.append(cumulative_regret(t, ystar, task))
     return {"finalY": [float(np.mean(fin)), _sem(fin)],
             "GAP100": [float(np.mean(g100)), _sem(g100)],
-            "PAGAP100": [float(np.mean(pag)), _sem(pag)],
             "regretT": [float(np.mean(rT)), _sem(rT)],
             "cumRegret": [float(np.mean(RT)), _sem(RT)]}
 

@@ -3,10 +3,10 @@
 ClusterBench10D shares ClusterBench10's structure but its global optimum is the
 singleton do(X1) (also attained by the cluster arm do(C1), so the coarse
 partition stays lossless). The intra-cluster bow P1 (add X1->X2 on the
-X1<->X2-confounded pair) therefore deletes the cheap 1-d optimal arm from the
-finest exploration set: full-DAG CBO must reach the same optimum through the
+X1<->X2-confounded pair) therefore costs the cheap 1-d optimal arm at the
+finest partition: full-DAG CBO must reach the same optimum through the
 higher-dimensional do(X1,X2)/do(C1) arms -- a real convergence cost (dGAP < 0)
--- while QCBO-coarse is byte-identical (Prop. 2, intra edit).
+-- while QCBO-coarse is invariant (Prop. 2, intra edit).
 
 Same fixed-objective protocol as scripts/run_misspec_fullfield.py: one
 objective (the true ClusterBench10D SEM), shared seeds/budget, only the assumed
@@ -38,9 +38,7 @@ from ccbo import benchmark, clusterbench10 as cb
 from ccbo.metrics import simple_regret, cumulative_regret
 import misspec_inject  # noqa: F401  (kept for parity with the L runner's BO arm)
 
-sys.path.insert(0, benchmark.BENCH_ROOT)
-from metrics.GAP import GAP            # noqa: E402
-from metrics.PA_GAP import PA_GAP      # noqa: E402
+from ccbo.metrics import gap
 
 DS = "ClusterBench10D"
 RUNDIR = os.path.join(benchmark.BENCH_ROOT, "results", "_damage")
@@ -50,9 +48,7 @@ PIDS = ["P0", "P1"]
 
 def score(traj, ystar, task, n):
     t = list(traj)[: n + 1]
-    g = GAP(ystar); g.calculate_GAP(t, task)
-    p = PA_GAP(ystar); p.calculate_PA_GAP(t, task)
-    return g.GAP_value, p.PA_GAP_value, float(t[-1])
+    return gap(t, ystar, task), float(t[-1])
 
 
 def run_qcbo(label, clusters, pid, seed, trials, ninit):
@@ -64,9 +60,8 @@ def run_qcbo(label, clusters, pid, seed, trials, ninit):
             return tr
     benchmark.run_qcbo_benchmark(
         DS, coarse_clusters=clusters, seed=seed, num_trials=trials,
-        num_interventions=ninit, max_intervention_size=5, out_csv=csv,
-        method_label=label, assumed_graph_name=cb.variant_name(pid, prefix=DS),
-        gating=True)
+        num_interventions=ninit, out_csv=csv,
+        method_label=label, assumed_graph_name=cb.variant_name(pid, prefix=DS))
     return pd.read_csv(csv)["current_optimal"].tolist()
 
 
@@ -77,20 +72,25 @@ def run_bo(seed, trials, ninit):
         tr = pd.read_csv(csv)["current_optimal"].tolist()
         if len(tr) >= trials:
             return tr
-    from baselines.BO_CBO.BO import NonCausal_BO
+    from ccbo.cbo.bo import NonCausal_BO
     np.random.seed(seed)
     graph, obs, functions, config = misspec_inject.build_cbo_graph(DS, seed, "P0")
     manip = list(config["intervention"])
     task = config["task"]
+    if task != "min":
+        raise NotImplementedError("vendored NonCausal_BO is minimization-only")
     ranges = graph.get_interventional_ranges()
     dict_ranges = {v: (ranges[v][0], ranges[v][1]) for v in manip}
     costs = graph.get_cost_structure(1)
     dxl, dyl, bx, oy, _ = benchmark._initial_interventional_data(
         graph, [manip], ninit, task, seed)
-    NonCausal_BO(trials, graph, dict_ranges, dxl[0], dyl[0], costs, obs,
-                 functions, bx, oy, manip, Causal_prior=False, task=task,
-                 csv_log_file=csv)
-    return pd.read_csv(csv)["current_optimal"].tolist()
+    _, _, best_y, _ = NonCausal_BO(
+        trials, graph, dict_ranges, dxl[0], dyl[0], costs, obs,
+        functions, bx, oy, manip, Causal_prior=False)
+    traj0 = np.minimum.accumulate(
+        np.asarray(best_y, dtype=float).ravel()).tolist()
+    benchmark._write_progress_csv(csv, traj0)
+    return traj0
 
 
 def run_unit(method, pid, seed, trials, ninit):
@@ -162,21 +162,21 @@ def main():
     out = {"dataset": DS, "y_star": ystar, "task": task,
            "trials": args.trials, "seeds": args.seeds, "methods": {}}
     print(f"\n{'method':13s} {'pert':4s} {'finalY':>9s} {'dFinalY':>9s} "
-          f"{'GAP@100':>8s} {'dGAP':>8s} {'dPAGAP':>8s} {'byte-id':>7s}")
+          f"{'GAP@100':>8s} {'dGAP':>8s} {'ident':>7s}")
     for m in methods:
         out["methods"][m] = {}
         base = traj[m]["P0"]
         for pid in PIDS:
-            fin, dfin, gaps, dgap, dpag, ident = [], [], [], [], [], []
+            fin, dfin, gaps, dgap, ident = [], [], [], [], []
             rTs, cums = [], []
             for s in range(args.seeds):
                 if s not in traj[m][pid] or s not in base:
                     continue
                 t, t0 = traj[m][pid][s], base[s]
-                g, pag, f_ = score(t, ystar, task, args.trials)
-                g0, pag0, _ = score(t0, ystar, task, args.trials)
-                fin.append(f_); dfin.append(f_ - score(t0, ystar, task, args.trials)[2])
-                gaps.append(g); dgap.append(g - g0); dpag.append(pag - pag0)
+                g, f_ = score(t, ystar, task, args.trials)
+                g0, f0 = score(t0, ystar, task, args.trials)
+                fin.append(f_); dfin.append(f_ - f0)
+                gaps.append(g); dgap.append(g - g0)
                 rTs.append(float(simple_regret(
                     t[: args.trials + 1], ystar, task)[-1]))
                 cums.append(cumulative_regret(t[: args.trials + 1], ystar, task))
@@ -189,20 +189,19 @@ def main():
                     "dFinalY": [float(np.mean(dfin)), _sem(dfin)],
                     "GAP100": [float(np.mean(gaps)), _sem(gaps)],
                     "dGAP": [float(np.mean(dgap)), _sem(dgap)],
-                    "dPAGAP": [float(np.mean(dpag)), _sem(dpag)],
                     "regretT": [float(np.mean(rTs)), _sem(rTs)],
                     "cumRegret": [float(np.mean(cums)), _sem(cums)],
-                    "byte_identical_to_P0": all(ident)}
+                    "identical_to_P0": all(ident)}
             out["methods"][m][pid] = cell
             print(f"{m:13s} {pid:4s} {np.mean(fin):+9.3f} {np.mean(dfin):+9.3f} "
                   f"{np.mean(gaps):8.3f} {np.mean(dgap):+8.3f} "
-                  f"{np.mean(dpag):+8.3f} {str(all(ident)):>7s}")
+                  f"{str(all(ident)):>7s}")
 
     coarse_p1 = out["methods"].get("QCBO-coarse", {}).get("P1", {})
     if coarse_p1:
-        assert coarse_p1["byte_identical_to_P0"], \
-            "Prop.2 VIOLATION: coarse not byte-identical under the intra bow"
-        print("\nPREMISE CHECK  QCBO-coarse P1 byte-identical: OK  <- Prop.2")
+        assert coarse_p1["identical_to_P0"], \
+            "Prop.2 VIOLATION: coarse not identical under the intra bow"
+        print("\nPREMISE CHECK  QCBO-coarse P1 identical: OK  <- Prop.2")
 
     os.makedirs("results", exist_ok=True)
     outpath = os.path.join("results", "clusterbench10D.json")

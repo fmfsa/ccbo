@@ -36,9 +36,7 @@ from ccbo import benchmark, clusterbench10 as cb
 from ccbo.metrics import simple_regret, cumulative_regret
 import misspec_inject
 
-sys.path.insert(0, benchmark.BENCH_ROOT)
-from metrics.GAP import GAP            # noqa: E402
-from metrics.PA_GAP import PA_GAP      # noqa: E402
+from ccbo.metrics import gap
 
 DS = "ClusterBench10L"
 RUNDIR = os.path.join(benchmark.BENCH_ROOT, "results", "_lossy")
@@ -47,9 +45,7 @@ COARSE = [list(c) for c in cb.COARSE_CLUSTERS]
 
 def score(traj, ystar, task, n):
     t = list(traj)[: n + 1]
-    g = GAP(ystar); g.calculate_GAP(t, task)
-    p = PA_GAP(ystar); p.calculate_PA_GAP(t, task)
-    return g.GAP_value, p.PA_GAP_value, float(t[-1])
+    return gap(t, ystar, task), float(t[-1])
 
 
 def run_qcbo(label, clusters, seed, trials, ninit):
@@ -61,8 +57,8 @@ def run_qcbo(label, clusters, seed, trials, ninit):
             return tr
     benchmark.run_qcbo_benchmark(
         DS, coarse_clusters=clusters, seed=seed, num_trials=trials,
-        num_interventions=ninit, max_intervention_size=5, out_csv=csv,
-        method_label=label, assumed_graph_name=DS, gating=True)
+        num_interventions=ninit, out_csv=csv,
+        method_label=label, assumed_graph_name=DS)
     return pd.read_csv(csv)["current_optimal"].tolist()
 
 
@@ -154,13 +150,13 @@ def main():
            "price_of_coarsening_oracle": price_oracle,
            "trials": args.trials, "seeds": args.seeds, "methods": {}}
     print(f"\n{'method':13s} {'finalY':>9s} {'GAP@20':>7s} {'GAP@50':>7s} "
-          f"{'GAP@100':>7s} {'PA-GAP':>7s} {'rT':>7s} {'RT':>8s}")
+          f"{'GAP@100':>7s} {'rT':>7s} {'RT':>8s}")
     for m in methods:
-        fin, g20, g50, g100, pag, rT, RT = ([] for _ in range(7))
+        fin, g20, g50, g100, rT, RT = ([] for _ in range(6))
         for s, tr in traj[m].items():
             t = tr[: args.trials + 1]
-            g, p, f_ = score(t, ystar, task, args.trials)
-            fin.append(f_); g100.append(g); pag.append(p)
+            g, f_ = score(t, ystar, task, args.trials)
+            fin.append(f_); g100.append(g)
             g20.append(score(t, ystar, task, min(20, args.trials))[0])
             g50.append(score(t, ystar, task, min(50, args.trials))[0])
             rT.append(float(simple_regret(t, ystar, task)[-1]))
@@ -172,11 +168,10 @@ def main():
             "GAP20": [float(np.mean(g20)), _sem(g20)],
             "GAP50": [float(np.mean(g50)), _sem(g50)],
             "GAP100": [float(np.mean(g100)), _sem(g100)],
-            "PAGAP100": [float(np.mean(pag)), _sem(pag)],
             "regretT": [float(np.mean(rT)), _sem(rT)],
             "cumRegret": [float(np.mean(RT)), _sem(RT)]}
         print(f"{m:13s} {np.mean(fin):+9.3f} {np.mean(g20):7.3f} "
-              f"{np.mean(g50):7.3f} {np.mean(g100):7.3f} {np.mean(pag):7.3f} "
+              f"{np.mean(g50):7.3f} {np.mean(g100):7.3f} "
               f"{np.mean(rT):7.3f} {np.mean(RT):8.2f}")
 
     # Realized price = QCBO-coarse plateau minus y* (final incumbent gap).

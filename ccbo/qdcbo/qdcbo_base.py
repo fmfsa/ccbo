@@ -1,6 +1,6 @@
 """QDCBO: quotient Dynamic Causal Bayesian Optimisation.
 
-Subclasses the vendored DCBO (third_party/CausalBO_Benchmark/baselines/DCBO)
+Subclasses the DCBO authors' stack (third_party/DCBO)
 so that EVERY graph-dependent model component reads only the quotient
 temporal graph of a :class:`~ccbo.qdcbo.quotient_dbn.QuotientDBNSpec`:
 

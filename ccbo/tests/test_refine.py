@@ -32,11 +32,11 @@ def _obs(nodes=None):
     return pd.DataFrame({n: np.zeros(4) for n in (nodes or cb.NODES)})
 
 
-def _build(partition, max_size=5):
+def _build(partition):
     cb.register_variants()
     return CoarsenedGraph(
         _StubGraph(), partition, cb.NAME, _obs(),
-        max_intervention_size=max_size, num_mc_samples=50,
+        num_mc_samples=50,
         assumed_graph_name=cb.variant_name("P0"))
 
 
@@ -80,15 +80,15 @@ def test_split_partition_splits_only_incumbent_cluster():
 
 
 # ---------------------------------------------------------------------------
-# Warm start: data carryover + Prop. 4 superset under a finite m
+# Warm start: data carryover + phase-1 arm union
 # ---------------------------------------------------------------------------
 
 def test_union_and_carry_by_arm_key():
     ES_old = [["X1", "X2", "X3"], ["X4", "X5"]]
     dxl = [np.arange(6, dtype=float).reshape(2, 3), np.ones((2, 2))]
     dyl = [np.array([[1.0], [2.0]]), np.array([[3.0], [4.0]])]
-    # Refined ES drops the joint coarse arm (simulating a finite-m cap) and
-    # adds two new singleton arms.
+    # Refined ES drops the joint coarse arm (MIS membership is not
+    # refinement-monotone in general) and adds two new singleton arms.
     ES_new = [["X1"], ["X3"], ["X4", "X5"]]
     sampled = []
 
@@ -114,9 +114,11 @@ def test_union_and_carry_by_arm_key():
 # ---------------------------------------------------------------------------
 
 def test_refined_es_superset_and_contains_optimum_arm():
-    """Splitting C1 to singletons: the refined gated ES strictly contains the
-    coarse one (Prop. 4) and gains do(X1,X3) — the ClusterBench10L optimum arm
-    the coarse partition cannot express."""
+    """Splitting C1 to singletons: on ClusterBench10 the refined MIS ES
+    strictly contains the coarse one (every cluster member keeps a directed
+    path to Y, so every coarse cluster-union stays minimal after the split)
+    and gains do(X1,X3) — the ClusterBench10L optimum arm the coarse
+    partition cannot express."""
     es_coarse = [tuple(e) for e in _build(COARSE)._exploration_set]
     es_refined = [tuple(e) for e in _build(REFINED)._exploration_set]
     assert set(es_coarse) <= set(es_refined)
@@ -145,12 +147,12 @@ def test_cyclic_refinement_refused():
 
     valid = [frozenset({"a1", "a2", "a3"}), frozenset({"Y"})]
     CoarsenedGraph(_Stub3(), valid, name, _obs(nodes),
-                   max_intervention_size=3, num_mc_samples=50)  # no raise
+                   num_mc_samples=50)  # no raise
 
     cyclic = [frozenset({"a1", "a2"}), frozenset({"a3"}), frozenset({"Y"})]
     with pytest.raises(ValueError, match="cyclic"):
         CoarsenedGraph(_Stub3(), cyclic, name, _obs(nodes),
-                       max_intervention_size=3, num_mc_samples=50)
+                       num_mc_samples=50)
 
 
 if __name__ == "__main__":

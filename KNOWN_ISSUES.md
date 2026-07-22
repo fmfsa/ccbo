@@ -1,4 +1,35 @@
-# Known issues — RCCBO / RePaRe backlog
+# Known issues
+
+## Before release: rerun ClusterBench10 on the final self-contained stack
+
+The checked-in ClusterBench10 results (`results/clusterbench10*.json` and
+the tables built from them) were produced with the retired
+CausalBO_Benchmark's BO loop and its gate-deletion exploration rule. The
+current declared algorithm differs in two ways: the exploration set is the
+MIS of the (C-)DAG (no size cap), and non-identifiable arms are kept on the
+common uninformative prior tier instead of being deleted. **Before release,
+rerun every headline ClusterBench10 condition** (misspec fullfield, D, L,
+refine, wrongpi) **on the final self-contained stack** and regenerate the
+tables. Two porting prerequisites are tracked here:
+
+1. `ccbo/benchmark.py::load_graph` still expects the retired benchmark's
+   `DiscoveredGraph` loader (guarded with a clear error; a legacy checkout
+   can be pointed to via `CCBO_LEGACY_BENCH`). Port the ClusterBench10
+   dataset loading natively (the SEM already lives in
+   `scripts/generate_clusterbench10.py`).
+2. Until the rerun, the paper carries a provenance note on the
+   ClusterBench10 numbers (App. D).
+
+Queued alongside the rerun — a **sharpened arm-deletion variant**: add a
+misspecification whose edge edits change the *fine-graph MIS* (e.g. delete
+X1's outgoing edges so `do(X1)`-containing arms become non-minimal) while
+the C-DAG is untouched. Under the MIS rule this makes full-DAG CBO
+permanently lose the optimal arm (the "a wrong exploration set need not
+self-correct" mechanism, measured) while QCBO is invariant — a cleaner
+headline contrast than the bow (which under the two-tier rule corrupts
+priors rather than membership).
+
+# RCCBO / RePaRe backlog
 
 RCCBO is excluded from the current paper (the submission covers QCBO only;
 online partition discovery is deferred to follow-up work). The issues below

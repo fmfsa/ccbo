@@ -1,7 +1,8 @@
 """Generate the ClusterBench10 benchmark dataset (NON-LINEAR SCM).
 
-Writes the CausalBO_Benchmark-format files for the misspecification stress test
-into ``third_party/CausalBO_Benchmark/`` and runs oracle pre-checks. Structure
+Writes the benchmark-format files for the misspecification stress test
+into ``data/benchmarks/`` (``ccbo.benchmark.BENCH_ROOT``) and runs oracle
+pre-checks. Structure
 (edges/partition) comes from ``ccbo.clusterbench10``; numeric coefficients live
 here because they are tuned to satisfy the oracle constraints.
 

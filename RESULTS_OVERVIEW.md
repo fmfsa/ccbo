@@ -1,6 +1,6 @@
 # QCBO — Results Overview
 
-_Generated 2026-06-17. Protocol: 100 trials, 5 seeds, unit cost. Scoring: CausalBO-benchmark GAP / PA-GAP (higher = better) vs each dataset's shipped `y*`. Errors are ± s.e. (ddof=1)._
+_HISTORICAL RECORD (survey-era results; superseded by the family suite and the MIS/two-tier revision — see README). Generated 2026-06-17. Protocol: 100 trials, 5 seeds, unit cost. Scoring: CausalBO-benchmark GAP / PA-GAP (higher = better) vs each dataset's shipped `y*`. Errors are ± s.e. (ddof=1)._
 
 **Status:** QCBO (finest + coarse) and baselines **BO, CBO, CEO, CoCaBO, DCBO** are complete on all 6 curated datasets. **MCBO** finished only ToyGraph + Synthetic-2 (stopped early; slow at 100 trials) and is **excluded** from the head-to-head below — to be added later.
 
@@ -117,7 +117,7 @@ Deleting an edge that corrupts priors but deletes no arm (\|ES\| unchanged).
 ## Provenance
 
 - QCBO: `results/qcbo_benchmark_results.json` → `paper/tables/benchmark_gap.tex` (`scripts/emit_benchmark_table.py`)
-- Head-to-head: per-seed CSVs under `third_party/CausalBO_Benchmark/results/<METHOD>/` → `results/baseline_comparison.json`, `paper/tables/benchmark_comparison{,_pagap}.tex` (`scripts/run_baselines_suite.py`, `scripts/emit_baseline_table.py`)
+- Head-to-head (retired with the CausalBO_Benchmark dependency): the family suite (`scripts/run_cbo_family.py`, `scripts/run_qdcbo_pilot.sh`, `scripts/run_qmcbo_pilot.sh`) replaces it — per-seed CSVs under `results/{family_cbo,qdcbo,qmcbo}/` → `paper/figures/family_suite.pdf`, `paper/tables/family_price.tex`
 - Robustness: `paper/tables/{CompleteGraph,ConfoundedCluster}_wrong_edge.tex` + `paper/figures/*_wrong_edge.pdf` (`run_experiments.py`)
 - Arm values: `scripts/*_arm_values.py`
 - _Pending:_ MCBO on synthetic/healthcare/epidemiology/ecology, then re-emit head-to-head with MCBO.

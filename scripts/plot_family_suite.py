@@ -6,10 +6,10 @@ Row 2  DCBO vs QDCBO    stat / ind / nonstat (T=3)   best Y per slice (min), 10 
 Row 3  MCBO vs QMCBO    ToyGraph / PSAGraph          best reward (max), 5 seeds
 
 Sources: results/family_cbo/{ds}_{arm}_seed{N}.csv (trial, best_y, cum_cost);
-third_party/.../DCBO/results/_qdcbo/{algo}_{setup}_..._seed{s}_...csv
+results/qdcbo/{algo}_{setup}_..._seed{s}_...csv
 (time_index, trial_index, best_so_far_value; slices concatenated on the x
-axis); third_party/.../results/_qmcbo/trial_results_{label}_{env}_{s}.csv
-(trial_number, current_optimal; QMCBO = the joint variant, label QMCBOJ).
+axis); results/qmcbo/trial_results_{label}_{env}_{s}.csv
+(trial_number, current_optimal; QMCBO = the joint cluster mechanisms).
 
 Run:  PYTHONPATH=. python scripts/plot_family_suite.py
 """
@@ -25,8 +25,8 @@ import matplotlib.pyplot as plt
 
 OUT = "paper/figures/family_suite.pdf"
 CBO_DIR = "results/family_cbo"
-QDCBO_DIR = "third_party/CausalBO_Benchmark/baselines/DCBO/results/_qdcbo"
-QMCBO_DIR = "third_party/CausalBO_Benchmark/results/_qmcbo"
+QDCBO_DIR = "results/qdcbo"
+QMCBO_DIR = "results/qmcbo"
 
 C_BASE, C_QUOT = "#0072B2", "#D55E00"
 DCBO_SENTINEL = 1e7
@@ -109,7 +109,7 @@ def main():
 
     for j, (env, title) in enumerate(MCBO_PANELS):
         ax = axes[2][j]
-        base, quot = mcbo_trajs(env, "MCBO"), mcbo_trajs(env, "QMCBOJ")
+        base, quot = mcbo_trajs(env, "MCBO"), mcbo_trajs(env, "QMCBO")
         if base:
             _band(ax, base, C_BASE, "MCBO")
         if quot:
