@@ -1,121 +1,91 @@
-"""Release gate for the ToyGraph MCBO claim of the family suite (Exp. D).
+"""Release gate for the five ToyGraph MCBO trajectories reported in the paper.
 
-The paper reports MCBO ToyGraph final 1.143 +- 0.271 (5 seeds, T=100) with a
-best-so-far trajectory that remains flat across the 100 BO iterations. The
-checked-in aggregate (results/qmcbo_pilot.json) is not sufficient evidence on
-its own; this script verifies the claim against the raw per-seed CSVs, which
-live on the experiment server (results/ is gitignored).
-
-Checks, all of which must pass for the claim to be release-ready:
-  (a) trial_results_MCBO_ToyGraph_{0..4}.csv and their _info.json exist;
-  (b) each CSV has exactly --trials finite records;
-  (c) the best-so-far sequence is monotone non-decreasing (maximization);
-  (d) the recomputed final mean +- s.e. matches the published numbers;
-  (e) flatness: max_t y_t^best - y_0^best == 0 per seed.
-
-Note on (e): the runner records best_score during BO iterations, so the first
-CSV row may already follow the first BO evaluation. A passing (e) supports
-"the recorded best-so-far trajectory remains flat across the BO iterations",
-NOT "MCBO never improves on its initial design". The stronger claim needs the
-instrumented rerun described in RUN_TODO.md (log the initial-design incumbent
-before BO, each proposed intervention, the raw objective value, and the
-updated incumbent).
-
-Run:  python scripts/verify_qmcbo_release.py [--dir results/qmcbo]
-Exit status is nonzero on any failure.
+This validates the checked raw records. It does not prove that the first CSV
+row is the pre-BO initial design because the current runner logs during BO.
+The main text therefore reports only final aggregate values. Any future
+interpretation of the flat recorded curve requires this gate, while the
+stronger "never improved on the initial design" claim also requires the
+instrumented rerun listed in RUN_TODO.md.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
-import math
-import os
-import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-SEEDS = (0, 1, 2, 3, 4)
+
+EXPECTED_MEAN = 1.1433154226418354
+EXPECTED_SEM = 0.27128671442865404
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="results/qmcbo")
-    ap.add_argument("--env", default="ToyGraph")
-    ap.add_argument("--algo", default="MCBO")
-    ap.add_argument("--trials", type=int, default=100)
-    ap.add_argument("--expected-mean", type=float, default=1.143)
-    ap.add_argument("--expected-sem", type=float, default=0.271)
-    ap.add_argument("--tol", type=float, default=5e-3,
-                    help="absolute tolerance on the recomputed mean/s.e. "
-                         "against the published (3-decimal) numbers")
-    args = ap.parse_args()
-
-    failures = []
+def verify(results_dir: Path, trials: int, tolerance: float) -> None:
     finals = []
-
-    for seed in SEEDS:
-        csv = os.path.join(
-            args.dir, f"trial_results_{args.algo}_{args.env}_{seed}.csv")
-        info = csv.replace(".csv", "_info.json")
-
-        # (a) presence
-        if not os.path.exists(csv):
-            failures.append(f"(a) missing {csv}")
+    errors = []
+    for seed in range(5):
+        stem = results_dir / f"trial_results_MCBO_ToyGraph_{seed}"
+        csv_path = stem.with_suffix(".csv")
+        info_path = Path(f"{stem}_info.json")
+        if not csv_path.exists():
+            errors.append(f"missing {csv_path}")
             continue
-        if not os.path.exists(info):
-            failures.append(f"(a) missing {info}")
-        else:
-            with open(info) as fh:
-                meta = json.load(fh)
-            if "secs" not in meta:
-                failures.append(f"(a) {info} lacks 'secs' (incomplete run?)")
-
-        y = pd.read_csv(csv)["current_optimal"].to_numpy(float)
-
-        # (b) count + finiteness
-        if len(y) != args.trials:
-            failures.append(
-                f"(b) seed {seed}: {len(y)} records, expected {args.trials}")
-        if not np.all(np.isfinite(y)):
-            failures.append(f"(b) seed {seed}: non-finite best-so-far values")
+        if not info_path.exists():
+            errors.append(f"missing {info_path}")
             continue
 
-        # (c) monotone under maximization
-        if np.any(np.diff(y) < 0):
-            t = int(np.argmax(np.diff(y) < 0))
-            failures.append(
-                f"(c) seed {seed}: best-so-far decreases at trial {t + 1}")
+        df = pd.read_csv(csv_path)
+        if "current_optimal" not in df:
+            errors.append(f"{csv_path}: missing current_optimal column")
+            continue
+        values = df["current_optimal"].to_numpy(float)
+        if len(values) != trials:
+            errors.append(f"{csv_path}: expected {trials} rows, found {len(values)}")
+        if not np.isfinite(values).all():
+            errors.append(f"{csv_path}: non-finite current_optimal value")
+        if np.any(np.diff(values) < -tolerance):
+            errors.append(f"{csv_path}: best-so-far decreases under maximization")
+        if np.ptp(values) > tolerance:
+            errors.append(
+                f"{csv_path}: recorded trajectory is not flat "
+                f"(range={np.ptp(values):.6g})")
 
-        # (e) flatness of the recorded trajectory
-        if y.max() - y[0] != 0.0:
-            failures.append(
-                f"(e) seed {seed}: trajectory improves by {y.max() - y[0]:.6g}"
-                " — the paper's flat-trajectory sentence must be revised")
+        with info_path.open() as fh:
+            info = json.load(fh)
+        if info.get("env") != "ToyGraph" or info.get("algo") != "MCBO":
+            errors.append(f"{info_path}: unexpected env/algo metadata")
+        if int(info.get("num_trials", -1)) != trials:
+            errors.append(f"{info_path}: unexpected num_trials metadata")
+        finals.append(values[-1])
 
-        finals.append(y[-1])
-
-    # (d) recompute the published aggregate
-    if len(finals) == len(SEEDS):
-        mean = float(np.mean(finals))
-        sem = float(np.std(finals, ddof=1) / math.sqrt(len(finals)))
-        if abs(mean - args.expected_mean) > args.tol:
-            failures.append(
-                f"(d) recomputed mean {mean:.4f} != {args.expected_mean}")
-        if abs(sem - args.expected_sem) > args.tol:
-            failures.append(
-                f"(d) recomputed s.e. {sem:.4f} != {args.expected_sem}")
-        print(f"recomputed final: {mean:.3f} +- {sem:.3f} "
-              f"(published {args.expected_mean} +- {args.expected_sem})")
+    if len(finals) == 5:
+        arr = np.asarray(finals)
+        mean = float(arr.mean())
+        sem = float(arr.std(ddof=1) / np.sqrt(len(arr)))
+        if not np.isclose(mean, EXPECTED_MEAN, atol=tolerance, rtol=0):
+            errors.append(f"final mean {mean:.12g} != {EXPECTED_MEAN:.12g}")
+        if not np.isclose(sem, EXPECTED_SEM, atol=tolerance, rtol=0):
+            errors.append(f"final s.e. {sem:.12g} != {EXPECTED_SEM:.12g}")
     else:
-        failures.append("(d) cannot recompute aggregate: missing seeds")
+        mean = sem = float("nan")
 
-    if failures:
-        print(f"\nRELEASE GATE FAILED ({len(failures)} problem(s)):")
-        for f in failures:
-            print("  -", f)
-        sys.exit(1)
-    print("release gate passed: MCBO ToyGraph raw trajectories support the "
-          "flat-trajectory claim")
+    if errors:
+        raise SystemExit("QMCBO release gate failed:\n- " + "\n- ".join(errors))
+    print(
+        f"PASS: 5 ToyGraph MCBO trajectories, {trials} rows each, "
+        f"flat recorded best-so-far, final={mean:.6f} +/- {sem:.6f}"
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", type=Path, default=Path("results/qmcbo"))
+    parser.add_argument("--trials", type=int, default=100)
+    parser.add_argument("--tolerance", type=float, default=1e-9)
+    args = parser.parse_args()
+    verify(args.dir, args.trials, args.tolerance)
 
 
 if __name__ == "__main__":

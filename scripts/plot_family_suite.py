@@ -14,8 +14,7 @@ axis); results/qmcbo/trial_results_{label}_{env}_{s}.csv
 Run:  PYTHONPATH=. python scripts/plot_family_suite.py
 
 NOTE: the per-seed CSVs live on the experiment server (results/ is
-gitignored); regenerate paper/figures/family_suite.pdf there after any
-style change here.
+gitignored); regenerate the checked-in PDF there before release.
 """
 
 import os
@@ -32,15 +31,13 @@ CBO_DIR = "results/family_cbo"
 QDCBO_DIR = "results/qdcbo"
 QMCBO_DIR = "results/qmcbo"
 
-# Okabe-Ito palette, one color per method; base methods solid, quotient
-# methods dashed.
-STYLE = {
-    "CBO":   ("#0072B2", "-"),   # blue
-    "QCBO":  ("#E69F00", "--"),  # orange
-    "DCBO":  ("#009E73", "-"),   # green
-    "QDCBO": ("#CC79A7", "--"),  # purple
-    "MCBO":  ("#D55E00", "-"),   # vermillion
-    "QMCBO": ("#56B4E9", "--"),  # sky blue
+METHOD_STYLE = {
+    "CBO": ("#0072B2", "-"),
+    "QCBO": ("#E69F00", "--"),
+    "DCBO": ("#009E73", "-"),
+    "QDCBO": ("#CC79A7", "--"),
+    "MCBO": ("#D55E00", "-"),
+    "QMCBO": ("#56B4E9", "--"),
 }
 DCBO_SENTINEL = 1e7
 
@@ -50,16 +47,14 @@ DCBO_PANELS = [("stat", "stat"), ("ind", "ind"), ("nonstat", "nonstat")]
 MCBO_PANELS = [("ToyGraph", "ToyGraph"), ("PSAGraph", "PSAGraph")]
 
 
-def _band(ax, trajs, method):
-    """Plot mean +- s.e. of a list of equal-length series in the method's
-    color and line style."""
-    color, ls = STYLE[method]
+def _band(ax, trajs, color, ls, label):
+    """Plot mean +- s.e. of a list of equal-length series."""
     n = min(len(t) for t in trajs)
     arr = np.array([t[:n] for t in trajs])
     m = arr.mean(axis=0)
     se = arr.std(axis=0, ddof=1) / np.sqrt(len(arr)) if len(arr) > 1 else 0 * m
     x = np.arange(n)
-    ax.plot(x, m, color=color, ls=ls, lw=1.6, label=method)
+    ax.plot(x, m, color=color, lw=1.6, ls=ls, label=label)
     ax.fill_between(x, m - se, m + se, color=color, alpha=0.18, lw=0)
 
 
@@ -102,9 +97,9 @@ def main():
         ax = axes[0][j]
         base, quot = cbo_trajs(ds, "CBO"), cbo_trajs(ds, "QCBO")
         if base:
-            _band(ax, base, "CBO")
+            _band(ax, base, *METHOD_STYLE["CBO"], label="CBO")
         if quot:
-            _band(ax, quot, "QCBO")
+            _band(ax, quot, *METHOD_STYLE["QCBO"], label="QCBO")
         ax.set_title(title, fontsize=9)
         if j == 0:
             ax.set_ylabel("best $E[Y|do]$", fontsize=8)
@@ -113,9 +108,9 @@ def main():
         ax = axes[1][j]
         base, quot = dcbo_trajs(setup, "dcbo"), dcbo_trajs(setup, "qdcbo")
         if base:
-            _band(ax, base, "DCBO")
+            _band(ax, base, *METHOD_STYLE["DCBO"], label="DCBO")
         if quot:
-            _band(ax, quot, "QDCBO")
+            _band(ax, quot, *METHOD_STYLE["QDCBO"], label="QDCBO")
         for xs in (10, 20):
             ax.axvline(xs - 0.5, color="black", lw=0.5, alpha=0.25)
         ax.set_title(title + " (T=3)", fontsize=9)
@@ -126,9 +121,9 @@ def main():
         ax = axes[2][j]
         base, quot = mcbo_trajs(env, "MCBO"), mcbo_trajs(env, "QMCBO")
         if base:
-            _band(ax, base, "MCBO")
+            _band(ax, base, *METHOD_STYLE["MCBO"], label="MCBO")
         if quot:
-            _band(ax, quot, "QMCBO")
+            _band(ax, quot, *METHOD_STYLE["QMCBO"], label="QMCBO")
         ax.set_title(title, fontsize=9)
         if j == 0:
             ax.set_ylabel("best reward", fontsize=8)
@@ -138,7 +133,7 @@ def main():
     # legend panel: one named entry per method
     ax = axes[2][2]
     ax.axis("off")
-    for method, (color, ls) in STYLE.items():
+    for method, (color, ls) in METHOD_STYLE.items():
         ax.plot([], [], color=color, ls=ls, lw=1.6, label=method)
     ax.legend(loc="center", fontsize=8, frameon=False, ncol=2)
 

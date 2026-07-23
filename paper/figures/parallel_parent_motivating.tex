@@ -1,49 +1,41 @@
-% Motivating example (Fig. 1): the ParallelParent SCM as three subfigures.
-% (a) true fine graph; (b) misspecified fine graph with X1->Y deleted;
-% (c) the common quotient under C1 = {X1, X2}.
-% Uses the shared DAG styles from the main preamble (mannode/tgtnode/clbox/
-% diredge/bicross) and the subcaption package loaded there. Hand-written:
-% this is a one-off 3-node figure; the registered-graph gallery in the
-% appendix is emitted by scripts/emit_dataset_tikz.py.
-\begin{subfigure}[b]{0.32\linewidth}
+% Motivating example (Fig. 1): three semantic subfigures.
+\begin{subfigure}[t]{0.32\linewidth}
   \centering
-  \begin{tikzpicture}[x=1cm,y=1cm]
-    \node[mannode] (X1a) at (0,1.15) {$X_1$};
-    \node[mannode] (X2a) at (1.4,1.15) {$X_2$};
-    \node[tgtnode] (Ya)  at (0.7,-0.35) {$Y$};
-    \draw[diredge] (X1a) -- (Ya);
-    \draw[diredge] (X2a) -- (Ya);
-    \draw[bicross] (X1a) to[bend left=28] (X2a);
+  \begin{tikzpicture}[x=0.72cm,y=0.72cm]
+    \node[mannode] (X1) at (0,1.15) {$X_1$};
+    \node[mannode] (X2) at (1.5,1.15) {$X_2$};
+    \node[tgtnode] (Y) at (0.75,-0.35) {$Y$};
+    \draw[diredge] (X1) -- (Y);
+    \draw[diredge] (X2) -- (Y);
+    \draw[bicross] (X1) to[bend left=28] (X2);
   \end{tikzpicture}
   \caption{True graph}
   \label{fig:motivating-true}
 \end{subfigure}\hfill
-\begin{subfigure}[b]{0.32\linewidth}
+\begin{subfigure}[t]{0.32\linewidth}
   \centering
-  \begin{tikzpicture}[x=1cm,y=1cm]
-    \node[mannode] (X1b) at (0,1.15) {$X_1$};
-    \node[mannode] (X2b) at (1.4,1.15) {$X_2$};
-    \node[tgtnode] (Yb)  at (0.7,-0.35) {$Y$};
-    % the deleted edge, ghosted with a strike mark
-    \draw[diredge,black!25] (X1b) -- (Yb)
+  \begin{tikzpicture}[x=0.72cm,y=0.72cm]
+    \node[mannode] (X1) at (0,1.15) {$X_1$};
+    \node[mannode] (X2) at (1.5,1.15) {$X_2$};
+    \node[tgtnode] (Y) at (0.75,-0.35) {$Y$};
+    \draw[diredge,black!25] (X1) -- (Y)
       node[midway,sloped] {\textcolor{red!70!black}{\footnotesize$\boldsymbol{\times}$}};
-    \draw[diredge] (X2b) -- (Yb);
-    \draw[bicross] (X1b) to[bend left=28] (X2b);
+    \draw[diredge] (X2) -- (Y);
+    \draw[bicross] (X1) to[bend left=28] (X2);
   \end{tikzpicture}
   \caption{Assumed graph}
   \label{fig:motivating-assumed}
 \end{subfigure}\hfill
-\begin{subfigure}[b]{0.32\linewidth}
+\begin{subfigure}[t]{0.32\linewidth}
   \centering
-  \begin{tikzpicture}[x=1cm,y=1cm]
-    \node[mannode] (X1c) at (0,1.15) {$X_1$};
-    \node[mannode] (X2c) at (1.4,1.15) {$X_2$};
-    \node[tgtnode] (Yc)  at (0.7,-0.35) {$Y$};
+  \begin{tikzpicture}[x=0.72cm,y=0.72cm]
+    \node[mannode] (X1) at (0,1.15) {$X_1$};
+    \node[mannode] (X2) at (1.5,1.15) {$X_2$};
+    \node[tgtnode] (Y) at (0.75,-0.35) {$Y$};
     \begin{scope}[on background layer]
-      \node[clbox,inner sep=2.6mm,fit=(X1c)(X2c),
-            label={[font=\scriptsize]above:$C_1$}] (C1c) {};
+      \node[clbox,fit=(X1)(X2),label={[font=\scriptsize]above:$C_1$}] (C1) {};
     \end{scope}
-    \draw[diredge] (C1c.south) -- (Yc);
+    \draw[diredge] (C1.south) -- (Y);
   \end{tikzpicture}
   \caption{Common quotient}
   \label{fig:motivating-quotient}
