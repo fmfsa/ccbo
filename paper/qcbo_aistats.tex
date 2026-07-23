@@ -119,8 +119,21 @@ exposure.
 
 Causal Bayesian optimization \citep{agliettiCausalBayesianOptimization2020b} unifies two ideas: when the variable $Y$ we wish to optimize sits inside a causal system, the right search space is the space of interventions $\doo(\mathbf{X}_s=\mathbf{x}_s)$, and observational data plus the causal graph yield informative priors over the interventional response surfaces. The catch is the input requirement: \CBO{} and its descendants \citep{agliettiDynamicCausalBayesian2021a,agliettiConstrainedCausalBayesian2023a,sussexMODELBASEDCAUSALBAYESIAN2023} assume the full DAG is specified correctly, and the survey of \citet{anonymous2026cbobench} ranks robustness to causal-assumption violations first among the field's open problems, with stress tests showing that method rankings can change substantially when only the assumed graph is perturbed. We study \emph{graph misspecification}: the learner is given, and trusts, a single graph that differs from the truth (as opposed to graph uncertainty, where the learner maintains a posterior). Our thesis is that this fragility is best addressed by committing to less structure of a more reliable kind.
 
-\paragraph{A wrong edge is costly.}
-The assumed graph enters a \CBO{} algorithm only through its derived causal-effect estimators, and it corrupts them in two ways: it biases the do-calculus prior, and it can change the search set itself, possibly removing the candidate that contains the optimum (Remark~\ref{rem:taxonomy}). Either way the damage is a functional of the wrong edge: an estimator that cannot see an edge cannot be damaged by it.
+\begin{figure}[t]\centering
+\input{figures/parallel_parent_motivating}
+\caption{The paper in one figure (\textsc{ParallelParent}; orange:
+manipulable, blue: target, dash-dotted: latent confounding). Deleting
+$X_1\to Y$ (b) removes every $X_1$-containing arm from the fine
+exploration set — including the uniquely optimal joint arm — but is
+\emph{invisible} in the quotient (c): $C_1\to Y$ survives through
+$X_2\to Y$. A full-DAG method permanently pays the calculable gap
+$G(\lambda)=4.25\lambda$; a quotient method's trajectory is identical
+under (a) and (b).}
+\label{fig:motivating}
+\end{figure}
+
+\paragraph{A wrong edge is costly: a two-variable example.}
+The assumed graph enters a \CBO{} algorithm only through its derived causal-effect estimators, and it corrupts them in two ways: it biases the do-calculus prior, and it can change the search set itself, possibly removing the candidate that contains the optimum (Remark~\ref{rem:taxonomy}). Either way the damage is a functional of the wrong edge: an estimator that cannot see an edge cannot be damaged by it. Fig.~\ref{fig:motivating} makes this concrete on the smallest SCM in the paper: manipulable $X_1,X_2$, latently confounded ($X_1\leftrightarrow X_2$), both parents of $Y=\lambda(X_1-2)^2+(X_2+2)^2+\varepsilon$, so the uniquely optimal intervention is the joint arm $\doo(X_1{=}2,X_2{=}{-}2)$ with $y^\star=0$. Delete $X_1\to Y$ in the assumed graph and $X_1$ leaves $\An(Y)$: MIS pruning (Eq.~\ref{eq:mis}) drops \emph{every} $X_1$-containing arm, and no amount of interventional data restores an arm the search set does not contain — full-DAG \CBO{} plateaus permanently at the analytic gap $G(\lambda)=\lambda\,(4+\mathrm{Var}X_1)=4.25\lambda$ (\S\ref{sec:exp-a}). Commit instead only to the cluster $C_1=\{X_1,X_2\}$ and its quotient $C_1\to Y$: the deletion is quotient-invisible ($C_1\to Y$ survives through $X_2\to Y$), so a quotient method's exploration set, priors, and entire trajectory are \emph{identical} under both hypotheses, and its lossless cluster arm still reaches $y^\star$. The trade is equally immediate: edits \emph{visible} in the quotient (say, an assumed $X_1\leftrightarrow Y$) are not protected, and whole-cluster actions can be too coarse — when every optimum sets a strict subset of a cluster, a fixed partition pays a positive price (Prop.~\ref{prop:price}) that only refinement buys back (\S\ref{sec:exp-c}).
 
 \paragraph{Coarser commitments decide less, so less can be wrong.}
 A cluster-level structural belief encodes strictly fewer decisions than a
@@ -139,6 +152,7 @@ knowledge, no optimization method.
 \begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
   \item \textbf{Robustness as an input contract.} Quotient invariance is \emph{method-agnostic} (Theorem~\ref{thm:contract}): any optimizer whose graph-dependent components factor through $(\Pi,\Gq)$ is invariant to arbitrary within-cluster edge errors. We instantiate the contract for the arm-based, dynamic, and model-based families (\QCBO{}, \QDCBO{}, \QMCBO{}; \S\ref{sec:method}).
   \item \textbf{Exploration focus.} Coarsening concentrates exploration on fewer cluster-level arms; Prop.~\ref{prop:price} characterizes its cost.
+  \item \textbf{Mechanism-isolating experiments.} Three deliberately minimal SCMs with closed-form oracles isolate the failure channels one at a time — exploration-set corruption (a calculable permanent gap), prior corruption (transient, and only where priors matter), and the price of coarsening with its recovery by refinement — followed by a portability suite running each quotient method against its base on the base paper's own experiments (\S\ref{sec:exp}).
 \end{itemize}
 
 % =============================================================================
@@ -160,20 +174,10 @@ where $D(\mathbf{X}_s)$ is the interventional domain, maintaining one GP per can
   \label{eq:mis}
   \ES = \mathrm{MIS}(\Gg) = \bigl\{\, \emptyset\neq\mathbf{X}_s\subseteq\mathbf{X} : \mathbf{X}_s\subseteq \An(Y)\ \text{in}\ \Gg_{\bar{\mathbf{X}}_s} \,\bigr\}:
 \end{equation}
-if some member of $\mathbf{X}_s$ is no ancestor of $Y$ once the whole set is intervened on, $\doo(\mathbf{X}_s)$ induces the same distribution as intervening on a strict subset, so the arm is redundant. The possibly-optimal sets POMIS are a further graph-only pruning with $\mathrm{POMIS}\subseteq\mathrm{MIS}$ \citep{leeStructuralCausalBandits}. Each trial selects the arm and value maximizing cost-normalized causal expected improvement: with incumbent $y^{\mathrm{best}}$ and per-arm posterior $(\mu_s,\sigma_s)$,
-\begin{equation}
-  \label{eq:ei}
-  \mathrm{EI}_s(\mathbf{x})
-  = \sigma_s(\mathbf{x})\bigl[\gamma_s(\mathbf{x})\,\Phi(\gamma_s(\mathbf{x})) + \phi(\gamma_s(\mathbf{x}))\bigr],
-  \qquad
-  \gamma_s(\mathbf{x})=\tfrac{y^{\mathrm{best}}-\mu_s(\mathbf{x})}{\sigma_s(\mathbf{x})},
-\end{equation}
-the closed form of $\E[\max(y^{\mathrm{best}}-Y_s(\mathbf{x}),0)]$ under the GP posterior \citep{garnettBayesianOptimization2023}, divided by the intervention cost $Co(\mathbf{X}_s,\mathbf{x})$ at selection. The model-based family selects instead by GP-UCB,
-\begin{equation}
-  \label{eq:ucb}
-  \alpha_s(\mathbf{x})=\mu_s(\mathbf{x})+\sqrt{\beta}\,\sigma_s(\mathbf{x}),
-\end{equation}
-with exploration weight $\beta$ ($\beta=10$ in all our runs, MCBO's default; \citealp{sussexMODELBASEDCAUSALBAYESIAN2023}). Both the pruning and the priors are functions of the assumed graph, which is where misspecification enters.
+if some member of $\mathbf{X}_s$ is no ancestor of $Y$ once the whole set is intervened on, $\doo(\mathbf{X}_s)$ induces the same distribution as intervening on a strict subset, so the arm is redundant. The possibly-optimal sets POMIS are a further graph-only pruning with $\mathrm{POMIS}\subseteq\mathrm{MIS}$ \citep{leeStructuralCausalBandits}. Each trial selects the arm and value maximizing cost-normalized causal expected improvement \citep[EI;][]{garnettBayesianOptimization2023}; the model-based family selects instead by GP-UCB with MCBO's default exploration weight $\beta=10$ \citep{sussexMODELBASEDCAUSALBAYESIAN2023}. Both the pruning and the priors are functions of the assumed graph, which is where misspecification enters.
+
+\paragraph{Two failure channels; the two-tier rule.}
+A wrong assumed graph reaches the optimizer through exactly two channels (Remark~\ref{rem:taxonomy}): it \emph{biases or forfeits priors} — the do-calculus prior mean of any arm whose estimand references the edge — and it can \emph{change the exploration set itself}, removing an arm (possibly the optimal one) or admitting a spurious one. The two behave very differently: a corrupted prior is overridden by interventional data as long as the arm survives, while a removed arm is never played again. \QCBO{} keeps the two channels separated by design: identifiability from the (quotient) graph decides an arm's \emph{prior tier} — an identified do-calculus prior, or a common uninformative one (the observational mean of $Y$) — but never its membership (Eq.~\ref{eq:two_tier_prior}, \S\ref{sec:setup}).
 
 \paragraph{Coarsening and C-DAGs.}
 \begin{definition}[Coarsening~\citep{madaleno2026a}]
@@ -183,19 +187,18 @@ Given a DAG $\Gg$ on $\mathbf{V}$, a partition $\Pi=\{C_1,\ldots,C_K\}$ of $\mat
 For ADMGs the quotient additionally carries $C_k\leftrightarrow C_\ell$ iff some $V_i\in C_k,V_j\in C_\ell$ share a bidirected edge. The result is a C-DAG in the sense of \citet{CausalEffectIdentification}: do-calculus on it is sound and complete for the class of fine graphs that quotient to it. Markov properties transfer to the cluster level, faithfulness does not \citep{wahlFoundationsCausalDiscovery2024}.
 
 \paragraph{Evaluation metrics.}
-Primary metrics are direct functions of the trajectory and the oracle optimum $y^\star$: the best value found $y^{\mathrm{best}}_T$ (final $Y$), the simple regret of the incumbent $r_t=|y^{\mathrm{best}}_t-y^\star|$, and the cumulative regret $R_T=\sum_{t=1}^{T}r_t$. As a secondary diagnostic we report GAP, introduced with DCBO \citep{agliettiDynamicCausalBayesian2021a}: with $y_0$ the initial incumbent, $\rho_t=\min\{(y_0-y^{\mathrm{best}}_t)/(y_0-y^\star),1\}$ the clipped improvement ratio (minimization shown), and $t^\star$ the first trial attaining the final ratio $\rho_T$,
-\begin{equation*}
-\mathrm{GAP}=\frac{\rho_T+(T-t^\star)/T}{1+(T-1)/T}.
-\end{equation*}
-GAP combines the final improvement with how early it was attained (higher is better; GAP@$k$ is GAP on the first $k$ trials), but it depends on the method-specific initial incumbent $y_0$, so final $Y$ and regret carry the headline comparisons.
+All metrics are direct functions of the trajectory and the oracle optimum $y^\star$: the best value found $y^{\mathrm{best}}_T$ (final $Y$), the simple regret of the incumbent $r_t=|y^{\mathrm{best}}_t-y^\star|$, and the cumulative regret $R_T=\sum_{t=1}^{T}r_t$. Behavioral robustness is scored by \emph{paired-by-seed} differences between a misspecified and a correct run of the same method (\S\ref{sec:exp}); solution quality by final $Y$ and regret against the closed-form $y^\star$.
 
 % =============================================================================
 \section{What coarsening buys}
 \label{sec:theory}
 
-Coarsening is not a property of one algorithm, so we state it as an input contract. An optimizer accepts the pair $(\Pi,\Gq)$ in place of a fine graph, and every graph-dependent component (search space, identification formulas, priors, surrogate architecture, selection rules) is required to be a function of that pair. Any optimizer meeting the contract inherits the invariance below, whatever its family. Read the theorem for what it is: an \emph{input-equivalence} statement. Two hypotheses with the same quotient are indistinguishable to the optimizer, so no intra-cluster mistake can change its behavior; the theorem does not certify solution quality, which rests on the quotient itself being correct. A wrong quotient produces the same trajectory for the wrong problem (\S\ref{sec:exp-partition} measures that cost).
+Coarsening is not a property of one algorithm, so we state it as an input contract. An optimizer accepts the pair $(\Pi,\Gq)$ in place of a fine graph, and every graph-dependent component (search space, identification formulas, priors, surrogate architecture, selection rules) is required to be a function of that pair. Any optimizer meeting the contract inherits the invariance below, whatever its family. Read the theorem for what it is: an \emph{input-equivalence} statement. Two hypotheses with the same quotient are indistinguishable to the optimizer, so no intra-cluster mistake can change its behavior; the theorem does not certify solution quality, which rests on the quotient itself being correct. A wrong quotient produces the same trajectory for the wrong problem.
 
-Throughout, $\Pi,\Pi'$ are manipulable-only partitions. $\Pi_\bot$ is the finest (all-singleton) partition, the bottom of the partition refinement lattice \citep{madaleno2026a}, and $\Pi'\preceq\Pi$ ($\Pi'$ refines $\Pi$) iff every cluster of $\Pi'$ is contained in a cluster of $\Pi$. Props.~\ref{prop:refinement_validity}--\ref{prop:price} relate quotients of a common underlying graph. The instantiations of \S\ref{sec:method} consume only $\Gq$ (Assumption~\ref{ass:valid}).
+Throughout, $\Pi,\Pi'$ are manipulable-only partitions. $\Pi_\bot$ is the finest (all-singleton) partition, the bottom of the partition refinement lattice \citep{madaleno2026a}, and $\Pi'\preceq\Pi$ ($\Pi'$ refines $\Pi$) iff every cluster of $\Pi'$ is contained in a cluster of $\Pi$. Props.~\ref{prop:refinement_validity}--\ref{prop:price} relate quotients of a common underlying graph. The instantiations of \S\ref{sec:method} consume only $\Gq$ (Assumption~\ref{ass:valid}). The section is organized around three questions: what is protected (\S\ref{sec:theory-protected}), what protection costs (\S\ref{sec:theory-price}), and why the two cannot be had for free (\S\ref{sec:theory-exposure}).
+
+\subsection{What is protected?}
+\label{sec:theory-protected}
 
 \begin{theorem}[Quotient invariance is method-agnostic]
 \label{thm:contract}
@@ -204,13 +207,16 @@ Let $\mathcal{A}$ be any causal Bayesian optimizer whose graph-dependent compone
 
 \begin{remark}[Exact scope]
 \label{rem:structural_robustness}
-A quotient-level input cannot represent an intra-cluster hypothesis, so no intra-cluster mistake can affect the optimizer. The precise condition is that the perturbed edge be invisible in the quotient: intra-cluster edges, and inter-cluster edges made redundant by a parallel edge. A quotient-visible edge is not protected (\S\ref{sec:exp-scope}).
+A quotient-level input cannot represent an intra-cluster hypothesis, so no intra-cluster mistake can affect the optimizer. The precise condition is that the perturbed edge be invisible in the quotient: intra-cluster edges, and inter-cluster edges made redundant by a parallel edge. A quotient-visible edge is not protected (\S\ref{sec:exp-a}).
 \end{remark}
 
 \begin{remark}[How a wrong graph enters the algorithm]
 \label{rem:taxonomy}
 A wrong assumed graph reaches any causal Bayesian optimizer through its derived causal-effect estimators, in two ways. \emph{Prior bias:} the do-calculus prior mean of any arm whose estimand references the edge is biased even though the true effect is unchanged, a convergence cost paid in regret; in \QCBO{} a wrong graph can also flip an arm's identifiability verdict and drop it to the uninformative prior tier (Eq.~\ref{eq:two_tier_prior}). \emph{Search-set change:} the exploration set is itself derived from the graph, by MIS pruning (Eq.~\ref{eq:mis}) in \CBO{} \citep{leeStructuralCausalBandits,agliettiCausalBayesianOptimization2020b} and its C-DAG analogue (Eq.~\ref{eq:ccbo_exploration}) in \QCBO{}, so a wrong graph can remove an arm, possibly the optimal one, or admit a spurious one. Coarsening closes both channels whenever the edges are quotient-invisible (Theorem~\ref{thm:contract}): the quotient never references the edge, so no estimator it forms is biased and no verdict it makes is flipped.
 \end{remark}
+
+\subsection{What does protection cost?}
+\label{sec:theory-price}
 
 \begin{proposition}[Validity is not refinement-monotone]
 \label{prop:refinement_validity}
@@ -237,11 +243,11 @@ Assume (i) full-support intervention domains and (ii) cluster-contained confound
 Under the premises of Prop.~\ref{prop:free}, if the exploration set contains a cluster arm covering an optimal fine arm and the arm-level optimizer is consistent with every arm sampled infinitely often, \QCBO{}'s incumbent converges to $y^\star$ — whichever prior tier the arm runs on, since the uninformative tier only slows learning, never removes the arm. Coarsening then changes where finite samples concentrate, never the attainable value.
 \end{corollary}
 
-\subsection{Refining the partition: Hierarchical \QCBO{} (\HQCBO{})}
+\paragraph{Refining the partition: Hierarchical \QCBO{} (\HQCBO{}).}
 \label{sec:refine}
-When no optimizer of Eq.~\eqref{eq:cbo_obj} is a union of $\Pi$-clusters, a fixed-partition run pays at least $V(\Pi)-y^\star>0$ per trial at every horizon: $R_T/T\ge V(\Pi)-y^\star$ for all $T$ — an action-space lower bound — with $R_T/T\to V(\Pi)-y^\star$ under the additional condition that the base optimizer is consistent on the quotient's arm set (Remark~\ref{rem:regret}). Prop.~\ref{prop:free} delimits when this can happen at all: a positive price requires a constrained intervention domain (the policy box of \textsc{ClusterBench10L}) or confounding that escapes the cluster. Note the kind of failure this is. With a correct graph, a full-DAG method always retains an optimal arm, and a biased prior is eventually overridden by interventional data. A fixed coarse partition lacks the sub-cluster arm even when its quotient is correct: the gap is a property of the action space, and no amount of data restores it. (Under a wrong graph a full-DAG method can suffer the same uncorrectable arm loss through a flipped verdict, Remark~\ref{rem:taxonomy}; refinement addresses the action-space kind.) Refinement converts this failure back into a correctable one by treating $\Pi$ as a starting resolution.
+When no optimizer of Eq.~\eqref{eq:cbo_obj} is a union of $\Pi$-clusters, a fixed-partition run pays at least $V(\Pi)-y^\star>0$ per trial at every horizon: $R_T/T\ge V(\Pi)-y^\star$ for all $T$ — an action-space lower bound — with $R_T/T\to V(\Pi)-y^\star$ under the additional condition that the base optimizer is consistent on the quotient's arm set (Remark~\ref{rem:regret}). Prop.~\ref{prop:free} delimits when this can happen at all: a positive price requires a constrained intervention domain (the policy box of \textsc{MediatedChain}, \S\ref{sec:exp-c}) or confounding that escapes the cluster. Note the kind of failure this is. With a correct graph, a full-DAG method always retains an optimal arm, and a biased prior is eventually overridden by interventional data. A fixed coarse partition lacks the sub-cluster arm even when its quotient is correct: the gap is a property of the action space, and no amount of data restores it. (Under a wrong graph a full-DAG method can suffer the same uncorrectable arm loss through a flipped verdict, Remark~\ref{rem:taxonomy}; refinement addresses the action-space kind.) Refinement converts this failure back into a correctable one by treating $\Pi$ as a starting resolution.
 
-The practitioner may declare a \emph{hierarchy} $H$: per cluster, an optional sub-partition (default: singletons); no new graph is supplied. \HQCBO{} runs Algorithm~\ref{alg:ccbo} at $\Pi$ and, when the incumbent improves by less than $\delta$ over $k$ trials ($k{=}5$, $\delta{=}10^{-3}$, tuned once and fixed), splits the incumbent arm's clusters via $H$, refusing any split that fails the validity re-check (Prop.~\ref{prop:refinement_validity}). On acceptance the exploration set is rebuilt and unioned with every explored arm, data carry over keyed by arm (Prop.~\ref{prop:refinement}), and only new arms receive the standard $n_0$ initialization points (App.~\ref{app:refine}). We evaluate a single refinement step.
+The practitioner may declare a \emph{hierarchy} $H$: per cluster, an optional sub-partition (default: singletons); no new graph is supplied. \HQCBO{} runs Algorithm~\ref{alg:ccbo} at $\Pi$ and, when the incumbent improves by less than $\delta$ over $k$ trials ($k{=}5$, $\delta{=}10^{-3}$, tuned once and fixed), splits the incumbent arm's clusters via $H$, refusing any split that fails the validity re-check (Prop.~\ref{prop:refinement_validity}). On acceptance the exploration set is rebuilt and unioned with every explored arm, data carry over keyed by arm (Prop.~\ref{prop:refinement}), and only new arms receive the standard $n_0$ initialization points (App.~\ref{app:seam}). We evaluate a single refinement step.
 
 \begin{remark}[Phase-scoped invariance]
 \label{rem:phase_invariance}
@@ -250,7 +256,7 @@ Any misspecification that is quotient-invisible at every visited partition, in p
 
 \begin{remark}[Refinement makes the price correctable]
 \label{rem:regret}
-The fixed-partition failure is worth stating mechanically: \QCBO{} only ever executes whole-cluster interventions, so when every optimizer of Eq.~\eqref{eq:cbo_obj} sets a strict subset of some cluster, every arm the fixed partition can play has value at least $V(\Pi)>y^\star$. The per-trial regret is then bounded below by $V(\Pi)-y^\star>0$ at every $t$ — no amount of data lowers it, because the deficit lives in the action space, not in the estimates — hence $R_T=\Omega(T)$ (and $\Theta(T)$, since per-trial regret is bounded on the compact intervention domains). Refinement changes the action space itself: once the exploration set at some visited partition contains an optimal arm and the base optimizer is consistent on a finite arm set — in particular, it samples every arm sufficiently often — the incumbent converges to $y^\star$ and the average regret $R_T/T\to 0$. We claim no convergence rate and report the post-trigger behavior empirically (\S\ref{sec:exp-partition}). The trigger never observes $y^\star$, so it also fires on lossless partitions; there refinement costs only the new arms' initialization and, empirically, a small refinement price.
+The fixed-partition failure is worth stating mechanically: \QCBO{} only ever executes whole-cluster interventions, so when every optimizer of Eq.~\eqref{eq:cbo_obj} sets a strict subset of some cluster, every arm the fixed partition can play has value at least $V(\Pi)>y^\star$. The per-trial regret is then bounded below by $V(\Pi)-y^\star>0$ at every $t$ — no amount of data lowers it, because the deficit lives in the action space, not in the estimates — hence $R_T=\Omega(T)$ (and $\Theta(T)$, since per-trial regret is bounded on the compact intervention domains). Refinement changes the action space itself: once the exploration set at some visited partition contains an optimal arm and the base optimizer is consistent on a finite arm set — in particular, it samples every arm sufficiently often — the incumbent converges to $y^\star$ and the average regret $R_T/T\to 0$. We claim no convergence rate and report the post-trigger behavior empirically (\S\ref{sec:exp-c}). The trigger never observes $y^\star$, so it also fires on lossless partitions; there refinement costs only the new arms' initialization and, empirically, a small refinement price.
 \end{remark}
 
 \begin{remark}[Splitting as coarse-to-fine MIS search]
@@ -258,11 +264,28 @@ The fixed-partition failure is worth stating mechanically: \QCBO{} only ever exe
 MIS/POMIS pruning discards arms from the graph alone \citep{leeStructuralCausalBandits}. \HQCBO{} descends the partition lattice guided by observed value, stopping at the coarsest visited partition whose cluster-level MIS contains a value-optimal arm: a value-driven search for a partition exposing a minimal optimal intervention set, restricted to the declared hierarchy and the incumbent's clusters.
 \end{remark}
 
+\subsection{Why not both for free?}
+\label{sec:theory-exposure}
+Could a quotient method keep its invariance \emph{and} evaluate sub-cluster interventions when they matter? No: sub-cluster behavior is provably not a function of quotient-level inputs. Prop.~\ref{prop:qexposure} (\S\ref{sec:qmcbo}) exhibits two SCMs with identical cluster mechanisms and identical whole-cluster interventional distributions that disagree on a sub-cluster intervention — so \emph{no} method whose inputs factor through $(\Pi,\Gq)$, arm-based, dynamic, or model-based, can distinguish them, and any method that could would have to consume intra-cluster structure, forfeiting Theorem~\ref{thm:contract} for exactly that structure. Refinement is therefore not a loophole but a controlled purchase:
+
+\begin{remark}[Refinement spends invariance, exactly where it refines]
+\label{rem:invariance_spent}
+Let \HQCBO{} split cluster $C$ into $\Pi'$-clusters at some trigger. Post-trigger, its graph-dependent components factor through $(\Pi',\Gg^{\Pi'})$, so Theorem~\ref{thm:contract} still applies at $\Pi'$: every edit invisible in $\Gg^{\Pi'}$ — in particular anything confined to a \emph{never-split} cluster — remains protected, while edits inside $C$ are now visible and can affect the post-trigger phase. Each split re-exposes exactly the split cluster's intra-cluster structure and nothing else. (Proof: App.~\ref{app:proofs}, a corollary of Theorem~\ref{thm:contract} applied per phase.)
+\end{remark}
+
 % =============================================================================
 \section{Instantiations: \QCBO{}, \QDCBO{}, and \QMCBO{}}
 \label{sec:method}
 
-The contract is met by replacing each graph-coupled component of a base optimizer with its quotient counterpart. We instantiate it for the three main families, in increasing order of graph coupling: \CBO{} (the graph prunes arms and builds priors), DCBO (it additionally carries information across time slices), and MCBO (it is the surrogate's architecture). Figure~\ref{fig:contract} shows the structural input each family consumes and its quotient.
+The contract is met by one recipe: replace each graph-coupled component of a base optimizer with its quotient counterpart (Table~\ref{tab:instantiation}). We instantiate it for the three main families, in increasing order of graph coupling: \CBO{} (the graph prunes arms and builds priors), DCBO (it additionally carries information across time slices), and MCBO (it is the surrogate's architecture). Figure~\ref{fig:contract} shows the structural input each family consumes and its quotient; estimator mechanics live in App.~\ref{app:seam} and~\ref{app:repro}.
+
+\begin{table}[t]\centering
+  \caption{One recipe, three families: each base method's graph-dependent
+  components and their quotient replacements.}
+  \label{tab:instantiation}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/instantiation_map}}
+\end{table}
 
 \begin{figure*}[t]\centering
 \input{figures/family_graphs}
@@ -296,7 +319,7 @@ For each arm $\mathbf{X}_s\in\ESpi$ we pose the cluster-level query $P(Y\mid\doo
     \bar{Y}_{\mathrm{obs}} & \text{otherwise.}
   \end{cases}
 \end{equation}
-An identifiable arm's prior mean instantiates the identified formula as a pipeline of GP-based plug-ins (backdoor $\to$ front-door $\to$ $g$-computation) on the bidirected-edge expansion of $\Gq$. A non-identifiable arm — and any identifiable query the sound-but-incomplete pipeline cannot instantiate — shares the common uninformative prior, the observational mean of $Y$, and its interventional response is learned from experimental data alone. The identifiability test is exact where it applies: ID is complete on the C-DAG, and identification from $\Gq$ is sound for every fine graph in its class \citep{CausalEffectIdentification}. Because clusters are manipulable-only and interventions assign full clusters, the cluster-level formulas expand exactly into fine-grained regressions on observational data.
+The identifiability test is exact where it applies: ID is complete on the C-DAG, and identification from $\Gq$ is sound for every fine graph in its class \citep{CausalEffectIdentification}; a non-identifiable arm learns its response from experimental data alone. Estimator mechanics (the GP plug-in pipeline instantiating identified formulas) are in App.~\ref{app:seam}.
 
 \begin{assumption}[Valid C-DAG; estimator boundary]
 \label{ass:valid}
@@ -312,14 +335,7 @@ Under $\Pi=\Pi_\bot$, $\Gq=\Gg^{*}$ and Eq.~\eqref{eq:ccbo_exploration} is exact
 \label{sec:qdcbo}
 Dynamic \CBO{} (DCBO; \citealp{agliettiDynamicCausalBayesian2021a}) optimizes a sequence of interventions on a dynamic Bayesian network: each slice carries its own exploration sets and priors, built from within-slice (emission) and cross-slice (transition) mechanism estimates on the assumed temporal graph, and slice $t$'s optimum feeds slice $t{+}1$'s priors. The graph enters the per-slice exploration sets, both estimate families, and the propagation structure.
 
-\textbf{Construction (\QDCBO{}).} Given the temporal graph over slices $t=0,\dots,T{-}1$ and a partition $\Pi$ of the per-slice manipulable variables:
-\begin{enumerate}[leftmargin=1.4em,itemsep=1pt,topsep=2pt]
-  \item \emph{Quotient per slice.} One vertex $C_{k,t}$ per cluster per slice; emission edges quotient within a slice, transition edges across slices; intra-cluster edges vanish. Validity (acyclicity of each slice's quotient) is re-checked on construction (Prop.~\ref{prop:refinement_validity}).
-  \item \emph{Exploration sets.} Each slice's candidate interventions are lifted to whole-cluster patterns — the slice-level analogue of Eq.~\eqref{eq:ccbo_exploration}.
-  \item \emph{Mechanisms.} The emission and transition estimates become joint cluster mechanisms, one multi-output GP per cluster arc (the coregionalization construction of \QMCBO{} below), fit on the per-member observational sequences.
-  \item \emph{Propagation.} Slice $t$'s optimum feeds slice $t{+}1$'s priors exactly as in DCBO, now at cluster level.
-\end{enumerate}
-\emph{Assumptions.} DCBO's own — known temporal structure with stationary slice topology (or declared change points) and causal sufficiency as used by its estimators — plus the contract's: manipulable-only clusters and per-slice validity of $\Pi$. Singleton clusters reduce every component to stock DCBO.
+\textbf{Construction (\QDCBO{}).} Given the temporal graph over slices $t=0,\dots,T{-}1$ and a partition $\Pi$ of the per-slice manipulable variables, apply the recipe per slice (Table~\ref{tab:instantiation}): one vertex $C_{k,t}$ per cluster per slice (emission edges quotient within a slice, transition edges across; validity re-checked per slice, Prop.~\ref{prop:refinement_validity}); exploration sets lifted to whole-cluster patterns (the slice-level analogue of Eq.~\ref{eq:ccbo_exploration}); emission and transition estimates replaced by joint cluster mechanisms (the coregionalization construction of \QMCBO{} below); and slice $t$'s optimum feeding slice $t{+}1$'s priors exactly as in DCBO, now at cluster level. Assumptions are DCBO's own (known temporal structure, causal sufficiency as used by its estimators) plus the contract's (manipulable-only clusters, per-slice validity). Singleton clusters reduce every component to stock DCBO.
 
 \begin{corollary}[\QDCBO{} inherits the contract]
 \label{cor:qdcbo_invariance}
@@ -328,14 +344,9 @@ Every graph-dependent component of \QDCBO{} is a function of $(\Pi,\Gq)$ applied
 
 \subsection{Model-based: quotient MCBO (\QMCBO{})}
 \label{sec:qmcbo}
-Model-based \CBO{} (MCBO; \citealp{sussexMODELBASEDCAUSALBAYESIAN2023}) couples the surrogate to the graph more tightly than \CBO{}: it fits one GP per \emph{mechanism}, evaluates interventions by composing these GPs along the DAG, and selects them by GP-UCB (Eq.~\ref{eq:ucb}). The graph is the surrogate's architecture, so a wrong intra-cluster edge corrupts the factorization every prediction flows through.
+Model-based \CBO{} (MCBO; \citealp{sussexMODELBASEDCAUSALBAYESIAN2023}) couples the surrogate to the graph more tightly than \CBO{}: it fits one GP per \emph{mechanism}, evaluates interventions by composing these GPs along the DAG, and selects them by GP-UCB (\S\ref{sec:background}). The graph is the surrogate's architecture, so a wrong intra-cluster edge corrupts the factorization every prediction flows through.
 
-\textbf{Construction (\QMCBO{}).} Coarsen the factorization: one \emph{joint} mechanism per cluster, $P(\mathbf{X}_C \mid \mathbf{X}_{\mathrm{pa}(C)})$, modeled as a multi-output GP over the cluster's member coordinates whose task kernel couples them,
-\begin{equation*}
-  k\bigl((\mathbf{x},i),(\mathbf{x}',j)\bigr) = k_{\mathrm{in}}(\mathbf{x},\mathbf{x}')\,B_{ij},
-  \qquad B\succeq 0,
-\end{equation*}
-(a coregionalization kernel; \citealp{bonillaMultitaskGaussianProcess2007}), composed along the C-DAG with joint within-cluster sampling. Intervention targets are lifted to whole-cluster patterns, and singleton clusters reduce to MCBO's per-node GPs.
+\textbf{Construction (\QMCBO{}).} Coarsen the factorization: one \emph{joint} mechanism per cluster, $P(\mathbf{X}_C \mid \mathbf{X}_{\mathrm{pa}(C)})$, modeled as a multi-output GP over the cluster's member coordinates whose coregionalization (task) kernel couples them \citep{bonillaMultitaskGaussianProcess2007}, composed along the C-DAG with joint within-cluster sampling. Intervention targets are lifted to whole-cluster patterns, and singleton clusters reduce to MCBO's per-node GPs.
 
 \begin{corollary}[\QMCBO{} inherits the contract]
 \label{cor:qmcbo_invariance}
@@ -350,7 +361,7 @@ Assume causal sufficiency and a valid $\Pi$. For every union-of-clusters interve
 \begin{proposition}[Exposure: sub-cluster interventions are not identifiable
 from cluster mechanisms]
 \label{prop:qexposure}
-There exist SCMs $M_1, M_2$, causally sufficient and valid for the same $\Pi$, with identical joint cluster mechanisms and identical interventional distributions for every union-of-clusters intervention, yet $P^{M_1}(Y\mid\doo(\mathbf{x}_A)) \neq P^{M_2}(Y\mid\doo(\mathbf{x}_A))$ for a strict subset $A\subsetneq C$ of some cluster. (Proof: App.~\ref{app:proofs}.) Consequently no quotient-respecting method, arm-based, dynamic, or model-based, can evaluate sub-cluster arms from its inputs alone: the exposure trade of \S\ref{sec:refine} is a property of the quotient contract itself, not of our refinement procedure. ToyGraph realizes the arm-based face of this trade (Fig.~\ref{fig:toybow}): merging $\{X,Z\}$ imports $X$'s latent confounding with $Y$ into the single cluster arm — the C-DAG is the bow $C\to Y$, $C\leftrightarrow Y$ — so $P(Y\mid\doo(C))$ is not identifiable from the quotient even though $\doo(Z)$ is identifiable from the fine graph, and the arm runs on the uninformative prior tier (\S\ref{sec:exp-family}).
+There exist SCMs $M_1, M_2$, causally sufficient and valid for the same $\Pi$, with identical joint cluster mechanisms and identical interventional distributions for every union-of-clusters intervention, yet $P^{M_1}(Y\mid\doo(\mathbf{x}_A)) \neq P^{M_2}(Y\mid\doo(\mathbf{x}_A))$ for a strict subset $A\subsetneq C$ of some cluster. (Proof: App.~\ref{app:proofs}.) Consequently no quotient-respecting method, arm-based, dynamic, or model-based, can evaluate sub-cluster arms from its inputs alone: the exposure trade of \S\ref{sec:refine} is a property of the quotient contract itself, not of our refinement procedure. ToyGraph realizes the arm-based face of this trade (Fig.~\ref{fig:toybow}): merging $\{X,Z\}$ imports $X$'s latent confounding with $Y$ into the single cluster arm — the C-DAG is the bow $C\to Y$, $C\leftrightarrow Y$ — so $P(Y\mid\doo(C))$ is not identifiable from the quotient even though $\doo(Z)$ is identifiable from the fine graph, and the arm runs on the uninformative prior tier (\S\ref{sec:exp-d}).
 
 \begin{figure}[t]\centering
 \input{figures/toy_bow}
@@ -371,148 +382,203 @@ C-DAG and the single arm runs on the uninformative prior tier
 \section{Experiments}
 \label{sec:exp}
 
-\subsection{Setup: head-to-head under misspecification}
-\label{sec:exp-setup}
-\paragraph{ClusterBench10.}
-We construct an SCM (Fig.~\ref{fig:clusterbench10}) with ten observables: manipulable $X_1,\dots,X_5$, mediators $M_1,M_2,M_3,M_4$, target $Y$, and latent confounders $U_{12}\!\to\!\{X_1,X_2\}$ (intra-cluster) and $U_{15}\!\to\!\{X_1,X_5\}$ (cross-cluster). The coarse partition is $C_1=\{X_1,X_2,X_3\}$, $C_2=\{X_4,X_5\}$. Coefficients are chosen so that (i) $\doo(X_1)$ is the strongest \emph{singleton} intervention, (ii) the global optimum is $\doo(C_1)$ (a union of clusters, so the partition is \emph{lossless} and any robustness gap is not confounded by a price of coarsening), and (iii) $\mathrm{corr}(X_1,X_2)\approx 0.70$ (full specification and oracle checks in App.~\ref{app:scm}).
+The experiments answer four questions, one mechanism at a time, on three
+deliberately minimal SCMs with closed-form oracles (\textsc{MinimalBench};
+specifications, per-condition exploration sets, and oracle derivations in
+App.~\ref{app:minibench}), then check that the contract carries across
+optimizer families on the field's own benchmarks. \emph{(i)} Does quotient
+invisibility give exact invariance? \emph{(ii)} Can that matter for
+optimization quality? \emph{(iii)} What does a too-coarse partition cost?
+\emph{(iv)} Does the contract transfer to \CBO{}, DCBO, and MCBO?
 
-\begin{figure}[t]\centering
-\resizebox{.96\linewidth}{!}{\begin{tikzpicture}[scale=0.85, every node/.append style={transform shape}]
-  % ---- (a) fine DAG with the coarse partition ----
-  \node[mannode] (X1) at (0,2.4) {$X_1$};
-  \node[mannode] (X2) at (1.15,2.4) {$X_2$};
-  \node[mannode] (X3) at (2.3,2.4) {$X_3$};
-  \node[mannode] (X4) at (4.1,2.4) {$X_4$};
-  \node[mannode] (X5) at (5.25,2.4) {$X_5$};
-  \node[obsnode] (M2) at (0.5,1.1) {$M_2$};
-  \node[obsnode] (M1) at (2.3,1.1) {$M_1$};
-  \node[obsnode] (M3) at (4.1,1.1) {$M_3$};
-  \node[obsnode] (M4)  at (5.25,1.1) {$M_4$};
-  \node[tgtnode] (Y)  at (2.7,-0.3) {$Y$};
-  \draw[diredge] (X3) -- (X2);
-  \draw[diredge] (X1) -- (M2); \draw[diredge] (X2) -- (M2);
-  \draw[diredge] (X3) -- (M1);
-  \draw[diredge] (X4) -- (M3); \draw[diredge] (X5) -- (M3);
-  \draw[diredge] (X5) -- (M4);
-  % X1/X2 bend west and X3 bends east so none of them clips M1.
-  \draw[diredge] (X1) to[bend right=12] (Y);
-  \draw[diredge] (X2) to[bend right=8] (Y);
-  \draw[diredge] (X3) to[bend left=15] (Y);
-  \draw[diredge] (M1) -- (Y); \draw[diredge] (M2) -- (Y);
-  \draw[diredge] (M3) -- (Y); \draw[diredge] (M4) -- (Y);
-  % Latent confounding: the intra-C1 arc stays inside the cluster box; the
-  % cross-cluster arc bends lower so it cannot collide with the cluster labels.
-  \draw[bicross] (X1) to[bend left=25] (X2);
-  \draw[bicross] (X1) to[bend left=20] (X5);
-  \begin{scope}[on background layer]
-    \node[clbox,fit=(X1)(X2)(X3),label={[label distance=1mm]above:{\small$C_1$}}] {};
-    \node[clbox,fit=(X4)(X5),label={[label distance=1mm]above:{\small$C_2$}}] {};
-  \end{scope}
-  \node at (2.6,-1.15) {\small (a) fine DAG with coarse partition};
-\end{tikzpicture}}
-\\[8pt]
-\resizebox{.8\linewidth}{!}{\begin{tikzpicture}[scale=0.85, every node/.append style={transform shape}]
-  % ---- (b) quotient C-DAG; clusters sit centred over their mediators so the
-  %      quotient map from (a) is visually immediate ----
-  \node[mannode,minimum size=7.5mm] (C1) at (0.6,2.4) {$C_1$};
-  \node[mannode,minimum size=7.5mm] (C2) at (3.4,2.4) {$C_2$};
-  \node[obsnode] (M2) at (-0.1,1.1) {$M_2$};
-  \node[obsnode] (M1) at (1.3,1.1) {$M_1$};
-  \node[obsnode] (M3) at (2.8,1.1) {$M_3$};
-  \node[obsnode] (M4)  at (4.0,1.1) {$M_4$};
-  \node[tgtnode] (Y)  at (1.9,-0.3) {$Y$};
-  \draw[diredge] (C1) -- (M1); \draw[diredge] (C1) -- (M2);
-  \draw[diredge] (C1) to[bend right=18] (Y);
-  \draw[diredge] (C2) -- (M3); \draw[diredge] (C2) -- (M4);
-  \draw[diredge] (M1) -- (Y); \draw[diredge] (M2) -- (Y);
-  \draw[diredge] (M3) -- (Y); \draw[diredge] (M4) -- (Y);
-  \draw[bicross] (C1) to[bend left=20] (C2);
-  \node at (1.9,-1.15) {\small (b) quotient C-DAG};
-\end{tikzpicture}}
-\caption{\textbf{ClusterBench10} (orange: manipulable, blue: target, dash-dotted: latent confounding, dashed boxes: clusters). In the quotient (b), the intra-cluster
-confounding $X_1\!\leftrightarrow\!X_2$ disappears while the cross-cluster
-$X_1\!\leftrightarrow\!X_5$ becomes $C_1\!\leftrightarrow\!C_2$. Hence the
-\emph{intra} bow (adding $X_1\!\to\!X_2$) is invisible to the quotient,
-whereas the \emph{inter} bow (adding $X_1\!\to\!X_5$) completes a
-cluster-level bow, rendering $\doo(C_1)$ non-identifiable and removing it
-from the coarse exploration set.}
-\label{fig:clusterbench10}
-\end{figure}
-
-\paragraph{Fixed-objective protocol.}
-We hold fixed the true SCM, observational data, $y^\star$, seeds, and number of trials, and inject the misspecification only into the assumed structure each causal method reasons with, verifying that the injection leaves the objective identical under every perturbation (App.~\ref{app:seam}).
-
-\paragraph{Perturbations, methods, and metrics.}
-We perturb the DAG by adding, deleting, or reversing edges, classified as \emph{intra} or \emph{inter} by whether their endpoints share a coarse cluster. The headline perturbation is a \emph{bow}: a directed edge added on a latently-confounded pair, rendering the corresponding $\doo$-effect non-identifiable. The arms share one estimator, seeds, and initialization, differing only in the structure each reasons with: \BO{} reads none and optimizes one joint arm under a zero-mean prior, \CBO{} \citep{agliettiCausalBayesianOptimization2020b} identifies on the full assumed DAG over its MIS arms (Eq.~\ref{eq:mis}; by Prop.~\ref{prop:identity} it is \QCBO{} at the finest partition, on every graph), and \QCBO{} runs the same algorithm on the quotient over its cluster-level MIS (Eq.~\ref{eq:ccbo_exploration}), non-identifiable arms on the uninformative prior tier.
-
-We report the final value $Y_T$, the simple regret $r_T=|y^{\mathrm{best}}_T-y^\star|$, and the cumulative regret $R_T=\sum_{t=1}^{T} r_t$ of the incumbent sequence as primary metrics, with GAP (\S\ref{sec:background}) as a secondary convergence diagnostic, and score misspecification by the paired-by-seed degradation $\Delta=\mathrm{metric}(\text{misspecified},s)-\mathrm{metric}(\text{correct},s)$, so per-seed noise cancels. $\Delta$-signs are metric-specific: for GAP a positive $\Delta$ means the misspecified run converged faster, and for $Y_T$ under minimization a negative $\Delta$ means it reached a better value.
-
-\subsection{Coarsening guarantees an unchanged trajectory}
-\label{sec:exp-headline}
-We first fix the correct DAG (Table~\ref{tab:headline}): the causal methods exploit the observational prior to converge within a handful of interventions. Non-causal \BO{}, learning the five-dimensional joint intervention response from scratch, is far slower and worst in absolute $Y$.
-
-We then add the intra-cluster bow (add $X_1\!\to\!X_2$ on the $U_{12}$-confounded pair) with the objective held fixed. The damage appears in convergence, where Remark~\ref{rem:taxonomy} predicts it. For \QCBO{} the bow lies inside $C_1$: its trajectory and every score are unchanged ($\Delta=0$ exactly, Theorem~\ref{thm:contract}). On the full assumed DAG the bow strips $\doo(X_1)$, and every superset leaving $X_2$ unintervened, of identification, so \CBO{}'s behavior shifts (Fig.~\ref{fig:overlays}, Table~\ref{tab:taxonomy}).
-
-\begin{figure}[!tb]\centering
-  \includegraphics[width=\linewidth]{figures/clusterbench10_overlays}
-  \caption{The headline contrast on ClusterBench10: correct DAG (solid) vs
-  intra-cluster bow $P_1$ (dashed). Bands are $\pm$\,s.e.\ over $10$ seeds.
-  Top: best-so-far $Y$. Bottom: simple regret $r_t$ (log scale). \QCBO{}'s
-  and \BO{}'s dashed curves coincide exactly with their solid ones. The
-  full-DAG method's dashed curve separates from its solid one, but both
-  converge.}
-  \label{fig:overlays}
-\end{figure}
-
-\paragraph{The same edit with the opposite sign.}
-On this SCM the arm loss even \emph{helps}: $\doo(X_1)$ is a ``decoy'', so losing it concentrates exploration on the larger arms containing the optimum (Fig.~\ref{fig:overlays}). \textsc{ClusterBench10D} (App.~\ref{app:scm}) moves $Y$'s centers so the strongest singleton \emph{is} the global optimum while the coarse partition stays lossless: the identical bow now costs the cheap optimal arm, and full-DAG \CBO{}'s cumulative regret rises $4.6\times$ (Table~\ref{tab:damage}, App.~\ref{app:scm}), a per-trial cost no data repaired within the horizon. \QCBO{} is invariant on both variants. Losing a decoy accelerates, losing the optimal arm injures, and which case one is in cannot be known without the very structure in doubt; Theorem~\ref{thm:contract} removes the question for every quotient-invisible error. (These recorded runs realize the arm loss as removal under the earlier gate rule; see Provenance, App.~\ref{app:repro}.)
-
-
-\subsection{Which misspecifications are protected?}
-\label{sec:exp-scope}
-A single controlled contrast delimits the scope: the \emph{same} operation, adding a directed edge on a latently-confounded pair. The intra bow (add $X_1\!\to\!X_2$) leaves \QCBO{} unchanged. The inter bow (add $X_1\!\to\!X_5$, across $C_1,C_2$) forms a \emph{cluster-level} bow $C_1\to C_2$ with $C_1\leftrightarrow C_2$, making $\doo(C_1)$, the arm \QCBO{} relies on, non-identifiable: the guarantee is lost and the trajectory moves off zero (Table~\ref{tab:taxonomy}). The other quotient-visible perturbation, the inter deletion, is unprotected yet unchanged on this SCM (the deleted edge never enters the identification of an arm the optimizer uses), so quotient-invisibility is \emph{sufficient} for invariance, not necessary. The field also contains the most realistic error of all: omitting the latent confounder $X_1\!\leftrightarrow\!X_2$ ($P_7$). No verdict flips (the channel is pure prior bias), yet the full-DAG trajectory reshuffles in a seed-dependent direction. The quotient discards intra-cluster bidirected edges, so \QCBO{} is again invariant. The severity dial (Fig.~\ref{fig:dial}, App.~\ref{app:fulltables}) confirms the pattern across the whole field: \QCBO{} stays at zero across the one-, two-, three-edit intra sweep and leaves zero only under the inter bow.
+\paragraph{Protocol.}
+Every condition holds the true SCM, the observational data ($n_{\mathrm{obs}}
+= 100$ per run, one shared dataset per SCM), $y^\star$, seeds, and trials
+fixed, and injects the misspecification only into the assumed structure the
+method reasons with, verifying that the objective is untouched
+(App.~\ref{app:seam}). The methods share one estimator backend and differ
+only in the structure they consume: \CBO{} identifies on the full assumed
+DAG over its MIS arms (by Prop.~\ref{prop:identity} it is \QCBO{} at the
+finest partition), \QCBO{} runs the same algorithm on the quotient
+(Eq.~\ref{eq:ccbo_exploration}), non-identifiable arms on the uninformative
+tier. $30$ seeds, $T{=}50$ trials ($60$ on \textsc{MediatedChain}), $3$
+initial interventional points per arm (a larger initial design on these
+1--2D arms already contains near-optimal points, hiding the prior channel
+that \S\ref{sec:exp-b} isolates), unit costs. Behavioral robustness is
+scored paired-by-seed: $\Delta_t = \mathrm{metric}(\text{misspecified},s,t)
+- \mathrm{metric}(\text{correct},s,t)$, so per-seed noise cancels;
+$\sup|\Delta|$ over trials and seeds is the invariance check.
+Table~\ref{tab:minimal-taxonomy} classifies every perturbation in advance:
+whether the quotient changes, whether the fine MIS changes, whether fine
+prior tiers change, and hence whether protection is predicted — the
+experiments then confirm each row.
 
 \begin{table*}[t]\centering
-  \caption{Scope of the guarantee: paired $\Delta$GAP and $\Delta Y_T$ (misspecified $-$ correct; mean$\pm$s.e., $10$ seeds; $\Delta Y_T<0$ means the perturbed run ended closer to $y^\star$). \QCBO{} is exactly $\mathbf{0}$ (identical, bold) on every quotient-invisible perturbation and moves only under the inter bow. Full rows in App.~\ref{app:fulltables}.}
-  \label{tab:taxonomy}
-  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_taxonomy}}
+  \caption{Perturbation taxonomy of the minimal suite, emitted from the
+  same structural module the methods consume (so paper and code cannot
+  drift). ``Protected'' is the \emph{prediction} of
+  Theorem~\ref{thm:contract} (quotient-invisibility); the last column is
+  the measured paired invariance check
+  $\sup_{s,t}|\Delta|$ for \QCBO{} over $30$ seeds — exactly $0$ on every
+  protected row, nonzero only on the quotient-visible negative control.
+  PP = \textsc{ParallelParent}, FD = \textsc{FrontDoor}.}
+  \label{tab:minimal-taxonomy}
+  \adjustbox{max width=\linewidth}{\input{tables/minimal_taxonomy}}
 \end{table*}
 
-\subsection{When the partition is lossy or wrong}
-\label{sec:exp-partition}
-\textbf{The price of coarsening, realized.}
-\textsc{ClusterBench10L} shares \textsc{ClusterBench10}'s structure but strengthens the $X_3\!\to\!X_2$ mechanism and restricts interventions to a policy box, engineered so the global optimum $\mathrm{do}(X_1,X_3)$ \emph{splits} $C_1$ (oracle-verified price $V(\Pi)-y^\star=0.95$). The loss is the constrained-domain mechanism of Prop.~\ref{prop:free}: the mediated path $X_3\!\to\!X_2$ drives $X_2$ to values the box forbids the whole-cluster arm to set directly. This is the regime of Prop.~\ref{prop:price}: \CBO{} reaches $y^\star$ while \QCBO{} plateaus a bounded gap above it (realized price $1.03$, Table~\ref{tab:price}, App.~\ref{app:fulltables}). The price is paid only where coarsening is lossy, and is exactly $0$ everywhere else (\S\ref{sec:exp-family}).
+\subsection{Experiment A: exploration-set corruption}
+\label{sec:exp-a}
+\textsc{ParallelParent} (Fig.~\ref{fig:motivating}; $\lambda{=}1$) puts the
+optimum on the joint arm: fine MIS $=\{X_1\},\{X_2\},\{X_1,X_2\}$,
+$y^\star=0$ at $\doo(X_1{=}2,X_2{=}{-}2)$; the coarse partition
+$C_1=\{X_1,X_2\}$ is lossless (its single cluster arm covers the optimum).
+Condition A1 deletes $X_1\to Y$ from the assumed graph — quotient-redundant,
+since $C_1\to Y$ survives through $X_2\to Y$ — and the fine MIS collapses to
+$\{X_2\}$ alone: \CBO{} loses the optimal arm \emph{structurally}, before
+any data are seen. The damage is permanent and calculable: its best
+reachable value is $\min_{x_2} \E[Y\mid\doo(x_2)] = \lambda(4+\mathrm{Var}
+X_1) = 4.25$, and every seed's full-horizon trajectory pins there
+(Fig.~\ref{fig:minimal-misspec}a) — the arm-deletion failure of
+Remark~\ref{rem:taxonomy}, realized at its analytic value. \QCBO{} is
+trajectory-invariant: arm choices, intervention values, and incumbents are
+identical under A0 and A1 on every seed ($\sup|\Delta|=0$,
+Table~\ref{tab:minimal-taxonomy}), and it reaches $y^\star$. The
+negative control A3 assumes a spurious $X_1\leftrightarrow Y$: this
+\emph{is} quotient-visible (the C-DAG gains $C_1\leftrightarrow Y$, a
+cluster bow), so \QCBO{} keeps running — membership is never gated — but
+its cluster arm drops to the uninformative tier and its trajectory moves
+off its A0 path on every seed: the protection boundary is exactly where
+Remark~\ref{rem:structural_robustness} draws it. The intra-cluster bow A2
+(add $X_1\to X_2$ on the confounded pair) rounds out the taxonomy: it flips
+$\doo(X_1)$'s fine prior tier, yet even \emph{fine} \CBO{} moves by
+$\sup|\Delta|<10^{-2}$ here — the corrupted singleton is irrelevant to the
+optimum, which motivates Experiment B's design.
 
-\textbf{Refining away the plateau.}
-\HQCBO{} runs the identical coarse configuration with the singleton hierarchy declared for $C_1$. The trigger fires at trial $11.1\pm0.8$ (10 seeds), the split passes the validity re-check, and the warm-started refined phase descends immediately: final $Y=0.101\pm0.001$, indistinguishable from \CBO{} ($0.103\pm0.001$), against the \QCBO{} plateau at $1.128\pm0.016$. Cumulative regret (Remark~\ref{rem:regret}): fixed-partition \QCBO{} accrues $R_{100}=120.3\pm3.1$, growing at the linear rate the action-space bound prescribes, while \HQCBO{}'s $32.1\pm2.6$ has flattened over the observed horizon (Fig.~\ref{fig:refine}, App.~\ref{app:refine}). \CBO{}'s $5.3\pm0.7$ remains the best constant: refinement does not out-run a correctly specified full-DAG optimizer, but it removes fixed-partition \QCBO{}'s linear regret while phase 1 keeps \QCBO{}'s invariance (Remark~\ref{rem:phase_invariance}). On the lossless control the trigger still fires and costs nothing ($R_{100}$: $41.6\pm5.8$ vs $41.8\pm5.2$; App.~\ref{app:refine}).
+\begin{figure*}[t]\centering
+\includegraphics[width=\textwidth]{figures/minimal_misspec}
+\caption{Correct (solid) vs misspecified (dashed) trajectories, mean
+$\pm$\,s.e.\ over $30$ seeds. (a) Exploration-set corruption
+(\textsc{ParallelParent}): wrong-fine \CBO{} plateaus at the analytic gap
+$G(\lambda)=4.25$; \QCBO{}'s misspecified trajectory coincides exactly with
+its correct one (black dashes over orange, $\sup|\Delta|=0$); the
+quotient-visible control (pink) moves \QCBO{} off its path. (b) Prior
+corruption (\textsc{FrontDoor}): the assumed intra-cluster
+$X_1\leftrightarrow M$ costs fine \CBO{} its do-calculus head start —
+transiently slower, same final value — while \QCBO{} is exactly invariant.}
+\label{fig:minimal-misspec}
+\end{figure*}
 
-\textbf{The cost of a wrong partition.} Soundness requires the true fine graph to quotient to $\Gq$. App.~\ref{app:wrongpi} stresses that assumption with a fixed, acyclic but \emph{incorrect} C-DAG and finds graceful degradation, not collapse (final $Y=0.49$ vs $0.13$ correct, $0.29$ \CBO{}, $1.98$ \BO{}): a misspecified \emph{clustering} costs bounded solution quality.
+\subsection{Experiment B: prior corruption without arm loss}
+\label{sec:exp-b}
+The recoverable channel needs the corrupted prior to sit on an arm that
+matters. \textsc{FrontDoor} arranges exactly that: $X_1\to M\to Y$ with
+latent $X_1\leftrightarrow Y$ and a \emph{narrow-well} target
+$Y=2\,(1-e^{-(M-1)^2/2\cdot 0.3^2})+U+\varepsilon$, so the optimal arm is
+$\doo(M{=}1)$ ($y^\star=0$; backdoor through $X_1$), $\doo(X_1)$ is
+identified by the front-door functional, and the do-calculus prior's head
+start — knowing where the well is — is the difference between sampling it
+immediately and searching a domain twenty well-widths wide. (On a smooth
+quadratic the same class of corruption measurably costs \emph{nothing} —
+any BO self-corrects within a couple of trials, cf.\ the A2 discussion in
+\S\ref{sec:exp-a}. Prior corruption is a global-search phenomenon.) Condition B1 assumes a spurious intra-cluster confounder
+$X_1\leftrightarrow M$: the fine MIS is untouched, but \emph{both} fine
+arms — including the optimal $\doo(M)$ — lose identification and drop to
+the uninformative tier (Eq.~\ref{eq:two_tier_prior}). The effect is
+transient damage, precisely as Remark~\ref{rem:taxonomy} classifies it:
+fine \CBO{} under B1 is visibly slower early
+(Fig.~\ref{fig:minimal-misspec}b), paying $\Delta R_{50} = 6.1\pm1.0$
+cumulative regret (paired, mean$\pm$s.e., $30$ seeds), yet recovers
+essentially the same final value ($0.006$ vs $0.001$, against an
+observational baseline of $1.64$) — the arm is still there, and
+interventional data override the lost prior. The coarse
+partition $\{X_1,M\}$ quotients to the ToyGraph bow ($C_1\to Y$,
+$C_1\leftrightarrow Y$), so \QCBO{}'s single cluster arm runs on the
+uninformative tier \emph{in both conditions} — and its trajectories,
+arm choices, and intervention values are exactly identical
+($\sup|\Delta|=0$): the assumed $X_1\leftrightarrow M$ is intra-cluster,
+and the quotient cannot even represent it.
 
-\subsection{The contract in the model-based family}
-\label{sec:exp-qmcbo}
-We run \QMCBO{} against MCBO through MCBO's own harness and protocol ($T{=}100$, $5$ seeds) on its two CBO-lineage tasks (\textsc{ToyGraph} and \textsc{PSAGraph}; causal sufficiency holds in both). \QMCBO{} differs from MCBO only in the model's graph view and the lifted targets.
+\subsection{Experiment C: the price of coarsening, and buying it back}
+\label{sec:exp-c}
+\textsc{MediatedChain} makes the price of Prop.~\ref{prop:price} concrete
+in two variables: $X_1\to X_2\to Y$ with $Y=(X_2-4)^2$, $X_2 = 2X_1$ (plus
+noise), and the \emph{policy box} $D(X_2)=[-2,2]$. Fine MIS $=
+\{X_1\},\{X_2\}$ — on a chain the joint is not minimal
+(Prop.~\ref{prop:refinement}) — and the fine optimum $\doo(X_1{=}2)$ drives
+$X_2$'s natural response to $4$, \emph{outside} the box: exactly the
+constrained-domain mechanism by which Prop.~\ref{prop:free}'s premise (i)
+fails. The whole-cluster arm $\doo(X_1,X_2)$ must clamp $X_2$ into the box,
+so $V(\Pi)=(2-4)^2=4$ against $y^\star=\sigma_2^2=0.04$: an analytic price
+of $3.96$. The runs realize it exactly (Fig.~\ref{fig:minimal-refine}):
+\CBO{} descends to $y^\star$ through its sub-cluster arm (final $0.040$),
+fixed-partition \QCBO{} pins at $4.000$ on every seed and accrues
+cumulative regret at the linear rate the action-space bound prescribes
+(Remark~\ref{rem:regret}; $R_{60}=252.7\pm1.8$), and \HQCBO{} — same
+coarse configuration, singleton hierarchy declared — plateaus, triggers at
+trial $7.5\pm0.1$ ($30/30$ seeds, no refused splits), splits
+$\{X_1,X_2\}$, and descends to $0.040\pm0.000$: the fixed partition's
+linear regret flattens once the refined exploration set contains the
+optimal fine arm ($R_{60}=46.7\pm2.0$, against \CBO{}'s $10.4\pm3.0$). Phase 1 is
+byte-identical to \QCBO{}'s prefix on every seed
+(Remark~\ref{rem:phase_invariance}).
 
-\textbf{Invariance (Table~\ref{tab:qmcbo-e2}, App.~\ref{app:fulltables}).} Under an intra-cluster misspecification of the model's view, \QMCBO{}'s trajectories are identical to their correct-graph runs on $10/10$ (env, seed) pairs (Cor.~\ref{cor:qmcbo_invariance} realized), while MCBO's shift on $8/10$, in a direction that is not predictable: on these SCMs the wrong graph sometimes \emph{helped}.
+\begin{figure}[t]\centering
+\includegraphics[width=\linewidth]{figures/minimal_refine}
+\caption{The price of coarsening and its recovery
+(\textsc{MediatedChain}, mean$\pm$s.e., $30$ seeds). Top: best-so-far
+against the analytic $V(\Pi)=4$ and $y^\star=0.04$ (log scale); the
+vertical line marks the mean refinement trigger. Bottom: cumulative
+regret — linear growth for the fixed partition, flattening for \HQCBO{},
+with fine \CBO{} the best constant.}
+\label{fig:minimal-refine}
+\end{figure}
 
-\textbf{Soundness matters (Table~\ref{tab:qmcbo-e1}).} On \textsc{ToyGraph}, whose cluster contains the only intra-cluster edge, the joint cluster mechanism reaches $2.150{\pm}0.013$ against the $2.172$ optimum — hitting it exactly on three of five seeds — where MCBO never improves on its initial design ($1.14{\pm}0.27$): the within-cluster correlation of Prop.~\ref{prop:qsound} is the missing ingredient. On \textsc{PSAGraph} both methods converge to the same plateau ($-5.15{\pm}0.00$), \QMCBO{} in $3.0\times$ less wall-clock ($2266$ vs $6830$\,s per unit).
-
-\begin{table}[t]\centering
-  \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds, $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit.}
-  \label{tab:qmcbo-e1}
-  \small
-  \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e1}}
-\end{table}
-
-\subsection{Each family on its own experiments}
-\label{sec:exp-family}
-We compare each quotient method with its base on the experiments the base method's own paper ran, in that paper's own metric, running every base through its authors' released stack. \CBO{} vs \QCBO{}: the 2020 paper's Toy, Synthetic, and coral-reef ecosystem examples, best attained $\E[Y\mid\doo]$ over trials at unit cost, 10 seeds. DCBO vs \QDCBO{}: its stationary, independent, and nonstationary DBNs at $T{=}3$, best $Y$ per time slice, 20 seeds. MCBO vs \QMCBO{}: its ToyGraph and PSAGraph tasks, best attained reward over trials, 5 seeds (the paper's remaining four problems are function networks, where a partition of function nodes has no causal reading, so we leave them out). Every dataset's DAG and quotient C-DAG are drawn in App.~\ref{app:dags}. Figure~\ref{fig:family} overlays the trajectories and Table~\ref{tab:family} reports the finals.
+\subsection{Experiment D: portability across families}
+\label{sec:exp-d}
+The minimal suite isolates mechanisms; the remaining question is whether
+the contract survives contact with the field's own benchmarks and
+optimizer families. We compare each quotient method with its base on the
+experiments the base method's own paper ran, in that paper's own metric,
+running every base through its authors' released stack: \CBO{} vs \QCBO{}
+on the 2020 paper's Toy, Synthetic, and coral-reef examples (best
+$\E[Y\mid\doo]$, $10$ seeds); DCBO vs \QDCBO{} on its stationary,
+independent, and nonstationary DBNs at $T{=}3$ (best $Y$ per slice, $20$
+seeds); MCBO vs \QMCBO{} on its ToyGraph and PSAGraph tasks (best reward,
+$5$ seeds; the paper's remaining problems are function networks, where a
+partition of function nodes has no causal reading). Every dataset's DAG
+and quotient are drawn in App.~\ref{app:dags}; Fig.~\ref{fig:family}
+overlays the trajectories and Table~\ref{tab:family} reports finals and
+realized prices.
 
 \begin{figure*}[t]\centering
 \IfFileExists{figures/family_suite.pdf}{\includegraphics[width=\textwidth]{figures/family_suite}}{\fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}family\_suite.pdf pending\vspace{2cm}}}}
-\caption{Each quotient method against its base on the base paper's own experiments and metric (mean$\pm$s.e.). Top: \CBO{} vs \QCBO{} (best $\E[Y\mid\doo]$, minimization). Middle: DCBO vs \QDCBO{} (best $Y$ per time slice, trials concatenated across slices). Bottom: MCBO vs \QMCBO{} (best reward, maximization). Dashed line: oracle optimum where known.}
+\caption{Each quotient method against its base on the base paper's own experiments and metric (mean$\pm$s.e.). Top: \CBO{} vs \QCBO{} (best $\E[Y\mid\doo]$, minimization). Middle: DCBO vs \QDCBO{} (best $Y$ per time slice, trials concatenated across slices). Bottom: MCBO vs \QMCBO{} (best reward, maximization).}
 \label{fig:family}
 \end{figure*}
- The quotient matches or beats its base on six of the eight experiments, including \QDCBO{} on all three of DCBO's own setups and \QMCBO{} essentially reaching ToyGraph's optimum ($2.15{\pm}0.01$ vs $2.172$) where MCBO never improves on its initial design. The two material positive prices are exactly where Prop.~\ref{prop:price} predicts them: Synthetic, whose optimum $\doo(B,D)$ splits the domain partition, and, mildly, Coral. On Toy the single coarse arm is not identifiable from the C-DAG — the bow of Fig.~\ref{fig:toybow} — so, per the declared two-tier rule (Eq.~\ref{eq:two_tier_prior}), \QCBO{} keeps the arm and runs it on the uninformative prior, learning the response from interventional data alone, and still matches \CBO{} ($-2.13{\pm}0.03$ vs $-2.16{\pm}0.00$).
+
+\textbf{Value.} The quotient matches or beats its base on six of the eight
+experiments, including \QDCBO{} on all three of DCBO's own setups and
+\QMCBO{} essentially reaching ToyGraph's optimum ($2.150{\pm}0.013$ vs
+$2.172$, exact on three of five seeds) where MCBO never improves on its
+initial design ($1.14{\pm}0.27$) — the within-cluster correlation of
+Prop.~\ref{prop:qsound} is the missing ingredient; on PSAGraph both
+converge to the same plateau ($-5.15{\pm}0.00$), \QMCBO{} in $3.0\times$
+less wall-clock. The two material positive prices are exactly where
+Prop.~\ref{prop:price} predicts them: Synthetic, whose optimum
+$\doo(B,D)$ splits the domain partition, and, mildly, Coral. On Toy the
+single coarse arm is the bow of Fig.~\ref{fig:toybow}: per the two-tier
+rule \QCBO{} keeps the arm on the uninformative prior and still matches
+\CBO{} ($-2.13{\pm}0.03$ vs $-2.16{\pm}0.00$).
+
+\textbf{Invariance within each family.} Under within-family
+quotient-invisible perturbations of the model's view, \QMCBO{}'s
+trajectories are identical to their correct-graph runs on $10/10$
+(env, seed) pairs (Cor.~\ref{cor:qmcbo_invariance} realized) while MCBO's
+shift on $8/10$ — in a direction that is not predictable: on these SCMs
+the wrong graph sometimes \emph{helped}; \QDCBO{} is likewise invariant on
+its three setups under the intra-slice edit while DCBO moves (App.~\ref{app:fulltables}). Which case a
+practitioner is in cannot be known without the very structure in doubt;
+the contract removes the question for every quotient-invisible error.
 
 \begin{table}[t]\centering
   \caption{Realized price of coarsening per family, each pair on the base
@@ -748,105 +814,119 @@ The two examples below are not decoration: they show the premises are
 \emph{tight} — dropping either one admits an SCM with strictly positive
 price, so no weaker hypothesis of this form can give the conclusion.
 
-\emph{Necessity of (i), realized by \textsc{ClusterBench10L}.} The policy box restricts hard interventions to $[-2,2]$ while the strengthened mechanism $X_2=1.5\,X_3$ pushes $X_2$ to $\approx 2.6$, near its bowl center $2.7$, when $X_3\approx1.7$ is set. The mediated path reaches values the box forbids, so $\doo(X_1,X_3)$ strictly beats every in-box whole-cluster intervention: the realized price is $0.95$. (The mixture argument fails at the reachability step: the best component $\mathbf{b}$ lies outside the interventional domain.)
+\emph{Necessity of (i), realized by \textsc{MediatedChain} (\S\ref{sec:exp-c}).} The policy box restricts hard interventions on $X_2$ to $[-2,2]$ while the mechanism $X_2=2X_1$ drives $X_2$'s natural response to $4$, the bowl center of $Y=(X_2-4)^2$, when $X_1{=}2$ is set. The mediated path reaches values the box forbids, so $\doo(X_1{=}2)$ strictly beats every in-box whole-cluster intervention: the price is exactly $V(\Pi)-y^\star=(2-4)^2-\sigma_2^2=3.96$ (App.~\ref{app:minibench}). (The mixture argument fails at the reachability step: the best component $\mathbf{b}$ lies outside the interventional domain.)
 
 \emph{Necessity of (ii).} Let $C=\{A,B\}$ with latent $U$, mechanisms $B=U$ and $Y=-B\,U+(A-1)^2$, $U$ standard normal. Under $\doo(A{=}1)$ with $B$ free, $\E[Y]=-\E[U^2]=-1$. Under any whole-cluster $\doo(A{=}a,B{=}b)$, $\E[Y]=-b\,\E[U]+(a-1)^2\ge 0$. Intervening severs the exploitable correlation between $B$ and $Y$: the backdoor path $B\leftrightarrow Y$ escapes the cluster, $U\in\mathbf{U}_{\mathbf{B}}\cap\mathbf{U}_{Y}$, the independence step fails, and the price is $1$ despite unconstrained domains.
 \end{proof}
 
-\section{ClusterBench10: specification and oracle}\label{app:scm}
+\begin{proof}[Proof of Remark~\ref{rem:invariance_spent}]
+Split the run at the trigger. Pre-trigger, every graph-dependent component
+factors through $(\Pi,\Gq)$, and by Remark~\ref{rem:phase_invariance} the
+trigger time and split decision are functions of the trajectory and the
+declared hierarchy alone, so two hypotheses with the same $\Gq$ produce the
+same phase-1 run \emph{and} the same refined partition $\Pi'$. Post-trigger,
+the components factor through $(\Pi',\Gg^{\Pi'})$, so
+Theorem~\ref{thm:contract} applies verbatim at $\Pi'$: hypotheses agreeing
+on $\Gg^{\Pi'}$ are indistinguishable. An edit confined to a never-split
+cluster is invisible in both $\Gq$ and $\Gg^{\Pi'}$ (the cluster is intact
+in both partitions), hence protected across the whole run; an edit inside
+the split cluster $C$ is invisible in $\Gq$ but generally visible in
+$\Gg^{\Pi'}$ (its endpoints now lie in distinct $\Pi'$-clusters), which is
+exactly the exposure purchased. No other edit changes visibility: quotient
+edges between untouched clusters are the same in $\Gq$ and $\Gg^{\Pi'}$.
+\end{proof}
 
-\paragraph{Variables and partition.}
-ClusterBench10 has five manipulable variables $\mathbf{X}=\{X_1,\dots,X_5\}$, four
-non-manipulable mediators $\{M_1,M_2,M_3,M_4\}$, and the target $Y$, plus two latent
-confounders $U_{12}\!\to\!\{X_1,X_2\}$ and $U_{15}\!\to\!\{X_1,X_5\}$ (bidirected
-$X_1\!\leftrightarrow\!X_2$ and $X_1\!\leftrightarrow\!X_5$ in the projected ADMG).
-The coarse partition is $\Pi=\{C_1,C_2\}\cup\text{singletons}$ with
-$C_1=\{X_1,X_2,X_3\}$, $C_2=\{X_4,X_5\}$. All non-manipulable atoms and $Y$ are
-singletons. The finest partition $\Pi_\bot$ (all singletons) recovers \CBO{}
-(Prop.~\ref{prop:identity}).
+\section{MinimalBench: specification and oracles}\label{app:minibench}
 
-\paragraph{Structural equations.}
-Roots $X_1,X_3,X_4,X_5$ carry only exogenous noise (and their latents). The remaining
-mechanisms are
-\[
-\begin{array}{llll}
-X_2 = 0.3\,X_3, & M_1 = X_3, & M_2 = X_1+X_2, & M_3 = X_4+X_5,\quad M_4 = X_5,
-\end{array}
-\]
-all linear, and the target is a \emph{quadratic bowl} in its parents,
-\[
-Y \;=\; \sum_{p\in\Pa(Y)} a_p\,(p-c_p)^2,\qquad
-\Pa(Y)=\{X_1,X_2,X_3,M_1,M_2,M_3,M_4\},
-\]
-with curvatures $a=(3.0,1.5,1.0,0.5,0.8,0.3,0.3)$ and centres
-$c=(2,1,1,1,3,0,0)$ over $(X_1,X_2,X_3,M_1,M_2,M_3,M_4)$. The quadratic form places the
-optimum at an \emph{interior} point (not a box vertex), so unstructured \BO{} cannot
-solve it in a constant number of evaluations. This is what makes the sample-efficiency
-comparison non-degenerate. In the observational sampler every node receives
-additive Gaussian noise ($\sigma=0.7$, except $\sigma_Y=1$ and
-$\sigma_{X_3}=\sigma_{X_4}=\sigma_{X_5}=1$), and the latents enter their
-children with unit loadings, $U_{12}\sim\mathcal{N}(0,1.6^2)$ and
-$U_{15}\sim\mathcal{N}(0,1^2)$. The $U_{12}$ scale is what produces
-$\mathrm{corr}(X_1,X_2)\approx 0.70$. The latent confounders enter only the
-observational
-sampler and the declared structure: the noise-free objective every method optimizes
-is the deterministic SEM above, identical across all methods and perturbations
-(App.~\ref{app:seam}).
+The three SCMs share one parameterization — Gaussian roots, manipulable
+domains $[-3,3]$ (except the \textsc{MediatedChain} policy box), unit
+intervention costs, target noise $\sigma_Y=0.1$, no clipping — so every arm
+value is closed-form. The structural module that defines them
+(\texttt{ccbo/minibench.py}) is the same one the methods, the perturbation
+registry, the structural tests, and Table~\ref{tab:minimal-taxonomy}'s
+emitter consume, so specification and experiment cannot drift. Observational
+datasets ($5{,}000$ rows, seed $0$; every run uses the first
+$n_{\mathrm{obs}}{=}100$) are produced by released generators whose built-in
+oracle gates assert the Monte-Carlo arm values against the closed forms
+below (tolerance $0.05$) at build time.
 
-\paragraph{Monte-Carlo oracle (verified at build time).}
-The generator's oracle minimizes the noise-free objective over each intervention arm's
-box and confirms: (C1) $\doo(X_1)$ is the strongest \emph{singleton} arm (it lowers $Y$
-from the no-intervention value $\approx 23.7$ to $\approx 3.6$, a reduction of $20.0$,
-versus $8.1$ for $\doo(X_2)$ and $5.6$ for $\doo(X_3)$), so losing it at the finest
-partition is a genuine loss; (C2) the global optimum over all subsets is
-$\doo(C_1)=\doo(X_1,X_2,X_3)$ at $(X_1,X_2,X_3)=(2,1,1)$ with $Y^\star=0$, a
-\emph{union of clusters}, so the coarse partition is lossless (Prop.~\ref{prop:price});
-$C_2$ is neutral-to-harmful (its $Y$-terms are minimized at $X_4=X_5=0$), so a method
-that intervenes on the full $5$-dimensional box wastes two dimensions; (C3) the optimum
-is interior; and the observational sample has $\mathrm{corr}(X_1,X_2)=0.70$ via $U_{12}$,
-making the bow a genuine confounded misspecification. All perturbed graphs below are
-acyclic. The build script is \texttt{scripts/generate\_clusterbench10.py} and the
-structural premises are asserted in \texttt{ccbo/tests/test\_clusterbench10\_structure.py}.
+\paragraph{\textsc{ParallelParent} (Experiment A).}
+Latent $U$; manipulable $X_1,X_2$; target $Y$:
+\begin{align*}
+  U = 0.4\,\epsilon_0,\quad
+  X_i = U + 0.3\,\epsilon_i,\quad
+  Y = \lambda(X_1-2)^2 + (X_2+2)^2 + \sigma_Y\epsilon_Y,
+\end{align*}
+with $\lambda=1$; the latent projection carries $X_1\leftrightarrow X_2$
+($\mathrm{corr}=0.64$), and $\mathrm{Var}X_i=0.25$. Coarse partition
+$C_1=\{X_1,X_2\}$. Closed forms:
+$\E[Y\mid\doo(x_1,x_2)]=\lambda(x_1-2)^2+(x_2+2)^2$, so $y^\star=0$ at the
+joint arm; $\E[Y\mid\doo(x_1)]=\lambda(x_1-2)^2+4.25$ (the free co-parent's
+bowl plus its variance) and $\E[Y\mid\doo(x_2)]=4.25\lambda+(x_2+2)^2$.
+Under A1 (delete $X_1\to Y$) the fine MIS is $\{X_2\}$ alone —
+$X_1\notin\An(Y)$ in every mutilation — so the best reachable fine value is
+$G(\lambda)=\lambda\,(4+0.25)=4.25\lambda$, the analytic gap of
+\S\ref{sec:exp-a}. Conditions: A1 = del $X_1\to Y$ (quotient-redundant); A2
+= add $X_1\to X_2$ (intra-cluster bow with the latent $X_1\leftrightarrow
+X_2$: $\doo(X_1)$ loses identification, membership intact); A3 = assume
+$X_1\leftrightarrow Y$ (quotient-visible: the C-DAG gains
+$C_1\leftrightarrow Y$ and the cluster arm drops to the uninformative
+tier; \QCBO{} keeps running).
 
-\paragraph{Perturbation taxonomy.}
-Each perturbation adds/deletes/reverses one or more edges, classified by whether its
-endpoints lie within a coarse cluster (\emph{intra}) or across clusters (\emph{inter}),
-and by whether it is \emph{quotient-invisible} (intra, or inter-but-redundant). The
-headline contrast is \textbf{P1} (add $X_1\!\to\!X_2$, an intra-$C_1$ bow on the
-$X_1\!\leftrightarrow\!X_2$ confounded pair, which makes $\doo(X_1)$ non-identifiable at the
-finest partition) versus \textbf{Pic} (add $X_1\!\to\!X_5$, the same operation across
-clusters, which forms a cluster-level bow $C_1\!\to\!C_2$ alongside
-$C_1\!\leftrightarrow\!C_2$, rendering $\doo(C_1)$ non-identifiable at the coarse level). The remaining
-perturbations are P2 (delete $X_3\!\to\!X_2$) and P3 (reverse it), both intra-$C_1$
-prior-bias controls; P5 (delete the sole inter edge $X_3\!\to\!M_1$) and P6 (delete the
-\emph{redundant} inter edge $X_1\!\to\!M_2$, with $X_2\!\to\!M_2$ surviving so the
-quotient is unchanged); P7 (omit the latent confounder $X_1\!\leftrightarrow\!X_2$
-from the assumed graph, the \emph{forgotten confounder}: directed edges and hence
-all identifiability verdicts are untouched, so this is a pure prior-bias
-perturbation); and a severity sweep S1--S3 of $1,2,3$ simultaneous intra-$C_1$
-edits. \QCBO{} is provably invariant on every quotient-invisible
-perturbation (P1, P2, P3, P6, P7, S1--S3) and is \emph{not} protected on Pic and P5.
+\paragraph{\textsc{FrontDoor} (Experiment B).}
+Latent $U$; manipulable $X_1,M$; target $Y$:
+\begin{align*}
+  U &= 0.4\,\epsilon_0,\qquad X_1 = U + 0.3\,\epsilon_1,\qquad
+  M = 2X_1 + 0.2\,\epsilon_M,\\
+  Y &= 2\bigl(1-e^{-(M-1)^2/(2\cdot 0.3^2)}\bigr) + U + \sigma_Y\epsilon_Y.
+\end{align*}
+The latent projection carries $X_1\leftrightarrow Y$. The target is a
+narrow well (width $0.3$ over the $6$-wide domain): prior corruption is a
+global-search phenomenon, and on a smooth quadratic the same corruption
+measurably costs nothing (\S\ref{sec:exp-b}). Fine MIS $=\{X_1\},\{M\}$
+(chain); $\doo(M)$ is identified by backdoor through $X_1$, $\doo(X_1)$ by
+the front-door functional through $M$. Gaussian smoothing gives the closed
+forms: $\E[Y\mid\doo(m)]=2(1-e^{-(m-1)^2/0.18})$, so $y^\star=0$ at
+$\doo(M{=}1)$; $\E[Y\mid\doo(x_1)]=2\bigl(1-\tfrac{0.3}{\sqrt{0.3^2+0.2^2}}
+e^{-(2x_1-1)^2/(2(0.3^2+0.2^2))}\bigr)$, best $\approx 0.336$ at
+$x_1=1/2$; observational mean $\E[Y]\approx 1.637$. The coarse partition
+$\{X_1,M\}$ quotients to the bow $C_1\to Y$, $C_1\leftrightarrow Y$: the
+cluster arm runs on the uninformative tier in \emph{every} condition, and
+setting $M$ directly makes the partition lossless ($V(\Pi)=y^\star=0$).
+Condition B1 assumes a spurious intra-cluster confounder
+$X_1\leftrightarrow M$: both fine arms lose identification (the backdoor
+set $\{X_1\}$ for $\doo(M)$ is invalidated by the induced collider path,
+the front-door premise for $\doo(X_1)$ by the confounded
+$X_1\!\to\!M$ edge), while the quotient — which drops intra-cluster
+bidirected edges — is unchanged.
 
-\begin{table}[t]\centering
-  \caption{The same intra bow, opposite sign: on \textsc{ClusterBench10D} the
-  lost arm \emph{is} the optimum's cheapest route, and full-DAG \CBO{}'s
-  cumulative regret $R_T$ rises $4.6\times$ ($10$ seeds, $T{=}100$,
-  $y^\star{=}0$).}
-  \label{tab:damage}
-  \small
-  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10D_damage}}
-\end{table}
+\paragraph{\textsc{MediatedChain} (Experiment C).}
+No latents; manipulable $X_1,X_2$; target $Y$:
+\begin{align*}
+  X_1 = 0.5\,\epsilon_1,\qquad X_2 = 2X_1 + 0.2\,\epsilon_2,\qquad
+  Y = (X_2-4)^2 + \sigma_Y\epsilon_Y,
+\end{align*}
+with $D(X_1)=[-3,3]$ and the \emph{policy box} $D(X_2)=[-2,2]$. Fine MIS
+$=\{X_1\},\{X_2\}$: the joint is not minimal on a chain (mutilating $X_2$
+severs $X_1$ from $\An(Y)$; Prop.~\ref{prop:refinement}), so the joint
+intervention exists only as the quotient's cluster arm, which must clamp
+$X_2$ into the box. Closed forms: $\E[Y\mid\doo(x_1)]=(2x_1-4)^2+0.04$, so
+$y^\star=0.04$ at $\doo(X_1{=}2)$ — driving $X_2$'s natural response to
+$4$, outside the box; $\E[Y\mid\doo(x_2)]=(x_2-4)^2$, best over the box
+$=4$; hence $V(\Pi)=4$ and the price $V(\Pi)-y^\star=3.96$
+(Prop.~\ref{prop:price}; premise (i) of Prop.~\ref{prop:free} fails by
+construction). The declared hierarchy splits $C_1=\{X_1,X_2\}$ into
+singletons; one split reaches the identity partition, whose MIS contains
+the optimal $\doo(X_1)$ arm.
 
-\paragraph{ClusterBench10D (the damage companion).}
-Identical structure, mechanisms, noise, and latents: only $Y$'s centers move to
-the values $\doo(X_1{=}2)$ induces in the noise-free SEM, $c=(2,0,0,0,2,0,0)$
-over $(X_1,X_2,X_3,M_1,M_2,M_3,M_4)$. Consequently $\doo(X_1)$ attains the global
-optimum $y^\star{=}0$ (the runner-up singleton is $\ge 14$), $\doo(C_1)$ attains
-the same value (the coarse partition stays lossless), and
-$\mathrm{corr}(X_1,X_2)=0.70$ is unchanged. Build-time oracle checks D1--D3
-assert exactly these three premises
-(\texttt{scripts/generate\_clusterbench10D.py}). The runner asserts
-\QCBO{}'s invariance under the bow before writing results.
+\paragraph{Structural tests and oracle gates.}
+Dataset-free structural tests assert, per condition, the exact fine MIS,
+the C-DAG signature (in)equalities, and the prior-tier flips claimed above,
+and end-to-end regressions assert \QCBO{}'s trajectory invariance (arm
+choices and intervention values exactly; incumbents to $10^{-8}$) under
+every protected condition and its divergence under A3. The data generators
+refuse to write datasets whose Monte-Carlo arm values, correlations, or
+policy-box geometry contradict the closed forms.
 
 \section{Fixed-objective protocol: per-method details}\label{app:seam}
 The invariant is that every method optimizes the \emph{same} objective, the true
@@ -858,6 +938,15 @@ SEM, while the structure is supplied separately through the assumed graph name
 (\texttt{CoarsenedGraph(\ldots, assumed\_graph\_name=variant)}). Swapping the assumed
 graph changes the quotient, the exploration set, the identification formulas, and the
 prior, but never the SEM that generates outcomes.
+\emph{Prior pipeline.} An identifiable arm's prior mean instantiates the
+identified formula as a pipeline of GP-based plug-ins (backdoor $\to$
+front-door $\to$ $g$-computation) on the bidirected-edge expansion of
+$\Gq$. A non-identifiable arm — and any identifiable query the
+sound-but-incomplete pipeline cannot instantiate — shares the common
+uninformative prior, the observational mean of $Y$. Because clusters are
+manipulable-only and interventions assign full clusters, the cluster-level
+formulas expand exactly into fine-grained regressions on observational
+data.
 
 \textbf{\CBO{} (full-DAG identification).} \CBO{} is \QCBO{}'s backend at the
 identity partition (Prop.~\ref{prop:identity}): it runs the same complete
@@ -869,40 +958,47 @@ is identical to \QCBO{}'s at the finest partition on every graph.
 
 \emph{Exploration-set disclosure.} Both methods use the MIS of the assumed
 graph (Eq.~\ref{eq:mis}), computed by the released code and verified against
-hand-derived Lee--Bareinboim ground truth per benchmark. The \CBO{} authors'
+hand-derived Lee--Bareinboim ground truth per benchmark (for the minimal
+suite, the per-condition sets are also asserted by the structural tests of
+App.~\ref{app:minibench}). The \CBO{} authors'
 shipped code deviates from that definition in two places, which we correct
-for both methods: on ToyGraph it lists the non-minimal arm $\{X,Z\}$
+for both methods in the family suite: on ToyGraph it lists the non-minimal
+arm $\{X,Z\}$
 (mutilating $Z$ cuts $X\to Z$, so $\doo(X,Z)\equiv\doo(Z)$ and the joint arm
 is redundant), and on CoralGraph it truncates the list at subsets of size
 three (an ad-hoc cap; the definition yields all $31$ non-empty subsets, as
 every manipulable variable keeps a directed path to $Y$ through
 never-intervened non-manipulables under any mutilation).
 
-\textbf{\BO{} (non-causal control).} \BO{} optimizes a single joint intervention
-on all manipulable variables with a zero-mean GP prior
-(\texttt{Causal\_prior=False}): it reads no structure at all, so it
-is invariant to every perturbation by construction (we run it once and report
-$\Delta=0$), at the price of the weakest absolute performance.
+\textbf{\HQCBO{}.} Phase 1 is the \QCBO{} configuration run by the same
+code path with the same seed (the trigger is a function of the coarse
+trajectory alone), so its pre-trigger prefix is byte-identical to the
+\QCBO{} run — asserted per seed. The refined phase re-enters the same
+backend with the split partition, the unioned exploration set, and the
+carried per-arm data (\S\ref{sec:refine}); the vendored loop forces an
+observation step at the start of a phase, a small bias \emph{against}
+refinement that we keep.
 
-\textbf{Byte-identity verification.} For the backend methods the decoupling holds
-by construction: outcomes are always evaluated on the true graph's SEM, and the
-perturbation enters only through the separately-supplied assumed-graph variant.
-As an independent guard, \texttt{seam\_ok} evaluates the objective on every
-singleton arm at random points under the true (P0) versus each perturbed
-structure and asserts the outcomes match to machine precision. It passes for all
-perturbations P1--P6 and S1--S3: feeding a method a wrong DAG changes only its causal
-reasoning, never the problem it is solving.
+\textbf{Objective-identity verification.} For all methods the decoupling
+holds by construction: outcomes are always evaluated on the true graph's
+SEM, and the perturbation enters only through the separately-supplied
+assumed-graph variant (including assumed latents, as in A3 and B1). The
+released data generators additionally refuse to build any dataset whose
+Monte-Carlo arm values contradict the closed-form oracles
+(App.~\ref{app:minibench}): feeding a method a wrong graph changes only its
+causal reasoning, never the problem it is solving.
 
 \section{Dataset graphs and their quotients}\label{app:dags}
 For every dataset in the paper, the figures below show the fine DAG with its
 coarse partition and the quotient C-DAG the method actually consumes —
 regenerated from the released structure registry by
 \texttt{scripts/emit\_dataset\_tikz.py}, so the pictures cannot drift from
-the code. The ToyGraph pair is the bow of Fig.~\ref{fig:toybow}; on
-ClusterBench10, note how the intra-cluster latent $U_{12}$ disappears in the
-quotient while the cross-cluster $U_{15}$ survives as
-$C_1\leftrightarrow C_2$ — the exact scope boundary of
-Theorem~\ref{thm:contract}.
+the code. On \textsc{ParallelParent}, note how the intra-cluster latent
+$X_1\leftrightarrow X_2$ disappears in the quotient while $C_1\to Y$
+survives any single parent-edge deletion — the redundancy behind
+Experiment A; the \textsc{FrontDoor} and ToyGraph pairs both quotient to
+the bow of Fig.~\ref{fig:toybow} — the exposure trade of
+Prop.~\ref{prop:qexposure}.
 \input{figures/dataset_dags}
 
 \section{Implementation and reproducibility}\label{app:repro}
@@ -944,34 +1040,46 @@ kernel (signal variance and lengthscale initialized to $1$, ARD off) and observa
 noise fixed near zero ($10^{-10}$, matching the deterministic mechanisms). The causal
 prior supplies the do-calculus estimate as the GP \emph{mean function}, so
 $\Delta$-metrics isolate the effect of a wrong prior/exploration set from surrogate
-noise. \textbf{Acquisition.} Causal Expected Improvement (Eq.~\ref{eq:ei}), maximized
+noise. \textbf{Acquisition.} Causal expected improvement \citep{garnettBayesianOptimization2023}, maximized
 over the box-constrained intervention domain by gradient-based L-BFGS.
-\textbf{Protocol.} Unit per-variable intervention costs, $5$ initial interventional
-points per arm, $T{=}100$ trials, $10$ seeds. Metrics are defined in
-\S\ref{sec:exp-setup}; $\Delta$-signs are metric-specific — for GAP a positive
-$\Delta$ means the perturbed run converged faster, while for $Y_T$ under
-minimization a negative $\Delta$ means it reached a better value.
-\textbf{Invariance tolerance.} Trajectories are numerically identical on all
-seeds of every protected perturbation except one seed of the intra bow, where
-GP-solver floating-point nondeterminism (independent of the perturbation)
-perturbs intermediate iterates by $<\!10^{-8}$ while the recovered optimum is
-exact. Every quotient-visible perturbation moves trajectories by
-$\ge\!10^{-2}$. We report invariance at this tolerance. \textbf{Provenance.}
-The ClusterBench10 misspecification results in this appendix were produced
-with the released generators and seeds under an earlier exploration rule in
-which non-identifiable arms were \emph{removed} from the search set; the
-released algorithm instead retains them on the uninformative prior tier
-(Eq.~\ref{eq:two_tier_prior}). \QCBO{}-coarse's invariance results are
-unaffected (the quotient, and hence every verdict, is identical either
-way); the \CBO{} rows realize the search-set-change channel of
-Remark~\ref{rem:taxonomy} as arm removal. The family-suite results
-(\S\ref{sec:exp-family}) use the released self-contained stack. \textbf{Artifacts.} The ClusterBench10,
-ClusterBench10L, and ClusterBench10D generators (with their C1--C3 / L1--L3 /
-D1--D3 oracle checks), the structure-assertion tests, the \texttt{seam\_ok}
-guard, every per-method runner, and the table/figure emitters are released,
-so all reported numbers regenerate from the released SCMs and seeds.
+\textbf{Protocol (minimal suite).} Unit per-variable intervention costs,
+$3$ initial interventional points per arm, $T{=}50$ trials ($60$ on
+\textsc{MediatedChain}), $30$ seeds, $n_{\mathrm{obs}}{=}100$ from one
+shared dataset per SCM; the family suite follows each base paper's own
+protocol (\S\ref{sec:exp-d}). Every run additionally logs the selected arm
+and intervention values per trial, so invariance is checked on
+\emph{decisions}, not only on incumbent values.
+\textbf{Invariance tolerance.} Arm-choice and intervention-value sequences
+are compared exactly; incumbent trajectories at $10^{-8}$ (GP-solver
+floating point). On every protected condition of
+Table~\ref{tab:minimal-taxonomy} the sequences are identical and
+$\sup|\Delta|=0$; the quotient-visible control moves trajectories on every
+seed.
+\textbf{Artifacts.} The MinimalBench structural module
+(\texttt{ccbo/minibench.py}), its data generators with built-in oracle
+gates, the dataset-free structural tests and end-to-end invariance
+regressions, the suite runner (\texttt{scripts/run\_minimal\_suite.py}),
+the native two-phase \HQCBO{} (\texttt{ccbo/minimal\_suite.py}), and every
+table/figure emitter are released, so all reported numbers regenerate from
+the released SCMs and seeds.
 
 \section{Full results}\label{app:fulltables}
+Table~\ref{tab:related} positions \QCBO{} in the method landscape
+(\S\ref{sec:related}). Tables~\ref{tab:qmcbo-e1} and~\ref{tab:qmcbo-e2}
+give the per-environment detail behind \S\ref{sec:exp-d}'s model-based
+rows: finals and wall-clock on MCBO's own tasks, and the within-family
+invariance counts under the intra-cluster perturbation of the model's
+graph view. Per-seed CSVs for every minimal-suite unit (trial, incumbent,
+cumulative cost, selected arm, and intervention values) regenerate from
+the released runners (App.~\ref{app:repro}).
+
+\begin{table}[t]\centering
+  \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds,
+  $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit.}
+  \label{tab:qmcbo-e1}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e1}}
+\end{table}
 
 \begin{table*}[t]\centering
   \caption{Positioning of \QCBO{} against the nearest methods.}
@@ -993,118 +1101,12 @@ so all reported numbers regenerate from the released SCMs and seeds.
 \end{table*}
 
 \begin{table}[t]\centering
-  \caption{Sample efficiency on ClusterBench10 under the \emph{correct} DAG
-  (mean$\pm$s.e., $10$ seeds, $T{=}100$; lower $r_T$/$R_T$ and higher GAP
-  are better).}
-  \label{tab:headline}
-  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_headline}}
-\end{table}
-
-\begin{table}[t]\centering
-  \caption{Realized price of coarsening on \textsc{ClusterBench10L} (lossy; 10 seeds, $T{=}100$, $y^\star{=}0.10$). The optimum splits $C_1$: \QCBO{} plateaus above $y^\star$ by the price of Prop.~\ref{prop:price}. \HQCBO{} splits $C_1$ at the trigger and recovers $y^\star$; its cumulative regret flattens after the split.}
-  \label{tab:price}
-  \small
-  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10L_price}}
-\end{table}
-
-\begin{table}[t]\centering
   \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Theorem~\ref{thm:contract}). MCBO does.}
   \label{tab:qmcbo-e2}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e2}}
 \end{table}
 
-
-\begin{figure*}[t]\centering
-  \includegraphics[width=\textwidth]{figures/clusterbench10_dial}
-  \caption{$\Delta Y_T$ (misspecified $-$ correct) for the whole
-  perturbation field, split at the scope boundary of
-  Theorem~\ref{thm:contract}: quotient-\emph{invisible} edits (left) versus
-  quotient-\emph{visible} (right). Filled markers: trajectories
-  identical to the correct-DAG run. \QCBO{} sits at exactly $0$
-  across the left panel and departs only under the inter bow. The full-DAG
-  method moves on every edge it can see.}
-  \label{fig:dial}
-\end{figure*}
-Table~\ref{tab:fulltables} reports, for every method and every perturbation, the absolute
-$\mathrm{GAP}$ at horizons $20/50/100$ and the paired degradation $\Delta\mathrm{GAP}@100$
-and $\Delta\text{Final }Y$ (misspecified $-$ correct),
-mean$\pm$s.e.\ over $10$ seeds at $T{=}100$. The \CBO{} row is
-\QCBO{} at the finest partition $\Pi_\bot$ (Prop.~\ref{prop:identity}). Table~\ref{tab:regret} reports the
-corresponding regret: the simple regret $r_T$ of the final incumbent and the
-cumulative regret $R_T$ of the incumbent sequence (\S\ref{sec:exp-setup}).
-\begin{table}[t]\centering
-\caption{ClusterBench10: full per-method, per-perturbation results
-($10$ seeds, $T{=}100$). $\mathrm{GAP}\in[0,1]$, higher is more
-sample-efficient; $\Delta$ columns are paired degradations versus the correct DAG, and
-\textbf{ident.} marks identical trajectories.}
-\label{tab:fulltables}
-\small\adjustbox{max width=\linewidth}{\input{tables/clusterbench10_fulltable}}
-\end{table}
-\begin{table}[t]\centering
-\caption{ClusterBench10: simple regret $r_T$ ($\downarrow$) and cumulative
-incumbent regret $R_T$ ($\downarrow$) per method and perturbation
-($10$ seeds, $T{=}100$; $y^\star{=}0$).}
-\label{tab:regret}
-\small\adjustbox{max width=\linewidth}{\input{tables/clusterbench10_regret}}
-\end{table}
-
-\section{The cost of a wrong partition}\label{app:wrongpi}
-\QCBO{} consumes only the C-DAG and never the fine graph, so a wrong
-\emph{partition} is stressed by quotienting the base structure once under
-$\{X_1,X_2,X_4\},\{X_3,X_5\}$ ($X_3$ and $X_4$ swapped) to obtain a fixed,
-acyclic but incorrect C-DAG, and optimizing the true objective through it.
-The wrong partition alters the exploration set, identification verdicts, and
-priors, but not the objective. By construction it is invariant to the
-fine-structure perturbations of \S\ref{sec:exp-scope}, so it has a single
-cost, reported in Table~\ref{tab:wrongpi}: final quality degrades
-($Y=0.49$ vs $0.13$ correct-partition, $0.29$ \CBO{}) while GAP
-stays within $0.06$ of the correct-partition \QCBO{} run ($0.71$ vs
-$0.77$), well above \CBO{} ($0.56$) and \BO{} ($0.18$).
-
-\begin{table}[h]\centering
-  \caption{Cost of a \emph{wrong} partition on \textsc{ClusterBench10} (correct
-  objective; 10 seeds, $T{=}100$, $y^\star{=}0$). \QCBO{}-wrong$\Pi$ holds a fixed,
-  acyclic but incorrect C-DAG (base structure under a wrong partition). It loses
-  final quality against the correct partition yet degrades gracefully, staying far
-  above non-causal \BO{}.}
-  \label{tab:wrongpi}
-  \small
-  \adjustbox{max width=\linewidth}{\input{tables/clusterbench10_wrongpi}}
-\end{table}
-
-\section{\HQCBO{} across datasets}\label{app:refine}
-
-\begin{figure}[t]\centering
-  \includegraphics[width=\linewidth]{figures/clusterbench10L_refine}
-  \caption{\HQCBO{} on \textsc{ClusterBench10L} (10 seeds, mean
-  $\pm$ s.e., dashed vertical line = mean trigger). Top: best-so-far $Y$.
-  \HQCBO{} rides the \QCBO{} trajectory, then splits $C_1$ and descends to
-  $y^\star$. Bottom: cumulative incumbent regret $R_t$. Fixed \QCBO{}'s is
-  linear in $t$, \HQCBO{}'s flattens after the trigger
-  (Remark~\ref{rem:regret}).}
-  \label{fig:refine}
-\end{figure}
-
-Table~\ref{tab:refine-suite} and Fig.~\ref{fig:refine-suite} give the full picture for \HQCBO{} (\S\ref{sec:refine}) on the two \textsc{ClusterBench} variants ($10$ seeds each; the finest-partition run supplies the \CBO{} row by Prop.~\ref{prop:identity}). Both regimes are visible. \emph{Lossless} (\textsc{ClusterBench10}): both quotient methods beat \CBO{} on final $Y$ and cumulative regret, and the false trigger (\HQCBO{} cannot observe $y^\star$, so it fires anyway) costs nothing ($R_T\,41.6$ vs \QCBO{}'s $41.8$). \emph{Lossy} (\textsc{ClusterBench10L}): fixed-partition \QCBO{} plateaus, its regret growing linearly over the horizon, while refinement escapes to the \CBO{}-level optimum and bends $R_T$ back. One honest read follows: refinement lowers GAP relative to fixed-partition \QCBO{} (the mid-run split adds arms and re-explores, trading early-budget GAP for final-value and regret recovery), so it is the right default only when the partition is suspected lossy.
-
-\begin{table}[t]\centering
-\caption{\HQCBO{} vs \BO{}, \CBO{}, and \QCBO{} across datasets.
-Final $Y$ (closest to $y^\star$ best), GAP@100 ($\uparrow$), cumulative
-incumbent regret $R_T$ ($\downarrow$); mean$\pm$s.e., best per group in bold.}
-\label{tab:refine-suite}
-\small\adjustbox{max width=\linewidth}{\input{tables/refine_suite}}
-\end{table}
-
-\begin{figure}[t]\centering
-\includegraphics[width=0.86\linewidth]{figures/refine_suite}
-\caption{Best-so-far $Y$ (left) and cumulative incumbent regret $R_t$ (right)
-per dataset (mean $\pm$ s.e., dashed line = mean \HQCBO{} trigger). \HQCBO{}
-rides \QCBO{} until the trigger, then, where the partition is lossy
-(\textsc{ClusterBench10L}), descends and flattens $R_t$. Where it is lossless
-the trajectories stay together.}
-\label{fig:refine-suite}
-\end{figure}
 
 % =============================================================================
 \bibliographystyle{abbrvnat}

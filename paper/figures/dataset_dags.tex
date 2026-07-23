@@ -2,6 +2,69 @@
 
 \begin{figure}[t]\centering
 \adjustbox{max width=0.58\linewidth,valign=c}{\begin{tikzpicture}
+  \node[mannode] (nX1) at (0.00,0.00) {X1};
+  \node[mannode] (nX2) at (0.00,-1.35) {X2};
+  \node[tgtnode] (nY) at (2.40,-2.70) {Y};
+  \draw[diredge] (nX1) -- (nY);
+  \draw[diredge] (nX2) -- (nY);
+  \draw[biintra] (nX1) to[bend left=28] (nX2);
+  \begin{scope}[on background layer]
+    \node[clbox,fit=(nX1)(nX2),label={[label distance=0.5mm]above:{\scriptsize$C_{1}$}}] {};
+  \end{scope}
+\end{tikzpicture}}\hfill
+\adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
+  \node[tgtnode] (nY) at (2.40,0.00) {Y};
+  \node[mannode] (nX1X2) at (0.00,0.00) {X1,X2};
+  \draw[diredge] (nX1X2) -- (nY);
+\end{tikzpicture}}
+\caption{\textbf{ParallelParent (MinimalBench, Exp.\ A).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The intra-cluster $X_1\leftrightarrow X_2$ disappears in the quotient; deleting $X_1\to Y$ leaves $C_1\to Y$ alive through $X_2\to Y$ (quotient-redundant).}
+\label{fig:dag-parallelparent}
+\end{figure}
+
+\begin{figure}[t]\centering
+\adjustbox{max width=0.58\linewidth,valign=c}{\begin{tikzpicture}
+  \node[mannode] (nX1) at (0.00,0.00) {X1};
+  \node[mannode] (nM) at (2.40,0.00) {M};
+  \node[tgtnode] (nY) at (4.80,-1.35) {Y};
+  \draw[diredge] (nX1) -- (nM);
+  \draw[diredge] (nM) -- (nY);
+  \draw[bicross] (nX1) to[bend left=14] (nY);
+  \begin{scope}[on background layer]
+    \node[clbox,fit=(nX1)(nM),label={[label distance=0.5mm]above:{\scriptsize$C_{1}$}}] {};
+  \end{scope}
+\end{tikzpicture}}\hfill
+\adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
+  \node[mannode] (nMX1) at (0.00,0.00) {M,X1};
+  \node[tgtnode] (nY) at (2.40,0.00) {Y};
+  \draw[diredge] (nMX1) -- (nY);
+  \draw[bicross] (nMX1) to[bend left=24] (nY);
+\end{tikzpicture}}
+\caption{\textbf{FrontDoor (MinimalBench, Exp.\ B).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The quotient is a bow ($C_1\to Y$, $C_1\leftrightarrow Y$): the cluster arm runs on the uninformative prior tier in every condition, so the assumed intra-cluster $X_1\leftrightarrow M$ cannot change it.}
+\label{fig:dag-frontdoor}
+\end{figure}
+
+\begin{figure}[t]\centering
+\adjustbox{max width=0.58\linewidth,valign=c}{\begin{tikzpicture}
+  \node[mannode] (nX1) at (0.00,0.00) {X1};
+  \node[mannode] (nX2) at (2.40,0.00) {X2};
+  \node[tgtnode] (nY) at (4.80,-1.35) {Y};
+  \draw[diredge] (nX1) -- (nX2);
+  \draw[diredge] (nX2) -- (nY);
+  \begin{scope}[on background layer]
+    \node[clbox,fit=(nX1)(nX2),label={[label distance=0.5mm]above:{\scriptsize$C_{1}$}}] {};
+  \end{scope}
+\end{tikzpicture}}\hfill
+\adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
+  \node[tgtnode] (nY) at (2.40,0.00) {Y};
+  \node[mannode] (nX1X2) at (0.00,0.00) {X1,X2};
+  \draw[diredge] (nX1X2) -- (nY);
+\end{tikzpicture}}
+\caption{\textbf{MediatedChain (MinimalBench, Exp.\ C).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The policy box restricts $D(X_2)$ to $[-2,2]$; the fine optimum $\doo(X_1{=}2)$ drives $X_2$ to $4$, outside the box.}
+\label{fig:dag-mediatedchain}
+\end{figure}
+
+\begin{figure}[t]\centering
+\adjustbox{max width=0.58\linewidth,valign=c}{\begin{tikzpicture}
   \node[mannode] (nX) at (0.00,0.00) {X};
   \node[mannode] (nZ) at (2.40,0.00) {Z};
   \node[tgtnode] (nY) at (4.80,-1.35) {Y};
@@ -13,12 +76,12 @@
   \end{scope}
 \end{tikzpicture}}\hfill
 \adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
-  \node[mannode] (nXZ) at (0.00,0.00) {X,Z};
   \node[tgtnode] (nY) at (2.40,0.00) {Y};
+  \node[mannode] (nXZ) at (0.00,0.00) {X,Z};
   \draw[diredge] (nXZ) -- (nY);
-  \draw[bicross] (nXZ) to[bend left=24] (nY);
+  \draw[bicross] (nY) to[bend left=24] (nXZ);
 \end{tikzpicture}}
-\caption{\textbf{ToyGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The quotient is a bow ($C_1\to Y$, $C_1\leftrightarrow Y$): $\doo(C_1)$ is not identifiable from the C-DAG, so the arm runs on the uninformative prior tier.}
+\caption{\textbf{ToyGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The quotient is a bow ($C_1\to Y$, $C_1\leftrightarrow Y$): $\doo(C_1)$ is not identifiable from the C-DAG, so the arm runs on the uninformative prior tier.}
 \label{fig:dag-toy}
 \end{figure}
 
@@ -36,26 +99,26 @@
   \draw[diredge] (nC) -- (nE);
   \draw[diredge] (nD) -- (nY);
   \draw[diredge] (nE) -- (nY);
-  \draw[bicross] (nA) to[bend left=14] (nY);
-  \draw[bicross] (nB) to[bend left=22] (nY);
+  \draw[bicross] (nB) to[bend left=14] (nY);
+  \draw[bicross] (nA) to[bend left=22] (nY);
   \begin{scope}[on background layer]
     \node[clbox,fit=(nD)(nE),label={[label distance=0.5mm]above:{\scriptsize$C_{2}$}}] {};
   \end{scope}
 \end{tikzpicture}}\hfill
 \adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
-  \node[obsnode] (nC) at (2.10,0.00) {C};
-  \node[mannode] (nDE) at (4.20,0.00) {D,E};
-  \node[obsnode] (nA) at (0.00,0.00) {A};
-  \node[tgtnode] (nY) at (6.30,0.00) {Y};
   \node[mannode] (nB) at (0.00,-1.35) {B};
+  \node[obsnode] (nC) at (2.10,0.00) {C};
+  \node[obsnode] (nA) at (0.00,0.00) {A};
+  \node[mannode] (nDE) at (4.20,0.00) {D,E};
+  \node[tgtnode] (nY) at (6.30,0.00) {Y};
   \draw[diredge] (nC) -- (nDE);
-  \draw[diredge] (nDE) -- (nY);
-  \draw[diredge] (nA) -- (nDE);
   \draw[diredge] (nB) -- (nC);
-  \draw[bicross] (nA) to[bend left=14] (nY);
-  \draw[bicross] (nB) to[bend left=22] (nY);
+  \draw[diredge] (nA) -- (nDE);
+  \draw[diredge] (nDE) -- (nY);
+  \draw[bicross] (nY) to[bend left=14] (nB);
+  \draw[bicross] (nA) to[bend left=22] (nY);
 \end{tikzpicture}}
-\caption{\textbf{CompleteGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{CompleteGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-complete}
 \end{figure}
 
@@ -106,93 +169,35 @@
   \end{scope}
 \end{tikzpicture}}\hfill
 \adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
-  \node[obsnode] (nL) at (0.00,0.00) {L};
-  \node[obsnode] (nS) at (4.20,0.00) {S};
   \node[mannode] (nDT) at (6.30,0.00) {D,T};
-  \node[obsnode] (nP) at (8.40,-2.70) {P};
   \node[obsnode] (nTE) at (2.10,0.00) {TE};
-  \node[tgtnode] (nY) at (10.50,0.00) {Y};
   \node[mannode] (nCNO) at (8.40,0.00) {C,N,O};
+  \node[obsnode] (nS) at (4.20,0.00) {S};
   \node[obsnode] (nCO) at (8.40,-1.35) {CO};
-  \draw[diredge] (nDT) -- (nCNO);
-  \draw[diredge] (nTE) -- (nCO);
-  \draw[diredge] (nDT) -- (nCO);
-  \draw[diredge] (nTE) -- (nCNO);
-  \draw[diredge] (nL) -- (nCNO);
-  \draw[diredge] (nL) -- (nTE);
-  \draw[diredge] (nCNO) -- (nY);
-  \draw[diredge] (nTE) -- (nY);
-  \draw[diredge] (nP) -- (nY);
-  \draw[diredge] (nS) -- (nDT);
+  \node[obsnode] (nP) at (8.40,-2.70) {P};
+  \node[obsnode] (nL) at (0.00,0.00) {L};
+  \node[tgtnode] (nY) at (10.50,0.00) {Y};
   \draw[diredge] (nL) -- (nY);
-  \draw[diredge] (nDT) -- (nP);
-  \draw[diredge] (nTE) -- (nP);
   \draw[diredge] (nS) -- (nCNO);
+  \draw[diredge] (nCNO) -- (nY);
+  \draw[diredge] (nTE) -- (nCNO);
+  \draw[diredge] (nTE) -- (nP);
+  \draw[diredge] (nDT) -- (nCNO);
   \draw[diredge] (nS) -- (nCO);
-  \draw[diredge] (nCO) -- (nY);
-  \draw[diredge] (nTE) -- (nS);
+  \draw[diredge] (nL) -- (nTE);
+  \draw[diredge] (nP) -- (nY);
+  \draw[diredge] (nDT) -- (nCO);
+  \draw[diredge] (nTE) -- (nCO);
+  \draw[diredge] (nDT) -- (nP);
+  \draw[diredge] (nL) -- (nCNO);
   \draw[diredge] (nS) -- (nP);
+  \draw[diredge] (nCO) -- (nY);
+  \draw[diredge] (nS) -- (nDT);
+  \draw[diredge] (nTE) -- (nY);
+  \draw[diredge] (nTE) -- (nS);
 \end{tikzpicture}}
-\caption{\textbf{SimplifiedCoralGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{SimplifiedCoralGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-coral}
-\end{figure}
-
-\begin{figure}[t]\centering
-\adjustbox{max width=0.58\linewidth,valign=c}{\begin{tikzpicture}
-  \node[mannode] (nX1) at (0.00,0.00) {X1};
-  \node[mannode] (nX2) at (2.10,0.00) {X2};
-  \node[mannode] (nX3) at (0.00,-1.35) {X3};
-  \node[mannode] (nX4) at (0.00,-2.70) {X4};
-  \node[mannode] (nX5) at (0.00,-4.05) {X5};
-  \node[obsnode] (nM1) at (2.10,-5.40) {M1};
-  \node[obsnode] (nM2) at (4.20,-5.40) {M2};
-  \node[obsnode] (nM3) at (2.10,-6.75) {M3};
-  \node[obsnode] (nM4) at (2.10,-8.10) {M4};
-  \node[tgtnode] (nY) at (6.30,-5.40) {Y};
-  \draw[diredge] (nX3) -- (nX2);
-  \draw[diredge] (nX1) -- (nM2);
-  \draw[diredge] (nX2) -- (nM2);
-  \draw[diredge] (nX3) -- (nM1);
-  \draw[diredge] (nX4) -- (nM3);
-  \draw[diredge] (nX5) -- (nM3);
-  \draw[diredge] (nX5) -- (nM4);
-  \draw[diredge] (nX1) -- (nY);
-  \draw[diredge] (nX2) -- (nY);
-  \draw[diredge] (nX3) -- (nY);
-  \draw[diredge] (nM1) -- (nY);
-  \draw[diredge] (nM2) -- (nY);
-  \draw[diredge] (nM3) -- (nY);
-  \draw[diredge] (nM4) -- (nY);
-  \draw[biintra] (nX1) to[bend left=25] (nX2);
-  \draw[bicross] (nX1) to[bend left=25] (nX5);
-  \begin{scope}[on background layer]
-    \node[clbox,fit=(nX1)(nX2)(nX3),label={[label distance=0.5mm]above:{\scriptsize$C_{1}$}}] {};
-  \end{scope}
-  \begin{scope}[on background layer]
-    \node[clbox,fit=(nX4)(nX5),label={[label distance=0.5mm]above:{\scriptsize$C_{2}$}}] {};
-  \end{scope}
-\end{tikzpicture}}\hfill
-\adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
-  \node[obsnode] (nM2) at (2.40,-1.35) {M2};
-  \node[obsnode] (nM3) at (2.40,-2.70) {M3};
-  \node[mannode] (nX1X2X3) at (0.00,0.00) {X1,X2,X3};
-  \node[obsnode] (nM4) at (2.40,-4.05) {M4};
-  \node[tgtnode] (nY) at (4.80,0.00) {Y};
-  \node[obsnode] (nM1) at (2.40,0.00) {M1};
-  \node[mannode] (nX4X5) at (0.00,-1.35) {X4,X5};
-  \draw[diredge] (nX4X5) -- (nM3);
-  \draw[diredge] (nX1X2X3) -- (nM1);
-  \draw[diredge] (nX1X2X3) -- (nM2);
-  \draw[diredge] (nM4) -- (nY);
-  \draw[diredge] (nM3) -- (nY);
-  \draw[diredge] (nM1) -- (nY);
-  \draw[diredge] (nX4X5) -- (nM4);
-  \draw[diredge] (nM2) -- (nY);
-  \draw[diredge] (nX1X2X3) -- (nY);
-  \draw[bicross] (nX1X2X3) to[bend left=28] (nX4X5);
-\end{tikzpicture}}
-\caption{\textbf{ClusterBench10 (misspecification suite).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
-\label{fig:dag-clusterbench10q}
 \end{figure}
 
 \begin{figure}[t]\centering
@@ -243,7 +248,7 @@
   \draw[diredge] (nX1Z1) -- (nX2Z2);
   \draw[diredge] (nY1) -- (nY2);
 \end{tikzpicture}}
-\caption{\textbf{DCBO stat / nonstat (QDCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. Slices $t=0,1,2$; the nonstat setup shares this topology with a change point in the SEM.}
+\caption{\textbf{DCBO stat / nonstat (QDCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. Slices $t=0,1,2$; the nonstat setup shares this topology with a change point in the SEM.}
 \label{fig:dag-dcbo-stat}
 \end{figure}
 
@@ -295,7 +300,7 @@
   \draw[diredge] (nX1Z1) -- (nX2Z2);
   \draw[diredge] (nY1) -- (nY2);
 \end{tikzpicture}}
-\caption{\textbf{DCBO ind (QDCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{DCBO ind (QDCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-dcbo-ind}
 \end{figure}
 
@@ -315,7 +320,7 @@
   \node[tgtnode] (nY) at (2.40,0.00) {Y};
   \draw[diredge] (nX0X1) -- (nY);
 \end{tikzpicture}}
-\caption{\textbf{ToyGraph-M (QMCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{ToyGraph-M (QMCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-mcbo-toygraph-m}
 \end{figure}
 
@@ -362,7 +367,7 @@
   \draw[diredge] (nAS) -- (nY);
   \draw[diredge] (nca) -- (nY);
 \end{tikzpicture}}
-\caption{\textbf{PSAGraph (QMCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:clusterbench10}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{PSAGraph (QMCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-mcbo-psagraph}
 \end{figure}
 

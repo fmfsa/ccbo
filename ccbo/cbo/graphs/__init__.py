@@ -5,3 +5,6 @@ from .CoralGraph import CoralGraph
 from .SimplifiedCoralGraph import SimplifiedCoralGraph
 from .ConfoundedCluster import ConfoundedCluster
 from .Tier1Graph import Tier1Graph
+from .ParallelParent import ParallelParent
+from .FrontDoor import FrontDoor
+from .MediatedChain import MediatedChain
