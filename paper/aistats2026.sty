@@ -1,5 +1,7 @@
-% File:  aistats2025.sty
+% File:  aistats2026.sty
 
+% Modified by Arno Solin, 2025: changed venue, year, and volume number, clarified the instructions, fixed title spacing bug in onecolumn (suppelement) mode, added a `preprint' option similar to other conference style files.
+%
 % Modified by Javier Burroni, 2024 (late): adapted to 2025; stop compilation if running headings are too long. 
 % Modified by Javier Burroni, 2024: volume number. 
 % Modified by Yingzhen Li, 2023: changed year and volume number. 
@@ -49,12 +51,12 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Content to be changed from year to year
 
-\ProvidesPackage{aistats2025}[2024/08/18 AISTATS2025 submission/camera-ready style file]
+\ProvidesPackage{aistats2026}[2026/08/29 AISTATS2026 submission/camera-ready style file]
 
-\newcommand{\@conferenceordinal}{28\textsuperscript{th}}
-\newcommand{\@conferenceyear}{2025}
-\newcommand{\@conferencelocation}{Mai Khao, Thailand}
-\newcommand{\@conferencevolume}{258}
+\newcommand{\@conferenceordinal}{29\textsuperscript{th}}
+\newcommand{\@conferenceyear}{2026}
+\newcommand{\@conferencelocation}{Tangier, Morocco}
+\newcommand{\@conferencevolume}{300}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -76,6 +78,15 @@
 \newcommand{\AISTATS@appearing}{Proceedings of the \@conferenceordinal\,International Conference on Artificial
   Intelligence and Statistics (AISTATS) \@conferenceyear,  \@conferencelocation\@. PMLR: Volume  \@conferencevolume. Copyright
   \@conferenceyear\/ by the author(s).}
+
+% Preprint option: hide the venue box on page 1
+\newif\if@preprint
+\@preprintfalse
+\DeclareOption{preprint}{%
+  \@preprinttrue
+  \renewcommand{\statePaper}{\acceptedPaper}%
+  \renewcommand{\Notice@String}{}%
+}
 
 \ProcessOptions\relax
 
@@ -115,6 +126,12 @@
 \end{picture}
 \end{center}
 \end@float}
+
+% If [preprint] is set, suppress the venue/copyright block entirely
+\if@preprint
+  \def\@copyrightspace{}%
+\fi
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -213,7 +230,12 @@
   \hsize\textwidth
   \linewidth\hsize \toptitlebar {\centering
   {\Large\bfseries #1 \par}}
- \bottomtitlebar \vskip 0.2in plus 1fil minus 0.1in
+ \bottomtitlebar %\vskip 0.2in plus 1fil minus 0.1in
+ \if@twocolumn
+   \vskip 0.25in plus 1fil minus 0.125in
+ \else
+   \vskip 0.5em
+ \fi
 }
 
 \long\def\aistatsauthor#1{
