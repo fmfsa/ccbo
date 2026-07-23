@@ -116,6 +116,15 @@ Deleting an edge that corrupts priors but deletes no arm (\|ES\| unchanged).
 
 ## Provenance
 
+- **MinimalBench (paper §5, Experiments A–C; 2026-07-23):** per-unit CSVs
+  under `results/minimal/` + `results/minimal/refine_info.json`
+  (`scripts/run_minimal_suite.py`, 30 seeds, T=50/60, 3 init points/arm) →
+  `paper/figures/minimal_misspec.pdf`, `paper/figures/minimal_refine.pdf`,
+  `paper/tables/minimal_taxonomy.tex`
+  (`scripts/plot_minimal_misspec.py`, `plot_minimal_refine.py`,
+  `emit_minimal_taxonomy.py`). Structural truth: `ccbo/minibench.py`;
+  oracles asserted at data-generation time. ClusterBench10 results below
+  are retired from the paper (KNOWN_ISSUES.md).
 - QCBO: `results/qcbo_benchmark_results.json` → `paper/tables/benchmark_gap.tex` (`scripts/emit_benchmark_table.py`)
 - Head-to-head (retired with the CausalBO_Benchmark dependency): the family suite (`scripts/run_cbo_family.py`, `scripts/run_qdcbo_pilot.sh`, `scripts/run_qmcbo_pilot.sh`) replaces it — per-seed CSVs under `results/{family_cbo,qdcbo,qmcbo}/` → `paper/figures/family_suite.pdf`, `paper/tables/family_price.tex`
 - Robustness: `paper/tables/{CompleteGraph,ConfoundedCluster}_wrong_edge.tex` + `paper/figures/*_wrong_edge.pdf` (`run_experiments.py`)

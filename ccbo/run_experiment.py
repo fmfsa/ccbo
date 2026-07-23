@@ -40,6 +40,14 @@ def get_original_graph(experiment, observational_samples, true_obs=None):
         return ConfoundedCluster(observational_samples)
     elif experiment in ('Tier1Graph', 'Tier1Graph_NoBC'):
         return Tier1Graph(observational_samples)
+    elif experiment.startswith('ParallelParent'):
+        # MinimalBench: variants (_NoX1Y, _WrongX1X2, _ConfXY) share the true
+        # SEM; the misspecification lives in the assumed graph metadata.
+        return ParallelParent(observational_samples)
+    elif experiment.startswith('FrontDoor'):
+        return FrontDoor(observational_samples)
+    elif experiment.startswith('MediatedChain'):
+        return MediatedChain(observational_samples)
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
 

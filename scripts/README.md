@@ -11,7 +11,35 @@ pinned fetch scripts: **`fetch_dcbo.sh`** (neildhir/DCBO → `third_party/DCBO`)
 **`fetch_mcbo.sh`** (ssethz/mcbo → `third_party/mcbo`), `fetch_ceo.sh`
 (nicola144/CEO). The CBO stack is vendored in-repo (`ccbo/cbo`).
 
-## DAG-misspecification stress test (ClusterBench10)
+## MinimalBench (the paper's Experiments A–C)
+
+The paper's misspecification/price/refinement results run on three minimal
+SCMs with closed-form oracles — ParallelParent (Exp. A: exploration-set
+corruption, analytic gap 4.25λ), FrontDoor (Exp. B: prior corruption of the
+optimal arm, narrow-well target), MediatedChain (Exp. C: policy-box price
+3.96 + HQCBO refinement). Single source of structural truth:
+[`ccbo/minibench.py`](../ccbo/minibench.py); unit runners (plain + native
+two-phase HQCBO): [`ccbo/minimal_suite.py`](../ccbo/minimal_suite.py).
+
+1. **Data** (checked in; regenerate to re-run the oracle gates):
+   `python -m ccbo.cbo.data.{ParallelParent,FrontDoor,MediatedChain}.generate_observations`
+2. **`run_minimal_suite.py`** — all units, resumable per-unit CSVs
+   (`trial,best_y,cum_cost,arm,x_values`) + `refine_info.json`:
+   `PYTHONPATH=. python scripts/run_minimal_suite.py --seeds 30 --trials 50
+   --mc-trials 60 --outdir results/minimal --jobs 12`
+   (3 init points/arm by default — the prior channel is invisible with
+   larger initial designs on these 1–2D arms).
+3. **Emitters** — `plot_minimal_misspec.py` (Fig. 2),
+   `plot_minimal_refine.py` (Fig. 3), `emit_minimal_taxonomy.py`
+   (Table: taxonomy + measured sup|Δ|, emitted from `minibench` itself).
+4. **Tests** — `pytest ccbo/tests/test_minibench_structure.py` (fast,
+   dataset-free) and `pytest -m slow ccbo/tests/test_minimal_invariance.py`
+   (end-to-end QCBO invariance + analytic-gap regressions).
+
+## DAG-misspecification stress test (ClusterBench10) — retired from the paper
+
+Retained as a higher-dimensional stress test; **no longer in the paper**
+(see KNOWN_ISSUES.md). The checked-in results predate the MIS/two-tier rule.
 
 The robustness experiment: full-DAG CBO shifts under a misspecified edge while QCBO is
 invariant, with the objective held fixed (only the *structure* each method reasons
@@ -96,6 +124,7 @@ Tests: `pytest ccbo/tests/test_qmcbo.py`. Note: `notes/qmcbo_pilot.md`.
 ## Standardized CausalBO benchmark (sample-efficiency / main comparison)
 
 - `run_qcbo_benchmark_suite.py` / `run_qcbo_benchmark_parallel.py` — QCBO on the 6 curated datasets.
-- `run_baselines_suite.py` — the benchmark's own baselines (BO/CBO/CEO/CoCaBO/DCBO/MCBO).
-- `emit_baseline_table.py` / `emit_benchmark_table.py` — score + emit `paper/tables/benchmark_*.tex`.
+- `emit_benchmark_table.py` — score + emit `paper/tables/benchmark_*.tex`.
+  (The benchmark's own baseline loop and `run_baselines_suite.py` /
+  `emit_baseline_table.py` were retired at 615f2b4.)
 - `run_qcbo_coarsening_sweep.py` / `emit_coarsening_sweep_table.py` — sweep the coarsening lattice.

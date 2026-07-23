@@ -1,48 +1,33 @@
 # Known issues
 
-## Before release: rerun ClusterBench10 on the final self-contained stack
+## ClusterBench10: out of the paper (2026-07-23); code and results retained
 
-The checked-in ClusterBench10 results (`results/clusterbench10*.json` and
-the tables built from them) were produced with the retired
-CausalBO_Benchmark's BO loop and its gate-deletion exploration rule. The
-current declared algorithm differs in two ways: the exploration set is the
-MIS of the (C-)DAG (no size cap), and non-identifiable arms are kept on the
-common uninformative prior tier instead of being deleted. **Before release,
-rerun every headline ClusterBench10 condition** (misspec fullfield, D, L,
-refine, wrongpi) **on the final self-contained stack** and regenerate the
-tables. Two porting prerequisites are tracked here:
+The paper's misspecification narrative now runs on the MinimalBench family
+(`ccbo/minibench.py`: ParallelParent / FrontDoor / MediatedChain, closed-form
+oracles, `scripts/run_minimal_suite.py`), and every ClusterBench10 section,
+table, and figure has been removed from the tex. Consequences:
 
-1. `ccbo/benchmark.py::load_graph` still expects the retired benchmark's
-   `DiscoveredGraph` loader (guarded with a clear error; a legacy checkout
-   can be pointed to via `CCBO_LEGACY_BENCH`). Port the ClusterBench10
-   dataset loading natively (the SEM already lives in
-   `scripts/generate_clusterbench10.py`).
-2. Until the rerun, the paper carries a provenance note on the
-   ClusterBench10 numbers (App. D).
-
-**ES-change audit (`scripts/audit_es_change.py`) — partial result, 2026-07-22.**
-The audit scoping this rerun OOM-killed twice on LSF (at 8GB and at 32GB,
-both times somewhere after the `Pic coarse` cell), while the individually
-probed stages of the suspect finest-partition cell (MIS, per-arm ananke ID
-checks, POMIS) each finish in seconds under 1GB — so some later (variant,
-partition) cell has a pathological memory blowup in the coarsening/ID
-machinery that the release-time rerun will hit too. Partial output
-(`results/es_audit.txt`, 17/44 cells: P0–P3 complete + Pic/coarse) already
-gives the qualitative answer: most cells are SAME (checked-in trajectories
-provably unchanged under the MIS rule); the DIFFs so far — P3/wrongpi and
-Pic/coarse — are cells where the old gate deleted a non-identifiable arm
-that the MIS rule keeps on the uninformative tier. When resuming: split the
-audit into one subprocess per cell (resumable, memory-isolated) and profile
-whichever cell blows up.
-
-Queued alongside the rerun — a **sharpened arm-deletion variant**: add a
-misspecification whose edge edits change the *fine-graph MIS* (e.g. delete
-X1's outgoing edges so `do(X1)`-containing arms become non-minimal) while
-the C-DAG is untouched. Under the MIS rule this makes full-DAG CBO
-permanently lose the optimal arm (the "a wrong exploration set need not
-self-correct" mechanism, measured) while QCBO is invariant — a cleaner
-headline contrast than the bow (which under the two-tier rule corrupts
-priors rather than membership).
+- The **release-blocking ClusterBench10 rerun is retired** — no paper claim
+  depends on the stale `results/clusterbench10*.json` anymore. The SCM
+  module, generators, structural tests, and checked-in results stay in-repo
+  as a higher-dimensional stress test for possible follow-up work.
+- The previously queued **sharpened arm-deletion variant is implemented and
+  measured**: MinimalBench condition A1 (delete X1→Y on ParallelParent)
+  changes the fine MIS to `{X2}` alone while the C-DAG is untouched —
+  full-DAG CBO permanently pays the analytic gap 4.25λ, QCBO is exactly
+  invariant (paper §5.1).
+- The ES-change audit (`scripts/audit_es_change.py`, OOM notes below in git
+  history) is likewise release-irrelevant now; keep it with the stress-test
+  backlog.
+- `ccbo/benchmark.py::load_graph` still expects the retired benchmark's
+  `DiscoveredGraph` loader (guarded with a clear error;
+  `CCBO_LEGACY_BENCH`); additionally,
+  `benchmark.py::run_qcbo_refine_benchmark::_run_segment` passes a
+  `csv_log_file=` kwarg the vendored `ccbo/cbo/cbo.py::CBO` does not accept
+  (latent TypeError). Both only matter if the ClusterBench10 pipeline is
+  ever revived; the paper's HQCBO is the native re-implementation in
+  `ccbo/minimal_suite.py`, which reuses only the standalone helpers
+  `_plateau` / `_split_partition` / `_union_and_carry`.
 
 # RCCBO / RePaRe backlog
 

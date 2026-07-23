@@ -1,0 +1,17 @@
+% One-recipe instantiation map (Sec. 4): which graph-dependent components
+% each base family exposes, and what the quotient method replaces them with.
+% Hand-written (structural, no experimental numbers).
+\begin{tabular}{@{}lll@{}}
+\toprule
+Base & Graph dependence & Quotient replacement \\
+\midrule
+\CBO{}  & MIS arms; do-calculus priors & cluster MIS of the C-DAG; \\
+        &                              & \quad two-tier C-DAG priors \\
+\addlinespace[2pt]
+DCBO    & per-slice arms; temporal     & cluster MIS per slice; \\
+        & \quad mechanisms             & \quad cluster mechanisms per slice \\
+\addlinespace[2pt]
+MCBO    & per-node GP mechanism        & joint multi-output cluster \\
+        & \quad factorization          & \quad mechanisms \\
+\bottomrule
+\end{tabular}
