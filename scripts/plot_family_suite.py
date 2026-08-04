@@ -12,6 +12,9 @@ axis); results/qmcbo/trial_results_{label}_{env}_{s}.csv
 (trial_number, current_optimal; QMCBO = the joint cluster mechanisms).
 
 Run:  PYTHONPATH=. python scripts/plot_family_suite.py
+
+NOTE: the per-seed CSVs live on the experiment server (results/ is
+gitignored); regenerate the checked-in PDF there before release.
 """
 
 import os
@@ -28,7 +31,14 @@ CBO_DIR = "results/family_cbo"
 QDCBO_DIR = "results/qdcbo"
 QMCBO_DIR = "results/qmcbo"
 
-C_BASE, C_QUOT = "#0072B2", "#D55E00"
+METHOD_STYLE = {
+    "CBO": ("#0072B2", "-"),
+    "QCBO": ("#E69F00", "--"),
+    "DCBO": ("#009E73", "-"),
+    "QDCBO": ("#CC79A7", "--"),
+    "MCBO": ("#D55E00", "-"),
+    "QMCBO": ("#56B4E9", "--"),
+}
 DCBO_SENTINEL = 1e7
 
 CBO_PANELS = [("ToyGraph", "Toy"), ("CompleteGraph", "Synthetic"),
@@ -37,14 +47,14 @@ DCBO_PANELS = [("stat", "stat"), ("ind", "ind"), ("nonstat", "nonstat")]
 MCBO_PANELS = [("ToyGraph", "ToyGraph"), ("PSAGraph", "PSAGraph")]
 
 
-def _band(ax, trajs, color, label):
+def _band(ax, trajs, color, ls, label):
     """Plot mean +- s.e. of a list of equal-length series."""
     n = min(len(t) for t in trajs)
     arr = np.array([t[:n] for t in trajs])
     m = arr.mean(axis=0)
     se = arr.std(axis=0, ddof=1) / np.sqrt(len(arr)) if len(arr) > 1 else 0 * m
     x = np.arange(n)
-    ax.plot(x, m, color=color, lw=1.6, label=label)
+    ax.plot(x, m, color=color, lw=1.6, ls=ls, label=label)
     ax.fill_between(x, m - se, m + se, color=color, alpha=0.18, lw=0)
 
 
@@ -87,9 +97,9 @@ def main():
         ax = axes[0][j]
         base, quot = cbo_trajs(ds, "CBO"), cbo_trajs(ds, "QCBO")
         if base:
-            _band(ax, base, C_BASE, "CBO")
+            _band(ax, base, *METHOD_STYLE["CBO"], label="CBO")
         if quot:
-            _band(ax, quot, C_QUOT, "QCBO")
+            _band(ax, quot, *METHOD_STYLE["QCBO"], label="QCBO")
         ax.set_title(title, fontsize=9)
         if j == 0:
             ax.set_ylabel("best $E[Y|do]$", fontsize=8)
@@ -98,9 +108,9 @@ def main():
         ax = axes[1][j]
         base, quot = dcbo_trajs(setup, "dcbo"), dcbo_trajs(setup, "qdcbo")
         if base:
-            _band(ax, base, C_BASE, "DCBO")
+            _band(ax, base, *METHOD_STYLE["DCBO"], label="DCBO")
         if quot:
-            _band(ax, quot, C_QUOT, "QDCBO")
+            _band(ax, quot, *METHOD_STYLE["QDCBO"], label="QDCBO")
         for xs in (10, 20):
             ax.axvline(xs - 0.5, color="black", lw=0.5, alpha=0.25)
         ax.set_title(title + " (T=3)", fontsize=9)
@@ -111,21 +121,21 @@ def main():
         ax = axes[2][j]
         base, quot = mcbo_trajs(env, "MCBO"), mcbo_trajs(env, "QMCBO")
         if base:
-            _band(ax, base, C_BASE, "MCBO")
+            _band(ax, base, *METHOD_STYLE["MCBO"], label="MCBO")
         if quot:
-            _band(ax, quot, C_QUOT, "QMCBO")
+            _band(ax, quot, *METHOD_STYLE["QMCBO"], label="QMCBO")
         ax.set_title(title, fontsize=9)
         if j == 0:
             ax.set_ylabel("best reward", fontsize=8)
         ax.set_xlabel("trial", fontsize=8)
     axes[1][0].set_xlabel("trial (slices concatenated)", fontsize=7)
 
-    # legend panel
+    # legend panel: one named entry per method
     ax = axes[2][2]
     ax.axis("off")
-    ax.plot([], [], color=C_BASE, lw=1.6, label="base (CBO / DCBO / MCBO)")
-    ax.plot([], [], color=C_QUOT, lw=1.6, label="quotient (QCBO / QDCBO / QMCBO)")
-    ax.legend(loc="center", fontsize=8, frameon=False)
+    for method, (color, ls) in METHOD_STYLE.items():
+        ax.plot([], [], color=color, ls=ls, lw=1.6, label=method)
+    ax.legend(loc="center", fontsize=8, frameon=False, ncol=2)
 
     for row in axes:
         for ax in row:

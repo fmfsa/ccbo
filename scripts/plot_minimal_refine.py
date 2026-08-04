@@ -4,8 +4,8 @@ MediatedChain: fine CBO reaches y* = 0.04 through do(X1); fixed-partition
 QCBO is capped at V(Pi) = 4 (the whole-cluster arm clamps X2 into the
 policy box); HQCBO runs coarse until the plateau trigger, splits {X1, X2},
 and descends to y*. Top panel: best-so-far with the two analytic reference
-lines and the mean trigger time. Bottom panel: cumulative simple regret
-(sum of best_y - y*): linear growth for fixed QCBO, flattening for HQCBO.
+lines and the mean trigger time. Bottom panel: cumulative incumbent regret,
+excluding the shared initial incumbent, as in ``ccbo.metrics``.
 
 Style follows scripts/plot_family_suite.py (Okabe-Ito, mean +- s.e. bands).
 
@@ -106,7 +106,12 @@ def main():
     # ---- bottom: cumulative simple regret ---------------------------------
     for arm, arr in data.items():
         label, color, ls = LABELS[arm]
-        reg = np.cumsum(arr - o["y_star"], axis=1)
+        # Row 0 is the shared initial incumbent, not a BO trial.
+        trial_regret = np.maximum(arr[:, 1:] - o["y_star"], 0.0)
+        reg = np.concatenate(
+            [np.zeros((len(arr), 1)), np.cumsum(trial_regret, axis=1)],
+            axis=1,
+        )
         _band(ax2, reg, color, label, ls)
     ax2.set_ylabel(r"cum.\ regret", fontsize=8)
     ax2.set_xlabel("trial", fontsize=8)

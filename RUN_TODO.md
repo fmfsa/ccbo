@@ -118,3 +118,43 @@ grep -rn "CausalBO_Benchmark" ccbo/ scripts/ README.md
   then, App. D).
 - Add the sharpened arm-deletion variant (edge edits that change the
   fine-graph MIS while the C-DAG is untouched) — design in KNOWN_ISSUES.md.
+
+## 8. Paper-revision release gates
+
+Replace `paper/aistats2026.sty` with the official AISTATS 2026 author-pack
+file before submission. The checked-in file still identifies itself as the
+2025 style, so locally rendered footers remain 2025 until this gate is
+completed. Recompile after replacement and remove the temporary
+title-box `\hfuzz` workaround in `paper/qcbo_aistats.tex` if the official
+style no longer emits that warning.
+
+After regenerating `results/qmcbo/`, validate the five ToyGraph MCBO records:
+
+```bash
+PYTHONPATH=. conda run -n ccbo python scripts/verify_qmcbo_release.py \
+    --dir results/qmcbo
+```
+
+The current runner logs `best_score` during BO, so a flat CSV establishes
+only that the recorded best-so-far trajectory is flat across the 100 logged
+iterations. Before using the stronger phrase "never improves on its initial
+design", run an instrumented unit that records:
+
+1. the initial-design incumbent before BO;
+2. every proposed intervention;
+3. every raw objective evaluation;
+4. the updated incumbent and acquisition-optimizer status.
+
+Archive those raw trajectories, the `_info.json` files, dependency versions,
+and the pinned MCBO commit with the release. The checked-in family-suite
+figure has been recolored as a vector without changing its trajectory
+geometry. Regenerate it from the raw server traces before release to reproduce
+the six-color artifact directly from `scripts/plot_family_suite.py`.
+
+The checked-in \textsc{MediatedChain} mean regret curves have been shifted by
+their mean initial regret so that trial zero is zero, matching
+`ccbo.metrics.cumulative_regret`; the bottom-panel bands were removed because
+their corrected covariance cannot be recovered from the old PDF. Regenerate
+`paper/figures/minimal_refine.pdf` from `results/minimal/` to restore exact
+standard-error bands. The main paper intentionally reports no exact
+\(R_{60}\) values until that regeneration.
