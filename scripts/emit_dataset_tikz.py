@@ -211,19 +211,23 @@ def registry_structs(name, clusters):
         e = sorted(e)
         if len(e) == 2:
             fine_bi.append((e[0], e[1]))
+    fine_bi = sorted(set(fine_bi))   # byte-stable across PYTHONHASHSEED
     nonmanip = set(obs_nodes) - set(manip) - {"Y"}
     partition = [frozenset(c) for c in clusters] + [frozenset({"Y"})]
     admg = build_coarsened_admg(partition, proj, atomic_vertices=nonmanip)
 
     def lab(v):
         return ",".join(sorted(v)) if isinstance(v, frozenset) else str(v)
-    cverts = [lab(v) for v in admg.get("vertices", [])]
-    cdi = [(lab(u), lab(v)) for (u, v) in admg.get("di", [])]
+    # build_coarsened_admg returns sets; sort everything so the emitted TikZ
+    # is byte-stable across runs (set iteration follows PYTHONHASHSEED).
+    cverts = sorted(lab(v) for v in admg.get("vertices", []))
+    cdi = sorted((lab(u), lab(v)) for (u, v) in admg.get("di", []))
     cbi = []
     for e in admg.get("bi", []):
         e = list(e)
         if len(e) == 2:
-            cbi.append((lab(e[0]), lab(e[1])))
+            cbi.append(tuple(sorted((lab(e[0]), lab(e[1])))))
+    cbi = sorted(set(cbi))
     obs_edges = [(u, v) for (u, v) in edges
                  if u not in hidden and v not in hidden]
     return dict(nodes=obs_nodes, di=obs_edges, bi=fine_bi, manip=list(manip),

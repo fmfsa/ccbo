@@ -456,15 +456,15 @@ for the worst case over the protected class.
 \begin{theorem}[Protected-class regret separation]
 \label{thm:separation}
 \begin{enumerate}[label=(\roman*),leftmargin=1.6em,itemsep=1pt,topsep=2pt]
-\item \textbf{Fine-graph fragility.} For every $B>0$ there exist a
+\item \textbf{Fine-graph fragility.} For every $\beta>0$ there exist a
 semi-Markovian SCM $\mathcal M_\lambda$ (\textsc{ParallelParent} with
-$\lambda=B/4.25$, App.~\ref{app:minibench}), a valid $\Pi$ with
+$\lambda=\beta/4.25$, App.~\ref{app:minibench}), a valid $\Pi$ with
 $\Delta(\Pi)=0$, and $H\in E_\Pi(\Gg)$ obtained from $\Gg$ by deleting
 a single directed edge, such that every optimizer whose executed
 intervention sets---initial design and sequential---all lie in
 $\mathrm{MIS}(H)$, and whose incumbent is selected among those executed
-interventions, satisfies $r_t\ge B$ for all $t$, hence
-$\mathrm{WR}_T\ge BT$.
+interventions, satisfies $r_t\ge \beta$ for all $t$, hence
+$\mathrm{WR}_T\ge \beta T$.
 \item \textbf{Uniform protection with exact decomposition.} For every
 $\mathcal M$, valid $\Pi$, and fixed $(\mathcal D,\omega,\eta)$: if
 $\mathcal A$ satisfies the quotient contract for $\Pi$, executes only
@@ -1118,7 +1118,7 @@ the useful dependence, giving $\Delta(\Pi)=1$ despite unrestricted domains.
 
 \begin{proof}[Proof of Theorem~\ref{thm:separation}]
 (i) Let $\mathcal M_\lambda$ be \textsc{ParallelParent}
-(App.~\ref{app:minibench}) with curvature $\lambda=B/4.25$: manipulable
+(App.~\ref{app:minibench}) with curvature $\lambda=\beta/4.25$: manipulable
 $\mathbf X=\{X_1,X_2\}$, edges $X_1\to Y$ and $X_2\to Y$, latent
 $X_1\leftrightarrow X_2$, domains $[-3,3]^2$, and
 $\Pi=\{\{X_1,X_2\},\{Y\}\}$. Let $H$ delete $X_1\to Y$. The quotient is
@@ -1129,10 +1129,10 @@ arm attains $y^\star=0$ at $(2,-2)\in[-3,3]^2$. In $H$, however, $X_1$
 has no directed path to $Y$, so $X_1\notin\An(Y)$ in every mutilation
 and Eq.~\eqref{eq:mis} gives $\mathrm{MIS}(H)=\{\{X_2\}\}$. By the
 closed form of App.~\ref{app:minibench},
-$\E[Y\mid\doo(X_2=x_2)]=4.25\lambda+(x_2+2)^2\ge4.25\lambda=B$ for
+$\E[Y\mid\doo(X_2=x_2)]=4.25\lambda+(x_2+2)^2\ge4.25\lambda=\beta$ for
 every $x_2$. Every executed intervention---initial design included---is
 an $\{X_2\}$-intervention, so every candidate incumbent satisfies
-$\mu(\hat a_t)\ge B$, i.e.\ $r_t\ge B$ and $R_T(\cdot\,;H)\ge BT$. The
+$\mu(\hat a_t)\ge \beta$, i.e.\ $r_t\ge \beta$ and $R_T(\cdot\,;H)\ge \beta T$. The
 supremum over $E_\Pi(\Gg)$ is at least this value. Both restrictions
 are necessary: an initial evaluation of the joint arm
 $\{X_1,X_2\}\notin\mathrm{MIS}(H)$, or an incumbent chosen outside the
@@ -1395,8 +1395,8 @@ never-intervened non-manipulables under any mutilation).
 
 \textbf{\HQCBO{}.} Phase 1 is the \QCBO{} configuration run by the same
 code path with the same seed (the trigger is a function of the coarse
-trajectory alone), so its pre-trigger prefix is byte-identical to the
-\QCBO{} run, which we assert per seed. The refined phase re-enters the same
+trajectory alone), so its pre-trigger prefix coincides exactly with the
+recorded \QCBO{} trajectory, an equality asserted per seed. The refined phase re-enters the same
 backend with the split partition, the unioned exploration set, and the
 carried per-arm data (\S\ref{sec:refine}); the vendored loop forces an
 observation step at the start of a phase, a small bias \emph{against}

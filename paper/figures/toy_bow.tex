@@ -11,8 +11,8 @@
   \end{scope}
 \end{tikzpicture}}\hfill
 \adjustbox{max width=0.50\linewidth,valign=c}{\begin{tikzpicture}
-  \node[tgtnode] (nY) at (2.20,0.00) {Y};
   \node[mannode] (nXZ) at (0.00,0.00) {X,Z};
+  \node[tgtnode] (nY) at (2.20,0.00) {Y};
   \draw[diredge] (nXZ) -- (nY);
-  \draw[bicross] (nY) to[bend left=25] (nXZ);
+  \draw[bicross] (nXZ) to[bend left=25] (nY);
 \end{tikzpicture}}
