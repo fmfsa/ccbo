@@ -102,8 +102,9 @@ intervention sets into arbitrarily large linear regret, while an
 optimizer that factors through the quotient has identical trajectories
 across the entire class---its worst-case regret over the class equals
 its regret under the true graph, decomposing exactly into the
-coarsening price plus within-quotient optimization regret---and only
-such optimizers are protected. Under full intervention support and
+coarsening price plus within-quotient optimization regret. Conversely,
+any trajectory map invariant over every protected class factors
+through the quotient. Under full intervention support and
 cluster-contained confounding the price is zero; otherwise a positive
 action-space gap lower-bounds incumbent regret linearly in the
 horizon, and a heuristic refinement scheme can recover fine actions.
@@ -172,8 +173,9 @@ well developed
   (Theorem~\ref{thm:separation}).
   \item \textbf{Input contract and characterization.} Trajectory
   invariance over the protected class holds for any optimizer that
-  factors through the quotient, and only for such optimizers
-  (Lemma~\ref{lem:contract}, Theorem~\ref{thm:separation}(iii)).
+  factors through the quotient; conversely, any trajectory map
+  invariant over every protected class factors through the quotient
+  (Lemma~\ref{lem:contract}, Prop.~\ref{prop:converse}).
   \item \textbf{Value and refinement.} We characterize the coarsening
   gap, give a graphical sufficient condition for zero gap
   (Def.~\ref{def:ccc}, Cor.~\ref{cor:reach}), show a positive gap
@@ -383,8 +385,20 @@ independence} premises
 hold, then $V(\Pi)=V(\Pi_\bot)$ and $\Delta(\Pi)=0$.
 \end{proposition}
 
+Both premises deserve names at the level a practitioner can check. The
+first is a domain condition:
+
+\begin{definition}[Full intervention support]
+\label{def:fullsupport}
+Intervention domains are products, $D(W)=\prod_{w\in W}D(w)$ for every
+$W\subseteq\mathbf X$, and for every manipulable $v$ and every
+intervention $a$ on any $A\subseteq\mathbf X\setminus\{v\}$,
+$\operatorname{supp}(v_a)\subseteq D(v)$: each variable's intervention
+domain contains every value it attains as a natural response.
+\end{definition}
+
 The second premise couples potential outcomes under different
-interventions. We therefore give a graph-level condition that implies
+interventions. We give a graph-level condition that implies
 it, stated where the proof actually operates: in the augmented NPSEM
 graph.
 
@@ -412,8 +426,9 @@ condition the proof consumes.
 
 \begin{corollary}[Graphical zero-gap condition]
 \label{cor:reach}
-In a semi-Markovian model, full intervention support implies support
-inclusion, and cluster-contained confounding (Def.~\ref{def:ccc})
+In a semi-Markovian model, full intervention support
+(Def.~\ref{def:fullsupport}) implies support inclusion, and
+cluster-contained confounding (Def.~\ref{def:ccc})
 implies cross-world independence (Lemma~\ref{lem:ccc}). Hence the
 premises of Prop.~\ref{prop:free} hold and $\Delta(\Pi)=0$.
 \end{corollary}
@@ -478,14 +493,9 @@ every $H\in E_\Pi(\Gg)$ and
  +\sum_{t=1}^T\bigl(\mu(\hat a_t)-V(\Pi)\bigr),
 \end{aligned}
 \]
-with both terms nonnegative: a structural price paid once per trial,
+with both terms nonnegative: an unavoidable per-trial structural gap,
 plus within-quotient optimization regret that no member of the
 protected class can alter.
-\item \textbf{Protection characterizes the contract.} If the
-trajectory map $H\mapsto\tau(H)$ at fixed $(\mathcal D,\omega,\eta)$
-is constant on $E_\Pi(\Gg)$ for every ADMG $\Gg$, then it factors
-through $Q_\Pi$: trajectory-level protection is available exactly to
-optimizers that satisfy the contract at the trajectory level.
 \end{enumerate}
 \end{theorem}
 
@@ -493,9 +503,19 @@ Part (i) is the headline: a single quotient-invisible edge deletion
 costs a fine-graph method an arbitrarily large linear regret while the
 quotient loses nothing ($\Delta(\Pi)=0$). Experiment~A instantiates the
 construction at $\lambda=1$ (\S\ref{sec:exp-a}). Part (ii) prices the
-protection exactly, and part (iii) shows the contract is not one design
-choice among several: any optimizer whose trajectories are invariant on
-every protected class already factors through the quotient.
+protection exactly. A converse closes the design space:
+
+\begin{proposition}[The contract is necessary for trajectory-level
+protection]
+\label{prop:converse}
+If the trajectory map $H\mapsto\tau(H)$ at fixed
+$(\mathcal D,\omega,\eta)$ is constant on $E_\Pi(\Gg)$ for every ADMG
+$\Gg$, then it factors through $Q_\Pi$.
+\end{proposition}
+This characterizes the \emph{trajectory map}, not an optimizer's
+internal implementation: any procedure whose behavior is invariant
+over every protected class is, at the trajectory level, a function of
+the quotient alone.
 
 \paragraph{Refining the partition: Hierarchical \QCBO{} (\HQCBO{}).}
 \label{sec:refine}
@@ -540,10 +560,12 @@ observations.
 
 \begin{corollary}[Adaptive refinement invariance]
 \label{cor:adaptive_invariance}
-For visited partitions $\Pi_0,\ldots,\Pi_J$,
+Write $\tau_{\mathcal H}$ for the \HQCBO{} trajectory under a
+declared hierarchy $\mathcal H$. For visited partitions
+$\Pi_0,\ldots,\Pi_J$,
 \[
  \left[\forall j,\ \Gg^{\Pi_j}=(\Gg')^{\Pi_j}\right]
- \Longrightarrow \tau_H(\Gg)=\tau_H(\Gg').
+ \Longrightarrow \tau_{\mathcal H}(\Gg)=\tau_{\mathcal H}(\Gg').
 \]
 \end{corollary}
 Splitting a cluster exposes its internal edges in later phases. Edits inside
@@ -1089,8 +1111,10 @@ independent of any function of the second.
 \end{proof}
 
 \begin{proof}[Proof of Cor.~\ref{cor:reach}]
-Full intervention support gives
-$\operatorname{supp}(B_a)\subseteq D_B(a)$ directly, and
+Under Def.~\ref{def:fullsupport}, the joint support of $B_a$ lies in
+the product of its marginal supports, each contained in the
+corresponding $D(v)$, whose product is $D_B(a)$; hence
+$\operatorname{supp}(B_a)\subseteq D_B(a)$.
 Lemma~\ref{lem:ccc} gives $B_a\perp Y_{a,b}$, so
 Prop.~\ref{prop:free} applies.
 
@@ -1152,8 +1176,10 @@ The incumbent is an executed action on some $A\in\mathcal U(\Pi)$, and
 $V(\Pi)$ is the minimum of $\mu^\star$ over $\mathcal U(\Pi)$
 (Eq.~\eqref{eq:value-link}), so $\mu(\hat a_t)\ge V(\Pi)$;
 $\Delta(\Pi)\ge0$ by Prop.~\ref{prop:price}.
+\end{proof}
 
-(iii) Constancy on $E_\Pi(\Gg)$ for every $\Gg$ means $\tau(H)$ depends
+\begin{proof}[Proof of Prop.~\ref{prop:converse}]
+Constancy on $E_\Pi(\Gg)$ for every $\Gg$ means $\tau(H)$ depends
 on $H$ only through the fiber of $Q_\Pi$ containing it. Setting
 $\bar\tau(q):=\tau(H)$ for any $H$ with $Q_\Pi(H)=q$ is therefore well
 defined, and $\tau=\bar\tau\circ Q_\Pi$.
@@ -1338,7 +1364,7 @@ $4$, outside the box. We have
 $\E[Y\mid\doo(x_2)]=(x_2-4)^2$, whose best value over the box is $4$.
 Hence $V(\Pi)=4$ and $V(\Pi)-y^\star=3.96$
 (Prop.~\ref{prop:price}). The support premise of Prop.~\ref{prop:free} fails by
-construction). The declared hierarchy splits $C_1=\{X_1,X_2\}$ into
+construction. The declared hierarchy splits $C_1=\{X_1,X_2\}$ into
 singletons. One split reaches the identity partition, whose MIS contains
 the optimal $\doo(X_1)$ arm.
 
@@ -1446,7 +1472,7 @@ the same cluster bow, illustrating Prop.~\ref{prop:qexposure}.
 \begin{algorithmic}[1]
 \REQUIRE C-DAG $\Gq$ over the clusters of $\Pi$ (or a fine hypothesis $\Gg$ and
 $\Pi$); target $Y$; number of trials $T$; observational data $\mathcal{D}^{O}$;
-optional hierarchy $H$ (\S\ref{sec:refine}).
+optional hierarchy $\mathcal H$ (\S\ref{sec:refine}).
 \STATE If given $\Gg$: $\Gg^*\leftarrow$ latent projection of $\Gg$;\quad
 $\Gq\leftarrow$ quotient of $\Gg^*$ under $\Pi$. Check acyclicity of $\Gq$
 (Assumption~\ref{ass:valid}).
@@ -1461,8 +1487,8 @@ rule, Eq.~\eqref{eq:two_tier_prior}, on $\mathcal{D}^{O}$.
   \STATE $(\mathbf{X}_{s_t},\mathbf{x}_t)\leftarrow\arg\max_{s,\mathbf{x}}
   \mathrm{EI}^{s}_{t}(\mathbf{x})/Co(\mathbf{X}_s,\mathbf{x})$.
   \STATE Intervene, observe $y_t$; update $\mathcal{D}^{I}_t$.
-  \STATE \textbf{if} $H$ declared \textbf{and} incumbent plateaued: split the
-  incumbent's clusters via $H$, re-check validity, rebuild
+  \STATE \textbf{if} $\mathcal H$ declared \textbf{and} incumbent plateaued: split the
+  incumbent's clusters via $\mathcal H$, re-check validity, rebuild
   $\ESpi\,\cup$ past arms, carry $\mathcal{D}^{I}_t$ by arm, init new arms
   (\S\ref{sec:refine}).
 \ENDFOR
@@ -1557,7 +1583,7 @@ behind them. Per-seed CSVs for every minimal-suite unit (trial,
 incumbent, cumulative cost, selected arm, and intervention values)
 regenerate from the archived traces (App.~\ref{app:repro}).
 
-\begin{table}[t]\centering
+\begin{table}[ht]\centering
   \caption{Per-seed paired differences $\Delta$ (base $-$ quotient;
   maximization, so positive = quotient worse) behind the $n{=}5$ MCBO
   rows of Table~\ref{tab:family}.}
@@ -1566,7 +1592,7 @@ regenerate from the archived traces (App.~\ref{app:repro}).
   \input{tables/qmcbo_paired}
 \end{table}
 
-\begin{table}[t]\centering
+\begin{table}[ht]\centering
   \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds,
   $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit.}
   \label{tab:qmcbo-e1}
@@ -1574,7 +1600,7 @@ regenerate from the archived traces (App.~\ref{app:repro}).
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e1}}
 \end{table}
 
-\begin{table}[t]\centering
+\begin{table}[ht]\centering
   \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Lemma~\ref{lem:contract}). MCBO does; on PSAGraph its five perturbed trajectories all differ mid-run yet end at the same displayed final.}
   \label{tab:qmcbo-e2}
   \small

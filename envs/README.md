@@ -45,16 +45,17 @@ bash scripts/fetch_dcbo.sh && bash scripts/fetch_mcbo.sh && bash scripts/fetch_c
 `pygraphviz` requires system graphviz headers. Pin BLAS threads when
 running suites (`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`).
 
-## Verification baseline (recorded 2026-08-10, pre-revision)
+## Verification baseline (2026-08-10)
 
 - `PYTHONPATH=. ~/venvs/ccbo/bin/python -m pytest` (default `-m 'not slow'`):
-  **52 passed, 11 skipped, 11 deselected** in ~116 s. Post-revision runs are
-  compared against these counts (skips depend on optional third-party
-  stacks being fetched, so compare like-for-like).
-- `latexmk -pdf paper/qcbo_aistats.tex`: clean build; 17 pages; the
-  committed PDF was up-to-date with the sources at baseline. Known layout
-  facts at baseline: p. 8 is a 207-character near-empty page (bibliography
-  tail), pp. 14–16 are sparse App. D DAG pages.
+  **52 passed, 11 skipped, 11 deselected** — recorded pre-revision and
+  re-verified unchanged after the revision (skips depend on optional
+  third-party stacks being fetched, so compare like-for-like).
+- `latexmk -pdf paper/qcbo_aistats.tex`, post-revision state: clean
+  build, zero undefined references, zero overfull boxes, 21 pages,
+  references beginning on p. 8, no rendered venue-branding strings.
+  (Pre-revision: 17 pages with a 207-character near-empty p. 8 — since
+  eliminated.)
 
 ## Open item
 
