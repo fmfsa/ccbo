@@ -295,10 +295,8 @@ def fig_block(fobj, key, pretty, fine_pic, cdag_pic, caption_extra=""):
                + "}\n")
     fobj.write(
         r"\caption{\textbf{%s.} Fine DAG with coarse partition (left) and "
-        r"quotient C-DAG (right), in the convention of "
-        r"Fig.~\ref{fig:motivating}: manipulable variables orange, "
-        r"target blue, dash-dotted latent confounding; dashed boxes are the "
-        r"manipulable clusters.%s}" % (pretty, caption_extra) + "\n")
+        r"quotient C-DAG (right); drawing conventions as stated at the start "
+        r"of this appendix.%s}" % (pretty, caption_extra) + "\n")
     fobj.write(r"\label{fig:dag-%s}" % key + "\n")
     fobj.write(r"\end{figure}" + "\n\n")
 
