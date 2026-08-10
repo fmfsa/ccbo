@@ -3,11 +3,11 @@
 # E2 (intra-cluster misspecification: correct vs perturbed model view).
 # QMCBO = joint cluster mechanisms (the paper's method); the per-coordinate
 # ind ablation is a dev tool only (run manually with --mechanism ind).
-# Usage: PYTHONPATH=. bash scripts/run_qmcbo_pilot.sh [outroot] [jobs]
+# Usage: PYTHONPATH=. [SEEDS="..."] bash scripts/run_qmcbo_pilot.sh [outroot] [jobs]
 set -u
 OUTROOT=${1:-results/qmcbo}
 JOBS=${2:-8}
-SEEDS="0 1 2 3 4"
+SEEDS=${SEEDS:-"0 1 2 3 4"}   # override: SEEDS="0 1 ... 19" for the 20-seed extension
 ENVS="ToyGraph PSAGraph"
 T=100
 PY=${PY:-python}

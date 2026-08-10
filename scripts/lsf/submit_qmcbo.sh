@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # LSF job for the MCBO vs QMCBO suite (RUN_TODO step 2c; the longest —
 # PSAGraph units are hours each). Needs ~/venvs/mcbo (era botorch stack).
-# Usage: bash scripts/lsf/submit_qmcbo.sh
+# Usage: [QMCBO_SEEDS="0 1 ... 19"] bash scripts/lsf/submit_qmcbo.sh
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -19,5 +19,6 @@ bsub <<EOF
 cd "$REPO"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 PYTHONPATH=. PY="\$HOME/venvs/mcbo/bin/python" \
+  SEEDS="${QMCBO_SEEDS:-0 1 2 3 4}" \
   bash scripts/run_qmcbo_pilot.sh results/qmcbo 10
 EOF
