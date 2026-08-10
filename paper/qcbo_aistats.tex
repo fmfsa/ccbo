@@ -1,6 +1,8 @@
 \documentclass[twoside]{article}
 
-\usepackage{aistats2026}
+% [preprint] suppresses all venue branding (notice box + running heads)
+% until the official AISTATS 2027 author pack replaces this style file.
+\usepackage[preprint]{aistats2026}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -22,16 +24,6 @@
 \usepackage{etoolbox}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shapes}
-
-% The official copyright float declares a 20pc picture in a 19.57pc column,
-% producing a harmless 5.1pt overfull box. Preserve its contents and shorten
-% only the empty picture bounding box.
-\makeatletter
-\patchcmd{\@copyrightspace}
-  {\begin{picture}(20,2.5)}
-  {\begin{picture}(19.5,2.5)}
-  {}{}
-\makeatother
 
 % Relax float-placement fractions so two full-width floats may share a page top.
 % without this the related-work table strands alone on a near-empty page.
@@ -83,7 +75,6 @@
 \newcommand{\Gq}{\mathcal{G}^{\Pi}}
 \newcommand{\ES}{\mathbf{ES}}
 \newcommand{\ESpi}{\mathbf{ES}^{\Pi}}
-\newcommand{\TODO}[1]{{\color{red!75!black}\bfseries [TODO: #1]}}
 
 % =============================================================================
 \begin{document}
@@ -481,9 +472,11 @@ interventions on cluster unions $A\in\mathcal U(\Pi)$, and selects its
 incumbent among executed actions, then its trajectory is identical for
 every $H\in E_\Pi(\Gg)$ and
 \[
- \mathrm{WR}_T(\mathcal A)=R_T(\mathcal A;\Gg)
- =T\,\Delta(\Pi)
+\begin{aligned}
+ \mathrm{WR}_T(\mathcal A)&=R_T(\mathcal A;\Gg)\\
+ &=T\,\Delta(\Pi)
  +\sum_{t=1}^T\bigl(\mu(\hat a_t)-V(\Pi)\bigr),
+\end{aligned}
 \]
 with both terms nonnegative: a structural price paid once per trial,
 plus within-quotient optimization regret that no member of the
@@ -613,6 +606,10 @@ implemented class receive the uninformative prior.
  m_A^\Pi&=m_A^{\CBO}.
 \end{align*}
 \end{proposition}
+Identity is with respect to \CBO{} \emph{as specified}---the MIS
+exploration set with do-calculus priors. The authors' released
+implementation deviates from that specification in two documented
+places, which we correct for both methods (App.~\ref{app:seam}).
 
 \subsection{Dynamic: quotient DCBO (\QDCBO{})}
 \label{sec:qdcbo}
@@ -678,6 +675,20 @@ joint cluster mechanisms and all whole-cluster interventional
 distributions.
 \end{proposition}
 
+\paragraph{Supplying the input in practice.}
+The contract's input is a partition of the variables plus a C-DAG over
+its clusters---never a fine graph. Clusters typically follow domain
+modules (subsystems, assays, market segments, pathways); each C-DAG
+edge is then a single cluster-level judgement (``can subsystem $A$
+affect $B$?''), one per pair, in place of many edge-level judgements.
+Validity is a syntactic acyclicity check (Def.~\ref{def:coarsening}),
+re-run after every refinement (Prop.~\ref{prop:refinement_validity}).
+In restricted model classes the consistency of a proposed coarsening
+is itself testable \citep{madalenoCoarseningLinearNonGaussian2026}. A
+refinement hierarchy, when supplied, follows the same nested domain
+taxonomy; \HQCBO{} never needs distinctions finer than the hierarchy
+declares.
+
 % =============================================================================
 \section{Experiments}
 \label{sec:exp}
@@ -690,9 +701,18 @@ App.~\ref{app:minibench}.
 \paragraph{Protocol.}
 For each minimal SCM we fix the true mechanisms, observational data
 ($n_{\mathrm{obs}}=100$), seeds, and evaluation budget. Only the assumed
-structure changes. We use $30$ paired seeds, $T=50$ trials, or $60$ for
-\textsc{MediatedChain}, three initial points per arm, and unit costs.
-\HQCBO{} uses $k=5$ and $\delta=10^{-3}$. The empirical cumulative-regret
+structure changes. We use $30$ paired seeds, $T=50$ trials ($60$ for
+\textsc{MediatedChain}), three initial interventional points per arm,
+and per-variable unit intervention costs: an arm's per-trial cost is
+its number of intervened variables, and acquisition divides expected
+improvement by this cost (Alg.~\ref{alg:ccbo}). Initialization is
+unlogged and its budget differs across methods with different arm
+counts (e.g.\ $12$ vs.\ $6$ cost units on \textsc{ParallelParent});
+reported cumulative costs exclude it, and App.~\ref{app:repro}
+quantifies the totals and re-compares methods at matched
+initialization-inclusive budgets. \HQCBO{} uses the plateau trigger of
+App.~\ref{app:seam} with $k=5$ and $\delta=10^{-3}$.
+The empirical cumulative-regret
 curves use the recorded best-so-far trajectory against the analytic
 $y^\star$. They are descriptive and are not direct estimates of the
 mean-regret bound. Invariance is measured by
@@ -749,8 +769,11 @@ $D(X_2)=[-2,2]$. For $\Pi=\{\{X_1,X_2\}\}$,
 The support condition in Prop.~\ref{prop:free} fails because
 $\doo(X_1=2)$ lets $X_2$ respond near $4$, outside its intervention box.
 \CBO{}, \QCBO{}, and \HQCBO{} finish at $0.040$, $4.000$, and $0.040$.
-\HQCBO{} refines at trial $7.5\pm0.1$. The fixed-partition empirical regret
-grows linearly, while the refined curve flattens after the fine arm appears.
+\HQCBO{} refines at trial $7.5\pm0.1$. The fixed-partition empirical
+regret tracks the floor of Prop.~\ref{prop:floor}, while the refined
+curve flattens after the fine arm appears:
+$R_{60}=5.60\pm1.69$ (\CBO{}), $243.23\pm0.91$ (\QCBO{}, against the
+floor $T\Delta(\Pi)=237.6$), and $37.22\pm1.21$ (\HQCBO{}).
 
 \begin{figure}[t]\centering
 \includegraphics[width=\linewidth]{figures/minimal_refine}
@@ -769,7 +792,7 @@ DCBO tasks ($20$ seeds), and two MCBO tasks ($5$ seeds). Graphs and full
 protocols are in Apps.~\ref{app:dags} and~\ref{app:repro}.
 
 \begin{figure*}[t]\centering
-\IfFileExists{figures/family_suite.pdf}{\includegraphics[width=\textwidth]{figures/family_suite}}{\fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}family\_suite.pdf pending\vspace{2cm}}}}
+\includegraphics[width=\textwidth]{figures/family_suite}
 \caption{Quotient methods and their bases on the base papers' benchmarks,
 mean$\pm$s.e. Top: minimization for \CBO{}. Middle: DCBO slices. Bottom:
 maximization for MCBO.}
@@ -777,51 +800,141 @@ maximization for MCBO.}
 \end{figure*}
 
 \textbf{Results.}
-Table~\ref{tab:family} carries the final values. The quotient matches or
-beats its base on six of eight tasks. On ToyGraph, \QMCBO{} reaches
-$2.150\pm0.013$ while MCBO reaches $1.143\pm0.271$. On PSAGraph both
-finish at $-5.15\pm0.00$, with
-\QMCBO{} using $3.0\times$ less wall-clock time. Synthetic has the largest
-positive gap because its optimum splits a cluster. Under quotient-invisible
-perturbations, \QMCBO{} is identical on all $10$ environment-seed pairs,
-while MCBO changes on $8$ of $10$. \QDCBO{} is likewise invariant to its
+Table~\ref{tab:family} reports finals and per-task \emph{paired}
+effects with $95\%$ confidence intervals. The quotient improves the
+final value on stat ($-0.29$, CI $[-0.41,-0.17]$), ind ($-2.45$, CI
+$[-2.72,-2.19]$), and---descriptively at $n{=}5$---MCBO ToyGraph
+($-1.01$, CI $[-1.76,-0.25]$), where \QMCBO{} reaches $2.150\pm0.013$
+against MCBO's $1.143\pm0.271$. It pays a clear price on Synthetic
+($+1.89$, CI $[+1.40,+2.39]$), whose optimum splits a cluster, and on
+Coral ($+0.34$, CI $[+0.30,+0.37]$). It is statistically
+indistinguishable from its base on Toy ($+0.03$, CI $[-0.04,+0.11]$)
+and nonstat ($-1.69$, CI $[-3.57,+0.18]$); on PSAGraph the final
+difference is negligible at displayed precision while trajectories
+differ, and \QMCBO{} uses $3.0\times$ less wall-clock time. At matched
+initialization-inclusive budgets the picture shifts further
+(App.~\ref{app:repro}): the Synthetic price disappears, and Coral's
+base has not completed initialization within the quotient's entire
+budget. Under quotient-invisible perturbations \QMCBO{}'s trajectories
+are identical on all $10$ environment--seed pairs, while MCBO's differ
+on $8$ of $10$; all five perturbed PSAGraph MCBO runs differ mid-run
+yet end at the same displayed final (both saturate at $-5.15$), so
+Table~\ref{tab:qmcbo-e2} reports trajectory identity and final
+deviation separately. \QDCBO{} is likewise invariant to its
 intra-slice edit.
 
-\begin{table}[t]\centering
-  \caption{Realized price of coarsening per family, each pair on the base
-  method's own experiment suite (final $Y$, mean$\pm$s.e.). Price is signed
-  so that positive means the quotient did worse in the task's direction.}
+\begin{table*}[t]\centering
+  \caption{Family suite: finals and per-task \emph{paired}
+  final-performance effects $\Delta$ (quotient $-$ base in the task's
+  own direction; positive = quotient worse) with paired-$t$ $95\%$
+  CIs. These are finite-budget empirical effects, not estimates of the
+  action-space gap $\Delta(\Pi)$; the $n{=}5$ MCBO rows are
+  descriptive (per-seed values in App.~\ref{app:fulltables}).}
   \label{tab:family}
   \small
-  \adjustbox{max width=\linewidth}{\input{tables/family_price}}
-\end{table}
+  \input{tables/family_effects}
+\end{table*}
 
 % =============================================================================
 \section{Related work}
 \label{sec:related}
-\QCBO{} neither assumes a full graph nor learns one. GACBO maintains a DAG
-posterior \citep{mukherjeeGraphAgnosticCausal2024}, \CEO{} uses graph
-entropy \citep{branchiniCausalEntropyOptimization2023}, and
+
+\paragraph{Graph uncertainty in CBO.}
+\QCBO{} neither assumes a full graph nor learns one. GACBO maintains a
+posterior over DAGs and searches the union of their MIS
+\citep{mukherjeeGraphAgnosticCausal2024}; our cluster-union MIS is the
+one-shot, coarse-input analogue of that union. \CEO{} reduces
+structural uncertainty online through graph entropy
+\citep{branchiniCausalEntropyOptimization2023}, and
 \citet{durandCausalBayesianOptimization2025} identify $\Pa(Y)$ under a
-$Y$-leaf assumption. Other work assumes an equivalence class
-\citep{parkStructuralCausalBandits}. We instead use C-DAG identification
-\citep{CausalEffectIdentification,ferreiraIdentifyingMacroCausal2025} as a
-fixed, coarser input. Causal abstraction has also been used to coarsen the
-outcome as a low-fidelity proxy
-\citep{zeitlerMFACBOMultiFidelityAbstraction2025}. We coarsen manipulable
-inputs.
+$Y$-leaf assumption; both are complementary rather than competing---an
+online learner can operate at cluster granularity, and its posterior
+could refine the quotient our contract consumes. Park et al.\ assume a
+Markov equivalence class \citep{parkStructuralCausalBandits}; the
+protected class $E_\Pi(\Gg)$ is the analogous object for coarsening,
+with membership decided by the quotient rather than by conditional
+independences. Table~\ref{tab:related} maps the nearest methods.
+
+\paragraph{Causal bandits under structural uncertainty.}
+Causal bandits bound regret with unknown or partial graphs: without
+the graph \citep{luCausalBanditsUnknown2021}, bypassing graph learning
+\citep{konobeevCausalBanditsGraph2025}, or with unobserved confounders
+under additive assumptions \citep{maitiCausalBanditApproach2022}.
+Those guarantees price \emph{learning} structure inside the horizon;
+Theorem~\ref{thm:separation} instead prices \emph{committing} to a
+fixed coarse input, worst-case over the protected class, with no
+learning assumption.
+
+\paragraph{Cluster-level identification.}
+Anand et al.\ define C-DAGs and give sound and complete identification
+over them \citep{CausalEffectIdentification}; our two-tier prior
+consumes exactly that layer---the contribution here is the
+optimization-level contract and separation built on top, not the
+identification theory. Identifiability under partial observability and
+surrogate experiments
+\citep{leeCausalEffectIdentifiability2020,leeGeneralIdentifiabilityArbitrary2020}
+governs which cluster queries a sound estimator may instantiate
+(Assumption~\ref{ass:valid}). Macro-level causal structure can itself
+be learned \citep{ferreiraIdentifyingMacroCausal2025}, though
+cluster-level faithfulness need not transfer
+\citep{wahlFoundationsCausalDiscovery2024}.
+
+\paragraph{Abstraction and coarsening.}
+Def.~\ref{def:coarsening} instantiates constructive causal abstraction
+\citep{beckersAbstractingCausalModels2019}: protection is invariance at
+the abstract level. Coarsening theory gives conditions under which a
+proposed clustering is consistent, including testable ones in
+restricted model classes
+\citep{madaleno2026a,madalenoCoarseningLinearNonGaussian2026}. MFACBO
+coarsens the \emph{outcome} into a low-fidelity proxy
+\citep{zeitlerMFACBOMultiFidelityAbstraction2025}; we coarsen
+manipulable inputs.
+
+\begin{table*}[t]\centering
+  \caption{Positioning of \QCBO{} against the nearest methods.}
+  \label{tab:related}
+  \small
+  \adjustbox{max width=\linewidth}{\begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Method} & \textbf{What is learned} & \textbf{Structural prior} & \textbf{Search space} \\
+    \midrule
+    \CBO{}~\citep{agliettiCausalBayesianOptimization2020b}    & nothing (oracle DAG) & full DAG & MIS \\
+    GACBO~\citep{mukherjeeGraphAgnosticCausal2024}  & posterior over DAGs & DAG family & union of MIS \\
+    Durand et al.~\citep{durandCausalBayesianOptimization2025} & $\Pa(Y)\subseteq\mathbf{X}$ & $Y$ leaf & $\mathbf{X}$ \\
+    Park et al.~\citep{parkStructuralCausalBandits} & PAG $\to$ MAG & MEC & partial $\mathbf{X}$ \\
+    SCB~\citep{leeStructuralCausalBandits}     & nothing (oracle DAG) & full DAG & POMIS \\
+    \midrule
+    \QCBO{} (ours) & nothing & partition + C-DAG & MIS of the C-DAG (whole-cluster unions) \\
+    \bottomrule
+  \end{tabular}}
+\end{table*}
 
 % =============================================================================
 \section{Discussion and limitations}
 \label{sec:limitations}
-The guarantee is behavioral and requires a correct quotient. Faithfulness
-need not transfer to clusters \citep{wahlFoundationsCausalDiscovery2024}.
-The experiments use unit intervention costs. Constructing the exploration
-set requires at most $2^K-1$ MIS and ID checks for $K$ manipulable clusters.
-\QMCBO{}, like MCBO, assumes causal sufficiency. A wrong prior can be
-overcome if its arm remains available, while a removed or unavailable arm
-cannot be recovered without changing the action space. Learning the
-hierarchy and controlling unnecessary-refinement cost remain open.
+The guarantee is behavioral and requires a correct quotient: arbitrary
+quotient-visible errors remain harmful, and nothing here protects
+against a wrong partition or a wrong C-DAG. The zero-gap condition
+rests on premises about the \emph{true} model whose cross-world
+consequence no single-world data can test
+(Remark~\ref{rem:crossworld}). Faithfulness need not transfer to
+clusters \citep{wahlFoundationsCausalDiscovery2024}. The refinement
+trigger is a heuristic with no firing guarantee, so
+Cor.~\ref{cor:recovery} is conditional on it. The experiments use
+per-variable unit intervention costs---cluster arms pay proportionally
+more per trial---and initialization budgets differ across methods with
+different arm counts; App.~\ref{app:repro} quantifies both and
+re-compares at matched total budgets. The MCBO family is evaluated at
+five paired seeds and reported descriptively. We compare each quotient
+method against its own base, not against graph-uncertain optimizers
+such as \CEO{} or GACBO; that comparison, random-graph
+misspecification sweeps, and learned partitions are deferred.
+Constructing the exploration set requires at most $2^K-1$ MIS and ID
+checks for $K$ manipulable clusters. \QMCBO{}, like MCBO, assumes
+causal sufficiency. A wrong prior can be overcome if its arm remains
+available, while a removed or unavailable arm cannot be recovered
+without changing the action space. Learning the hierarchy and
+controlling unnecessary-refinement cost remain open.
 
 % =============================================================================
 \section{Conclusion}
@@ -1141,8 +1254,9 @@ No function of those inputs can answer it.
 \section{MinimalBench: specification and oracles}\label{app:minibench}
 
 The three SCMs share one parameterization: Gaussian roots, manipulable
-domains $[-3,3]$ (except the \textsc{MediatedChain} policy box), unit
-intervention costs, target noise $\sigma_Y=0.1$, and no clipping. Every arm
+domains $[-3,3]$ (except the \textsc{MediatedChain} policy box),
+per-variable unit intervention costs, target noise $\sigma_Y=0.1$, and
+no clipping. Every arm
 value is closed-form. The structural module that defines them
 (\texttt{ccbo/minibench.py}) is the same one the methods, the perturbation
 registry, the structural tests, and Table~\ref{tab:minimal-taxonomy}'s
@@ -1288,6 +1402,18 @@ carried per-arm data (\S\ref{sec:refine}); the vendored loop forces an
 observation step at the start of a phase, a small bias \emph{against}
 refinement that we keep.
 
+\textbf{Plateau trigger (exact rule).} Let $b_0,b_1,\ldots$ be the
+best-so-far incumbent values. The trigger fires at the first
+$t\ge k$ with $b_{t-k}-b_t<\delta$ (minimization; the mirrored
+difference for maximization), provided $0<t<T$; the defaults are
+$k=5$ and $\delta=10^{-3}$ (\texttt{PLATEAU\_K},
+\texttt{PLATEAU\_DELTA} in \texttt{ccbo/minimal\_suite.py}, rule in
+\texttt{ccbo/benchmark.py}). On firing, the incumbent arm's clusters
+are split along the declared hierarchy; a split whose quotient is
+cyclic is refused and the run stays coarse
+(Prop.~\ref{prop:refinement_validity}). Each newly exposed arm is
+initialized with the protocol's three interventional points.
+
 \textbf{Objective-identity verification.} For all methods the decoupling
 holds by construction: outcomes are always evaluated on the true graph's
 SEM, and the perturbation enters only through the separately-supplied
@@ -1299,7 +1425,10 @@ causal reasoning, never the problem it is solving.
 
 \section{Dataset graphs and their quotients}\label{app:dags}
 For every dataset in the paper, the figures below show the fine DAG with its
-coarse partition and the quotient C-DAG the method actually consumes. They are
+coarse partition and the quotient C-DAG the method actually consumes,
+in the convention of Fig.~\ref{fig:motivating}: manipulable variables
+orange, target blue, dash-dotted latent confounding; dashed boxes are
+the manipulable clusters. They are
 regenerated from the released structure registry by
 \texttt{scripts/emit\_dataset\_tikz.py}, so the pictures cannot drift from
 the code. On \textsc{ParallelParent}, note how the intra-cluster latent
@@ -1371,15 +1500,71 @@ the native two-phase \HQCBO{} (\texttt{ccbo/minimal\_suite.py}), and every
 table/figure emitter are released, so all reported numbers regenerate from
 the released SCMs and seeds.
 
+\paragraph{Initialization-inclusive cost accounting.}
+Reported cumulative costs exclude the initial design (three
+interventional points per arm on MinimalBench, ten on the \CBO{}
+family; per-variable unit costs), so methods with different arm counts
+consume different unlogged budgets at equal $T$. Table~\ref{tab:cost}
+reconstructs, per method, the exploration-set size, initialization
+cost, logged cost, and total, and re-evaluates each method at the
+matched budget $C^\ast$---the smallest total across the group's
+methods (\HQCBO{} additionally pays three points per arm exposed at
+its per-seed split). The trajectory \emph{through} initialization is
+unlogged and is not reconstructed: each curve starts at its
+post-initialization incumbent placed at its full initialization cost,
+and budgets below that are reported as unavailable. Two reversals are
+worth naming: on Synthetic, \CBO{}'s final-value advantage over
+\QCBO{} disappears at matched total cost, and on Coral, \CBO{}'s
+$31$-arm initialization ($800$ cost units) exceeds \QCBO{}'s entire
+total budget. On \textsc{FrontDoor} the comparison moves the other
+way: fine \CBO{} reaches the well within a smaller total budget. The
+DCBO and MCBO families follow their base papers' trial-indexed
+protocols and are not re-costed.
+
+\begin{table}[t]\centering
+  \caption{Initialization-inclusive cost accounting and matched-budget
+  comparison (means over seeds; $Y$ at $C^\ast$ by step interpolation
+  above the post-initialization incumbent; ``n/a'' = initialization
+  alone exceeds $C^\ast$).}
+  \label{tab:cost}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/cost_accounting}}
+\end{table}
+
+\paragraph{Reproducibility statement.}
+The repository archives the complete raw per-seed traces behind every
+figure and table (\texttt{artifacts/traces/}: four compressed archives
+with per-file SHA256 checksums and a provenance manifest recording
+source commits, generating scripts, and settings), pip-freeze
+snapshots of both experiment environments with platform details and
+pinned external-stack commits (\texttt{envs/}), and a verification
+gate (\texttt{scripts/verify\_traces.py}) that re-checks the archive's
+file grid, recomputes every reported aggregate at displayed precision,
+and re-tests the exact invariance predictions. One command
+(\texttt{scripts/reproduce\_paper.sh}) regenerates every figure and
+table from the archives into a fresh working directory and rebuilds
+this document.
+
 \section{Full results}\label{app:fulltables}
-Table~\ref{tab:related} positions \QCBO{} in the method landscape
-(\S\ref{sec:related}). Tables~\ref{tab:qmcbo-e1} and~\ref{tab:qmcbo-e2}
+Tables~\ref{tab:qmcbo-e1} and~\ref{tab:qmcbo-e2}
 give the per-environment detail behind \S\ref{sec:exp-d}'s model-based
 rows: finals and wall-clock on MCBO's own tasks, and the within-family
 invariance counts under the intra-cluster perturbation of the model's
-graph view. Per-seed CSVs for every minimal-suite unit (trial, incumbent,
-cumulative cost, selected arm, and intervention values) regenerate from
-the released runners (App.~\ref{app:repro}).
+graph view. Because the MCBO family runs only five paired seeds, its
+effects in Table~\ref{tab:family} are descriptive;
+Table~\ref{tab:qmcbo-paired} lists the raw per-seed paired differences
+behind them. Per-seed CSVs for every minimal-suite unit (trial,
+incumbent, cumulative cost, selected arm, and intervention values)
+regenerate from the archived traces (App.~\ref{app:repro}).
+
+\begin{table}[t]\centering
+  \caption{Per-seed paired differences $\Delta$ (base $-$ quotient;
+  maximization, so positive = quotient worse) behind the $n{=}5$ MCBO
+  rows of Table~\ref{tab:family}.}
+  \label{tab:qmcbo-paired}
+  \small
+  \input{tables/qmcbo_paired}
+\end{table}
 
 \begin{table}[t]\centering
   \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds,
@@ -1389,27 +1574,8 @@ the released runners (App.~\ref{app:repro}).
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e1}}
 \end{table}
 
-\begin{table*}[t]\centering
-  \caption{Positioning of \QCBO{} against the nearest methods.}
-  \label{tab:related}
-  \small
-  \adjustbox{max width=\linewidth}{\begin{tabular}{@{}llll@{}}
-    \toprule
-    \textbf{Method} & \textbf{What is learned} & \textbf{Structural prior} & \textbf{Search space} \\
-    \midrule
-    \CBO{}~\citep{agliettiCausalBayesianOptimization2020b}    & nothing (oracle DAG) & full DAG & MIS \\
-    GACBO~\citep{mukherjeeGraphAgnosticCausal2024}  & posterior over DAGs & DAG family & union of MIS \\
-    Durand et al.~\citep{durandCausalBayesianOptimization2025} & $\Pa(Y)\subseteq\mathbf{X}$ & $Y$ leaf & $\mathbf{X}$ \\
-    Park et al.~\citep{parkStructuralCausalBandits} & PAG $\to$ MAG & MEC & partial $\mathbf{X}$ \\
-    SCB~\citep{leeStructuralCausalBandits}     & nothing (oracle DAG) & full DAG & POMIS \\
-    \midrule
-    \QCBO{} (ours) & nothing & partition + C-DAG & identifiable cluster unions \\
-    \bottomrule
-  \end{tabular}}
-\end{table*}
-
 \begin{table}[t]\centering
-  \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Lemma~\ref{lem:contract}). MCBO does.}
+  \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Lemma~\ref{lem:contract}). MCBO does; on PSAGraph its five perturbed trajectories all differ mid-run yet end at the same displayed final.}
   \label{tab:qmcbo-e2}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e2}}
