@@ -845,6 +845,26 @@ Table~\ref{tab:qmcbo-e2} reports trajectory identity and final
 deviation separately. \QDCBO{} is likewise invariant to its
 intra-slice edit.
 
+\paragraph{Graph-uncertain comparator (\CEO{}).}
+We also run \CEO{} \citep{branchiniCausalEntropyOptimization2023} on
+the minimal suite under the same protocol---seeds, budgets, shared
+observational data, and the same objective
+(Table~\ref{tab:ceo}, App.~\ref{app:fulltables})---with a candidate
+pool holding the asserted observable DAG plus every observable-distinct
+variant. Online structure learning does buy robustness: under the A1
+deletion, hedged \CEO{} ends at $0.164$ where committed fine \CBO{}
+plateaus at $4.245$. But it pays a consistent premium over the quotient
+on every protected condition ($+0.08$ to $+0.28$ at $n{=}30$, while
+\QCBO{} is exactly invariant), its posterior never resolves the
+\textsc{ParallelParent} pool ($P(\text{truth})\approx0.53$), and it
+cannot represent the assumed-confounder errors A3/B1 at all (its
+candidate DAGs carry no bidirected edges). On the unprotected price
+condition the picture mirrors: \CEO{}'s fine action space reaches
+$0.117$ where fixed-partition \QCBO{} pays the full gap ($4.000$),
+though \HQCBO{} recovers further ($0.040$). Committing to a quotient
+and learning over fine graphs are complementary: each wins exactly
+where its structural assumption binds.
+
 \begin{table*}[t]\centering
   \caption{Family suite: finals and per-task \emph{paired}
   final-performance effects $\Delta$ (quotient $-$ base in the task's
@@ -871,7 +891,7 @@ structural uncertainty online through graph entropy
 \citet{durandCausalBayesianOptimization2025} identify $\Pa(Y)$ under a
 $Y$-leaf assumption; both are complementary rather than competing---an
 online learner can operate at cluster granularity, and its posterior
-could refine the quotient our contract consumes. Park et al.\ assume a
+could refine the quotient our contract consumes (measured under a shared protocol in App.~\ref{app:fulltables}). Park et al.\ assume a
 Markov equivalence class \citep{parkStructuralCausalBandits}; the
 protected class $E_\Pi(\Gg)$ is the analogous object for coarsening,
 with membership decided by the quotient rather than by conditional
@@ -947,10 +967,10 @@ per-variable unit intervention costs---cluster arms pay proportionally
 more per trial---and initialization budgets differ across methods with
 different arm counts; App.~\ref{app:repro} quantifies both and
 re-compares at matched total budgets. The MCBO family is evaluated at
-five paired seeds and reported descriptively. We compare each quotient
-method against its own base, not against graph-uncertain optimizers
-such as \CEO{} or GACBO; that comparison, random-graph
-misspecification sweeps, and learned partitions are deferred.
+five paired seeds and reported descriptively. A \CEO{} comparison under the
+shared minimal-suite protocol is reported in \S\ref{sec:exp-d} and
+App.~\ref{app:fulltables}; GACBO, random-graph misspecification
+sweeps, and learned partitions remain deferred.
 Constructing the exploration set requires at most $2^K-1$ MIS and ID
 checks for $K$ manipulable clusters. \QMCBO{}, like MCBO, assumes
 causal sufficiency. A wrong prior can be overcome if its arm remains
@@ -1607,5 +1627,22 @@ regenerate from the archived traces (App.~\ref{app:repro}).
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e2}}
 \end{table}
 
+
+\begin{table}[ht]\centering
+  \caption{Graph-uncertain comparator: \CEO{} on the minimal suite
+  under the shared protocol (seeds $0$--$29$, $T{=}50$/$60$, three
+  initial points per arm, shared observational data, same closed-form
+  objective, seam-checked per run). Pool: asserted observable DAG
+  first, plus every observable-distinct variant of the same SCM,
+  uniform prior. A3/B1 add only an assumed latent confounder, so their
+  observable edge sets equal A0's/B0's: \CEO{} cannot represent this
+  error class and those rows are aliases of the base runs.
+  $\Delta$ is the per-seed paired difference (min task: positive =
+  \CEO{} worse); $P(\text{truth})$ is \CEO{}'s mean final posterior
+  mass on the true graph (trivially $1$ for singleton pools).}
+  \label{tab:ceo}
+  \small
+  \adjustbox{max width=\linewidth}{\input{tables/ceo_minimal}}
+\end{table}
 
 \end{document}

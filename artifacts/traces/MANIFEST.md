@@ -77,3 +77,19 @@ Tarballs created 2026-08-10 with
 `tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-07-23 00:00Z' -czf`
 for deterministic re-packing. Apparent raw size 4.41 MB (directory `du`
 is dominated by filesystem block overhead on many small files).
+
+## ceo_minimal.tar.gz — CEO comparator on MinimalBench (added 2026-08-10)
+
+- 210 CSVs (`CEO_{scm}_{cond}_seed{0..29}.csv`, columns
+  `trial_number,current_optimal`) + `.meta.json` sidecars (pool, final
+  graph posterior, wall time). 150 executed units (ParallelParent ×
+  {A0,A1,A2}, FrontDoor × B0, MediatedChain × C0) + 60 documented
+  observable-identical aliases (A3←A0, B1←B0).
+- Generator: `scripts/run_ceo_minimal.py` over `third_party/CEO` @
+  `35dd277` (prespecified protocol: seeds 0–29, T=50/60, 3 init points
+  per arm, n_obs=100 shared dataset, closed-form E[Y|do] objective
+  seam-gated per run against 200k-sample MC of the true latent SEMs),
+  via `scripts/lsf/submit_ceo_minimal.sh`, LSF job 29078320, 150/150
+  elements completed with zero failures, 2026-08-10.
+- Aggregation: `scripts/emit_ceo_comparison.py` →
+  `paper/tables/ceo_minimal.tex` + `artifacts/summaries/ceo_comparison.json`.
