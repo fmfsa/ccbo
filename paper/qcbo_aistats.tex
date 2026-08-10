@@ -102,18 +102,24 @@
 Causal Bayesian optimization (\CBO{}) uses a causal graph to select
 intervention sets and construct priors over the interventional response.
 A wrong graph can therefore bias a prior or remove an optimal arm. We
-replace the full graph by a partition and its cluster-level quotient.
-Any optimizer whose graph-dependent components factor through this input
-has the same trajectory for all fine graphs with the same quotient. We
-instantiate the contract for three families of the field: arm-based,
-dynamic, and model-based \CBO{}. Under full intervention support and
-cluster-contained confounding, coarsening preserves the best attainable
-value. Intervention constraints or confounding outside a cluster can
-create a positive action-space gap. We characterize this gap, show its
-linear contribution to incumbent regret, and recover fine actions by
-adaptive refinement. Experiments isolate prior and arm-set corruption,
-verify exact quotient invariance, and test all three families on their
-standard benchmarks.
+replace the full graph by a partition and its cluster-level quotient,
+and study behavior over the \emph{protected class}: all fine graphs
+sharing that quotient. Our central result separates the regimes. A
+single quotient-invisible edge deletion forces any optimizer whose
+interventions and incumbent respect the wrong graph's minimal
+intervention sets into arbitrarily large linear regret, while an
+optimizer that factors through the quotient has identical trajectories
+across the entire class---its worst-case regret over the class equals
+its regret under the true graph, decomposing exactly into the
+coarsening price plus within-quotient optimization regret---and only
+such optimizers are protected. Under full intervention support and
+cluster-contained confounding the price is zero; otherwise a positive
+action-space gap lower-bounds incumbent regret linearly in the
+horizon, and a heuristic refinement scheme can recover fine actions.
+We instantiate the contract for three families of the field:
+arm-based, dynamic, and model-based \CBO{}. Experiments isolate prior
+and arm-set corruption, verify exact quotient invariance, and test all
+three families on their standard benchmarks.
 \end{abstract}
 
 % =============================================================================
@@ -167,12 +173,22 @@ well developed
 
 \paragraph{Contributions.}
 \begin{itemize}[leftmargin=1.2em,itemsep=1pt,topsep=2pt]
-  \item \textbf{Input contract.} We prove exact trajectory invariance for
-  any optimizer that factors through the quotient
-  (Theorem~\ref{thm:contract}).
-  \item \textbf{Value and refinement.} We characterize the coarsening gap,
-  give sufficient conditions for zero gap, and connect a positive gap to
-  incumbent regret.
+  \item \textbf{Separation over the protected class.} One
+  quotient-invisible edge deletion costs fine-graph methods arbitrarily
+  large linear worst-case regret, while a quotient method's worst-case
+  regret over the class equals its regret under the truth---an exact
+  decomposition into coarsening price plus within-quotient regret
+  (Theorem~\ref{thm:separation}).
+  \item \textbf{Input contract and characterization.} Trajectory
+  invariance over the protected class holds for any optimizer that
+  factors through the quotient, and only for such optimizers
+  (Lemma~\ref{lem:contract}, Theorem~\ref{thm:separation}(iii)).
+  \item \textbf{Value and refinement.} We characterize the coarsening
+  gap, give a graphical sufficient condition for zero gap
+  (Def.~\ref{def:ccc}, Cor.~\ref{cor:reach}), show a positive gap
+  lower-bounds incumbent regret linearly under a fixed partition
+  (Prop.~\ref{prop:floor}), and state conditional recovery by
+  refinement (Cor.~\ref{cor:recovery}).
   \item \textbf{Experiments.} Minimal SCMs isolate the two
   misspecification channels and the coarsening gap. A portability suite
   evaluates \QCBO{}, \QDCBO{}, and \QMCBO{} against their base methods.
@@ -279,8 +295,8 @@ Write $\Pi'\preceq\Pi$ when every cluster of $\Pi'$ is contained in a
 cluster of $\Pi$. An optimizer satisfies the quotient contract when its
 graph-dependent components use $\Gg$ only through $Q_\Pi(\Gg)$.
 
-\begin{theorem}[Quotient invariance is method-agnostic]
-\label{thm:contract}
+\begin{lemma}[Quotient contract]
+\label{lem:contract}
 If
 \[
  \mathcal A(\Gg,\mathcal D,\omega,\eta)
@@ -293,9 +309,25 @@ hyperparameters $\eta$,
  \quad\Longrightarrow\quad
  \tau_{\mathcal A}(\Gg)=\tau_{\mathcal A}(\Gg').
 \]
-\end{theorem}
-Thus within-cluster edits and quotient-redundant cross-cluster edits are
-protected. Quotient-visible edits are not.
+\end{lemma}
+This invariance is immediate---by design---so we state it as a lemma:
+the \emph{contract} our constructions must honor, not a result in
+itself. The substance lies in what honoring it costs
+(\S\ref{sec:theory-price}) and what it buys
+(\S\ref{sec:theory-payoff}). The object it protects against is a class
+of fine graphs:
+
+\begin{definition}[Protected class]
+\label{def:protected}
+For an ADMG $\Gg$ over $\mathbf V$ and a valid partition $\Pi$,
+\[
+ E_\Pi(\Gg):=\{\Gg'\ \text{ADMG over}\ \mathbf V:
+ Q_\Pi(\Gg')=Q_\Pi(\Gg)\}.
+\]
+\end{definition}
+Within-cluster edits and quotient-redundant cross-cluster edits stay
+inside $E_\Pi(\Gg)$ and are protected. Quotient-visible edits leave the
+class and are not.
 
 \subsection{What does protection cost?}
 \label{sec:theory-price}
@@ -351,22 +383,60 @@ $\doo(A=a)$ and set
 \[
  D_B(a):=\{b:(a,b)\in D(\operatorname{cl}_\Pi(A))\}.
 \]
-If, for all $A,a$,
+If, for all $A,a$, the \emph{support inclusion} and \emph{cross-world
+independence} premises
 \[
  \operatorname{supp}(B_a)\subseteq D_B(a),
- \qquad B_a\perp Y_{a,b}\quad\forall b\in D_B(a),
+ \qquad B_a\perp Y_{a,b}\quad\forall b\in D_B(a)
 \]
-then $V(\Pi)=V(\Pi_\bot)$ and $\Delta(\Pi)=0$.
+hold, then $V(\Pi)=V(\Pi_\bot)$ and $\Delta(\Pi)=0$.
 \end{proposition}
+
+The second premise couples potential outcomes under different
+interventions. We therefore give a graph-level condition that implies
+it, stated where the proof actually operates: in the augmented NPSEM
+graph.
+
+\begin{definition}[Cluster-contained confounding]
+\label{def:ccc}
+Represent the semi-Markovian SCM by an NPSEM with mutually independent
+exogenous variables, one shared exogenous variable per bidirected edge,
+and augmented graph $\Gg^{\mathrm{aug}}$. For $A\subseteq\mathbf X$
+with $B=\operatorname{cl}_\Pi(A)\setminus A$, let $\mathbf U_B(A)$ be
+the exogenous ancestors of $B$ in $\Gg^{\mathrm{aug}}$ mutilated by
+$\doo(A)$ (the members of $B$ respond naturally and are not clamped),
+and let $\mathbf U_Y(A)$ be the exogenous ancestors of $Y$ in
+$\Gg^{\mathrm{aug}}$ mutilated by $\doo(\operatorname{cl}_\Pi(A))$.
+The partition $\Pi$ has \emph{cluster-contained confounding} when
+$\mathbf U_B(A)\cap\mathbf U_Y(A)=\emptyset$ for every
+$A\subseteq\mathbf X$.
+\end{definition}
+Informally: once a cluster union is clamped, no latent influence is
+shared between the un-clamped remainder of a cluster and the target.
+The familiar ADMG reading---every backdoor path from a cluster member
+to $Y$ meets another member of that cluster before reaching $Y$---is
+sufficient for Def.~\ref{def:ccc}
+(App.~\ref{app:proofs}); the exogenous-ancestor statement is the
+condition the proof consumes.
 
 \begin{corollary}[Graphical zero-gap condition]
 \label{cor:reach}
-In a semi-Markovian model, full intervention support and
-cluster-contained confounding imply the conditions of
-Prop.~\ref{prop:free}. Hence $\Delta(\Pi)=0$.
-Here cluster-contained means that every backdoor path from a cluster member
-to $Y$ meets another member of that cluster before reaching $Y$.
+In a semi-Markovian model, full intervention support implies support
+inclusion, and cluster-contained confounding (Def.~\ref{def:ccc})
+implies cross-world independence (Lemma~\ref{lem:ccc}). Hence the
+premises of Prop.~\ref{prop:free} hold and $\Delta(\Pi)=0$.
 \end{corollary}
+
+\begin{remark}[On the cross-world premise]
+\label{rem:crossworld}
+$B_a\perp Y_{a,b}$ is untestable from any single-world data,
+observational or from any one experiment. Cor.~\ref{cor:reach}
+therefore never invokes it as a primitive: within an NPSEM
+representation with mutually independent exogenous variables it is
+\emph{derived}, via Lemma~\ref{lem:ccc}, from Def.~\ref{def:ccc},
+an ordinary structural judgement about where confounding lives. The
+premise inherits exactly the credibility of that judgement, no more.
+\end{remark}
 
 Within this model class, the contrapositive is
 \[
@@ -378,26 +448,102 @@ Thus coarsening need not sacrifice the best attainable value. Even when
 $\Delta(\Pi)=0$, it may change finite-sample regret, dimension, and
 intervention cost.
 
+\subsection{What protection buys: worst-case regret}
+\label{sec:theory-payoff}
+
+Fix a true SCM $\mathcal M$ with latent projection $\Gg$, and hand the
+optimizer a \emph{hypothesis} graph $H$ while every intervention
+outcome is drawn from $\mathcal M$ (the fixed-objective seam of
+\S\ref{sec:exp}; App.~\ref{app:seam}). Write $R_T(\mathcal A;H)$ for
+the incumbent regret of \S\ref{sec:background} when $\mathcal A$ runs
+with input $H$ at fixed $(\mathcal D,\omega,\eta)$, and
+\[
+ \mathrm{WR}_T(\mathcal A):=\sup_{H\in E_\Pi(\Gg)}R_T(\mathcal A;H)
+\]
+for the worst case over the protected class.
+
+\begin{theorem}[Protected-class regret separation]
+\label{thm:separation}
+\begin{enumerate}[label=(\roman*),leftmargin=1.6em,itemsep=1pt,topsep=2pt]
+\item \textbf{Fine-graph fragility.} For every $B>0$ there exist a
+semi-Markovian SCM $\mathcal M_\lambda$ (\textsc{ParallelParent} with
+$\lambda=B/4.25$, App.~\ref{app:minibench}), a valid $\Pi$ with
+$\Delta(\Pi)=0$, and $H\in E_\Pi(\Gg)$ obtained from $\Gg$ by deleting
+a single directed edge, such that every optimizer whose executed
+intervention sets---initial design and sequential---all lie in
+$\mathrm{MIS}(H)$, and whose incumbent is selected among those executed
+interventions, satisfies $r_t\ge B$ for all $t$, hence
+$\mathrm{WR}_T\ge BT$.
+\item \textbf{Uniform protection with exact decomposition.} For every
+$\mathcal M$, valid $\Pi$, and fixed $(\mathcal D,\omega,\eta)$: if
+$\mathcal A$ satisfies the quotient contract for $\Pi$, executes only
+interventions on cluster unions $A\in\mathcal U(\Pi)$, and selects its
+incumbent among executed actions, then its trajectory is identical for
+every $H\in E_\Pi(\Gg)$ and
+\[
+ \mathrm{WR}_T(\mathcal A)=R_T(\mathcal A;\Gg)
+ =T\,\Delta(\Pi)
+ +\sum_{t=1}^T\bigl(\mu(\hat a_t)-V(\Pi)\bigr),
+\]
+with both terms nonnegative: a structural price paid once per trial,
+plus within-quotient optimization regret that no member of the
+protected class can alter.
+\item \textbf{Protection characterizes the contract.} If the
+trajectory map $H\mapsto\tau(H)$ at fixed $(\mathcal D,\omega,\eta)$
+is constant on $E_\Pi(\Gg)$ for every ADMG $\Gg$, then it factors
+through $Q_\Pi$: trajectory-level protection is available exactly to
+optimizers that satisfy the contract at the trajectory level.
+\end{enumerate}
+\end{theorem}
+
+Part (i) is the headline: a single quotient-invisible edge deletion
+costs a fine-graph method an arbitrarily large linear regret while the
+quotient loses nothing ($\Delta(\Pi)=0$). Experiment~A instantiates the
+construction at $\lambda=1$ (\S\ref{sec:exp-a}). Part (ii) prices the
+protection exactly, and part (iii) shows the contract is not one design
+choice among several: any optimizer whose trajectories are invariant on
+every protected class already factors through the quotient.
+
 \paragraph{Refining the partition: Hierarchical \QCBO{} (\HQCBO{}).}
 \label{sec:refine}
-\begin{proposition}[Fixed-partition regret and refinement]
-\label{prop:regret}
+\begin{proposition}[Linear regret floor under a fixed partition]
+\label{prop:floor}
 For a fixed partition,
 \[
- r_t\ge\Delta(\Pi),\qquad R_T\ge T\Delta(\Pi).
-\]
-If a valid refinement exposes an optimal arm and the base optimizer's
-incumbent is consistent on the finite arm set, then
-\[
- r_t\to0\quad\Longrightarrow\quad R_T/T\to0.
+ r_t\ge\Delta(\Pi)\ \text{ for every }t,\qquad R_T\ge T\Delta(\Pi).
 \]
 \end{proposition}
-The lower bound concerns the incumbent mean, not the exploratory action at
-trial $t$. \HQCBO{} starts at $\Pi$ and splits clusters according to a
-declared hierarchy when incumbent progress stalls. It rejects refinements
-whose quotient is cyclic, retains old-arm data, and initializes only new
-arms.
-The trigger and implementation are given in App.~\ref{app:seam}.
+The floor concerns the incumbent mean, not the exploratory action at
+trial $t$: a positive action-space gap contributes linearly in the
+horizon, and no within-quotient learning removes it. Refinement can.
+\HQCBO{} starts at $\Pi$ and splits the incumbent's clusters along a
+declared hierarchy when progress stalls; it rejects refinements whose
+quotient is cyclic (Prop.~\ref{prop:refinement_validity}), retains
+old-arm data, and initializes only new arms.
+
+\begin{definition}[Incumbent consistency]
+\label{def:consistency}
+The base optimizer's incumbent is \emph{consistent} on the action
+space of a partition $\Pi_J$ if, when the optimizer continues on that
+action space, $\mu(\hat a_t)\to V(\Pi_J)$ almost surely as
+$t\to\infty$.
+\end{definition}
+
+\begin{corollary}[Conditional refinement recovery]
+\label{cor:recovery}
+If the refinement schedule visits a valid $\Pi_J$ with
+$\Delta(\Pi_J)=0$ and the incumbent is consistent on $\Pi_J$'s action
+space (Def.~\ref{def:consistency}), then $r_t\to0$ and $R_T/T\to0$.
+\end{corollary}
+Whether $\Pi_J$ is visited depends on the trigger, a \emph{heuristic}
+with no guarantee: \HQCBO{} splits when the best-so-far value has
+improved by less than $\delta$ over the last $k$ trials (exact rule
+and defaults in App.~\ref{app:seam}). Cor.~\ref{cor:recovery} is
+conditional on the trigger firing, on the declared hierarchy exposing
+an optimal arm, and on consistency---a property of the base optimizer
+that we assume, not prove; with continuous within-arm domains and
+unbounded noise it fails for, e.g., raw running minima of noisy
+observations.
 
 \begin{corollary}[Adaptive refinement invariance]
 \label{cor:adaptive_invariance}
@@ -479,7 +625,7 @@ slice exactly as in DCBO.
 
 \begin{corollary}[\QDCBO{} inherits the contract]
 \label{cor:qdcbo_invariance}
-\QDCBO{} satisfies Theorem~\ref{thm:contract} per slice. At
+\QDCBO{} satisfies Lemma~\ref{lem:contract} per slice. At
 $\Pi=\Pi_\bot$ it equals DCBO, and Prop.~\ref{prop:price} applies to each
 slice's reachable interventions.
 \end{corollary}
@@ -500,7 +646,7 @@ composed along the C-DAG.
 
 \begin{corollary}[\QMCBO{} inherits the contract]
 \label{cor:qmcbo_invariance}
-\QMCBO{} satisfies Theorem~\ref{thm:contract}. At $\Pi=\Pi_\bot$ it equals
+\QMCBO{} satisfies Lemma~\ref{lem:contract}. At $\Pi=\Pi_\bot$ it equals
 MCBO. Its reachable interventions are whole-cluster patterns, so
 Prop.~\ref{prop:price} also applies.
 \end{corollary}
@@ -553,7 +699,7 @@ mean-regret bound. Invariance is measured by
 $\sup_{s,t}|\Delta_{s,t}|$ between paired trajectories.
 
 \begin{table*}[t]\centering
-  \caption{By Theorem~\ref{thm:contract}, rows with an unchanged quotient
+  \caption{By Lemma~\ref{lem:contract}, rows with an unchanged quotient
   are predicted invariant. The final column reports the measured paired
   deviation. PP = \textsc{ParallelParent}, FD = \textsc{FrontDoor}.}
   \label{tab:minimal-taxonomy}
@@ -566,7 +712,8 @@ $\sup_{s,t}|\Delta_{s,t}|$ between paired trajectories.
 $\lambda=1$. The fine MIS is
 $\{\{X_1\},\{X_2\},\{X_1,X_2\}\}$ and $y^\star=0$. Deleting
 $X_1\to Y$ leaves only $\{X_2\}$, whose optimum is $4.25$. Fine \CBO{}
-therefore plateaus at the analytic gap (Fig.~\ref{fig:minimal-misspec}a).
+therefore plateaus at the analytic gap (Fig.~\ref{fig:minimal-misspec}a): Experiment~A instantiates
+Theorem~\ref{thm:separation}(i) at $\lambda=1$.
 For $\Pi=\{\{X_1,X_2\}\}$ the deletion is quotient-invisible, and every
 \QCBO{} trajectory is identical under the two graphs
 ($\sup|\Delta|=0$). A spurious $X_1\leftrightarrow Y$ is a
@@ -679,11 +826,15 @@ hierarchy and controlling unnecessary-refinement cost remain open.
 % =============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
-Quotient inputs make \CBO{} invariant to structural errors they do not
-represent. Under the support and confounding conditions of
-Prop.~\ref{prop:free}, this robustness has zero action-space gap. Otherwise
-refinement can recover fine interventions. The same contract applies to
-arm-based, dynamic, and model-based \CBO{}.
+Quotient inputs buy exact protection over the class of fine graphs that
+share the quotient: worst-case regret over that class collapses to
+regret under the truth, while a single protected edge deletion already
+defeats fine-graph methods (Theorem~\ref{thm:separation}). The price is
+the action-space gap---zero under the support and confounding
+conditions of Cor.~\ref{cor:reach}, linear in the horizon otherwise
+(Prop.~\ref{prop:floor}), and recoverable by refinement only under the
+explicit conditions of Cor.~\ref{cor:recovery}. The same contract
+applies to arm-based, dynamic, and model-based \CBO{}.
 
 \bibliographystyle{abbrvnat}
 \bibliography{references}
@@ -695,7 +846,7 @@ arm-based, dynamic, and model-based \CBO{}.
 \section{Proofs}\label{app:proofs}
 Notation is as in \S\ref{sec:setup} and \S\ref{sec:theory}.
 
-\begin{proof}[Proof of Theorem~\ref{thm:contract}]
+\begin{proof}[Proof of Lemma~\ref{lem:contract}]
 Write the run as decisions $d_1,d_2,\ldots$ and datasets
 $\mathcal D_0,\mathcal D_1,\ldots$, with
 \[
@@ -708,66 +859,6 @@ Induction gives equality of every decision, dataset, and stopping event, hence
 of the full trajectories. Within-cluster edits and cross-cluster edits
 redundant in the quotient leave $Q_\Pi(\Gg)$ unchanged, which proves the
 stated scope.
-\end{proof}
-
-\begin{proof}[Proof of Prop.~\ref{prop:qsound}]
-Under causal sufficiency the fine SCM is Markov relative to $\Gg$ with
-mutually independent exogenous noises, so for any intervention
-$\doo(\mathbf{x}_S)$ on a union of clusters $S$ the fine truncated
-factorization gives
-$P(\mathbf{V}\mid\doo(\mathbf{x}_S))
- = \prod_{k\notin S} P\big(X_k \mid \mathbf{X}_{\mathrm{pa}_{\Gg}(k)}\big)
- \big|_{\mathbf{X}_S=\mathbf{x}_S}$.
-Group the factors by the clusters of $\Pi$. For a cluster $C\not\subseteq S$,
-the product of its members' factors is, by the chain rule applied in any
-topological order of $\Gg$ restricted to $C$, exactly the joint conditional
-$P\big(\mathbf{X}_C \mid \mathbf{X}_{\mathrm{pa}(C)}\big)$, where
-$\mathrm{pa}(C)$, the union of $C$'s parent clusters, contains every
-out-of-cluster variable appearing in a member's conditioning set (validity of
-$\Pi$ guarantees the quotient is acyclic, so $\mathrm{pa}(C)$ is well defined
-and precedes $C$ in C-DAG order). The fine factorization therefore equals the
-product over clusters of the joint cluster mechanisms with the clusters of
-$S$ clamped at $\mathbf{x}_S$: the cluster-level truncated factorization.
-Note both uses of sufficiency: independent noises across clusters (no
-bidirected edges) and the absence of unobserved common causes that would make
-a member's conditional depend on variables outside
-$\mathrm{pa}(C)\cup C$. Replacing
-$P(\mathbf{X}_C\mid\mathbf{X}_{\mathrm{pa}(C)})$ by the product of its
-per-member marginals would be exact iff the members are conditionally
-independent given $\mathrm{pa}(C)$, in particular when $C$ contains no
-intra-cluster edges. This proves why the construction uses a joint mechanism.
-\end{proof}
-
-\begin{proof}[Proof of Prop.~\ref{prop:qexposure}]
-Take $\mathbf{X}=\{X_2,X_3\}$ as one root cluster $C$, target
-$Y = X_2 + \varepsilon_Y$ its child, all noises standard normal and
-independent (sufficiency holds, and any $\Pi$ clustering $\{X_2,X_3\}$ is valid).
-Let $M_1$ have $X_2=\varepsilon_2$ and
-$X_3 = a X_2 + \varepsilon_3$. Let $M_2$ have
-$X_3=\varepsilon_3'$, $X_2 = a' X_3 + \varepsilon_2'$, with
-$a' = a/(1+a^2)$, $\mathrm{Var}(\varepsilon_3') = 1+a^2$, and
-$\mathrm{Var}(\varepsilon_2') = 1 - a^2/(1+a^2)$. Both induce the same
-zero-mean Gaussian joint on $(X_2,X_3)$, with covariance
-$\begin{psmallmatrix}1 & a\\ a & 1+a^2\end{psmallmatrix}$, hence the same
-joint cluster mechanism (here, the same root-cluster distribution), and the
-same $P(Y\mid\doo(\mathbf{x}_C))$ for the whole-cluster intervention (both
-set $X_2$ directly). But under the sub-cluster intervention $\doo(X_3=x)$:
-in $M_1$, $X_2=\varepsilon_2$ is unaffected, so
-$\mathbb{E}[Y\mid\doo(X_3{=}x)]=0$ for all $x$. In $M_2$,
-$X_2 = a'x$, so $\mathbb{E}[Y\mid\doo(X_3{=}x)] = a'x \neq 0$ for
-$x\neq 0$, $a\neq 0$. Every quotient-respecting input (the C-DAG, the
-joint cluster mechanisms, all whole-cluster interventional distributions)
-coincides between $M_1$ and $M_2$, yet the sub-cluster query differs.
-No function of those inputs can answer it.
-\end{proof}
-
-\begin{proof}[Proof of Prop.~\ref{prop:identity}]
-Singleton clusters make the quotient map the identity on $\Gg^{*}$, so
-$\Gq=\Gg^{*}$, unions of singleton clusters are exactly the subsets of
-$\mathbf{X}$, and the MIS condition of Eq.~\eqref{eq:ccbo_exploration}
-coincides verbatim with Eq.~\eqref{eq:mis}. The prior construction poses the
-same do-calculus queries \CBO{} poses on the full graph, so priors coincide
-arm-for-arm.
 \end{proof}
 
 \begin{lemma}[MIS reduction]
@@ -841,20 +932,6 @@ $\Pi_\bot$ the unrestricted minimum is $\min$ over Eq.~\eqref{eq:cbo_obj}'s
 exploration set. This is exactly the stated condition.
 \end{proof}
 
-\begin{proof}[Proof of Prop.~\ref{prop:regret}]
-By Lemma~\ref{lem:reduction}(iii),
-$y^\star=V(\Pi_\bot)$. A fixed partition executes only arms in
-$\mathcal U(\Pi)$, so every incumbent satisfies
-\[
- r_t=\mu(\hat a_t)-y^\star
- \ge V(\Pi)-V(\Pi_\bot)=\Delta(\Pi).
-\]
-Summation gives $R_T\ge T\Delta(\Pi)$. If a visited refinement has
-$\Delta=0$, its exploration set contains an optimal arm by
-Prop.~\ref{prop:price}. Incumbent consistency gives $r_t\to0$, and
-Ces\`aro averaging gives $R_T/T\to0$.
-\end{proof}
-
 \begin{proof}[Proof of Prop.~\ref{prop:free}]
 Fix $A$ and $a$. Consistency and the assumed cross-world independence give
 \[
@@ -875,23 +952,46 @@ $\mathcal U(\Pi)\subseteq\mathcal U(\Pi_\bot)$ implies
 $V(\Pi)\ge V(\Pi_\bot)$. Hence equality holds.
 \end{proof}
 
-\begin{proof}[Proof of Cor.~\ref{cor:reach}]
-Represent the semi-Markovian SCM using mutually independent exogenous
-variables, with each latent common cause represented by one shared
-exogenous variable. Full intervention support gives
-$\operatorname{supp}(B_a)\subseteq D_B(a)$.
+\begin{lemma}[Cluster containment implies cross-world independence]
+\label{lem:ccc}
+In an NPSEM with mutually independent exogenous variables and
+augmented graph $\Gg^{\mathrm{aug}}$: if $\Pi$ has cluster-contained
+confounding (Def.~\ref{def:ccc}), then for every $A\subseteq\mathbf X$,
+every $a\in D(A)$, and every $b\in D_B(a)$, $B_a\perp Y_{a,b}$.
+\end{lemma}
 
-Let $\mathbf U_B$ contain the exogenous variables that determine $B_a$, and
-let $\mathbf U_Y$ contain those that determine $Y_{a,b}$ after
-$\operatorname{cl}_\Pi(A)$ is clamped. If some
-$U^\star\in\mathbf U_B\cap\mathbf U_Y$, then $U^\star$ has a directed path
-to a member of $B$ and another to $Y$ that avoids the clamped closure.
-Taking the first closure member on the former path yields a backdoor path
-from a cluster member to $Y$ whose interior avoids the rest of its cluster.
-This contradicts cluster-contained confounding. Hence
-$\mathbf U_B\cap\mathbf U_Y=\varnothing$. Mutual independence of the
-exogenous variables gives $B_a\perp Y_{a,b}$, so
+\begin{proof}
+Under $\doo(A=a)$ the members of $B$ retain their mechanisms, so
+recursive substitution in the mutilated model writes $B_a$ as a
+measurable function of the exogenous ancestors of $B$ in
+$\Gg^{\mathrm{aug}}_{\overline A}$---that is, of $\mathbf U_B(A)$ (the
+clamped values $a$ enter as constants). Under
+$\doo(\operatorname{cl}_\Pi(A)=(a,b))$, recursive substitution writes
+$Y_{a,b}$ as a measurable function of $\mathbf U_Y(A)$, the exogenous
+ancestors of $Y$ in
+$\Gg^{\mathrm{aug}}_{\overline{\operatorname{cl}_\Pi(A)}}$. The two
+ancestor sets are disjoint by Def.~\ref{def:ccc}, and the exogenous
+variables are mutually independent, so any function of the first is
+independent of any function of the second.
+\end{proof}
+
+\begin{proof}[Proof of Cor.~\ref{cor:reach}]
+Full intervention support gives
+$\operatorname{supp}(B_a)\subseteq D_B(a)$ directly, and
+Lemma~\ref{lem:ccc} gives $B_a\perp Y_{a,b}$, so
 Prop.~\ref{prop:free} applies.
+
+For the ADMG reading quoted after Def.~\ref{def:ccc}: suppose some
+$U^\star\in\mathbf U_B(A)\cap\mathbf U_Y(A)$. Then $U^\star$ has a
+directed path $p_1$ to a member of $B$ avoiding the clamped $A$, and a
+directed path $p_2$ to $Y$ avoiding the entire clamped closure. Let
+$W$ be the closure member on $p_1$ nearest $U^\star$; the segment of
+$p_1$ from $W$ back to $U^\star$ meets no other closure member.
+Splicing it with $p_2$ at $U^\star$ yields a backdoor path from the
+cluster member $W$ to $Y$ whose interior avoids every other member of
+$W$'s cluster---violating the backdoor phrasing. Hence the backdoor
+phrasing implies the exogenous-ancestor disjointness of
+Def.~\ref{def:ccc}: checking it in the ADMG suffices.
 
 Both premises can be necessary. In \textsc{MediatedChain}, setting
 $X_1=2$ lets the natural response of $X_2$ reach $4$, while hard
@@ -903,16 +1003,139 @@ $\E[Y\mid\doo(A=a,B=b)]=(a-1)^2\ge0$. Whole-cluster intervention severs
 the useful dependence, giving $\Delta(\Pi)=1$ despite unrestricted domains.
 \end{proof}
 
+\begin{proof}[Proof of Theorem~\ref{thm:separation}]
+(i) Let $\mathcal M_\lambda$ be \textsc{ParallelParent}
+(App.~\ref{app:minibench}) with curvature $\lambda=B/4.25$: manipulable
+$\mathbf X=\{X_1,X_2\}$, edges $X_1\to Y$ and $X_2\to Y$, latent
+$X_1\leftrightarrow X_2$, domains $[-3,3]^2$, and
+$\Pi=\{\{X_1,X_2\},\{Y\}\}$. Let $H$ delete $X_1\to Y$. The quotient is
+unchanged---the cluster edge $C_1\to Y$ survives through $X_2\to Y$ and
+$X_1\leftrightarrow X_2$ is intra-cluster---so $H\in E_\Pi(\Gg)$, and
+$\Delta(\Pi)=0$ because $\mathcal U(\Pi)=\{\{X_1,X_2\}\}$ and the joint
+arm attains $y^\star=0$ at $(2,-2)\in[-3,3]^2$. In $H$, however, $X_1$
+has no directed path to $Y$, so $X_1\notin\An(Y)$ in every mutilation
+and Eq.~\eqref{eq:mis} gives $\mathrm{MIS}(H)=\{\{X_2\}\}$. By the
+closed form of App.~\ref{app:minibench},
+$\E[Y\mid\doo(X_2=x_2)]=4.25\lambda+(x_2+2)^2\ge4.25\lambda=B$ for
+every $x_2$. Every executed intervention---initial design included---is
+an $\{X_2\}$-intervention, so every candidate incumbent satisfies
+$\mu(\hat a_t)\ge B$, i.e.\ $r_t\ge B$ and $R_T(\cdot\,;H)\ge BT$. The
+supremum over $E_\Pi(\Gg)$ is at least this value. Both restrictions
+are necessary: an initial evaluation of the joint arm
+$\{X_1,X_2\}\notin\mathrm{MIS}(H)$, or an incumbent chosen outside the
+executed set, could otherwise seed a zero-regret incumbent.
+
+(ii) Trajectory identity across $E_\Pi(\Gg)$ is
+Lemma~\ref{lem:contract}: decisions and outcomes (drawn from the fixed
+$\mathcal M$) coincide step by step, so
+$R_T(\mathcal A;H)=R_T(\mathcal A;\Gg)$ for every $H\in E_\Pi(\Gg)$ and
+the supremum is attained everywhere. For the decomposition, add and
+subtract $V(\Pi)$ in each term of $R_T=\sum_t(\mu(\hat a_t)-y^\star)$:
+\[
+ r_t=\underbrace{V(\Pi)-y^\star}_{=\,\Delta(\Pi)}
+ +\bigl(\mu(\hat a_t)-V(\Pi)\bigr).
+\]
+The incumbent is an executed action on some $A\in\mathcal U(\Pi)$, and
+$V(\Pi)$ is the minimum of $\mu^\star$ over $\mathcal U(\Pi)$
+(Eq.~\eqref{eq:value-link}), so $\mu(\hat a_t)\ge V(\Pi)$;
+$\Delta(\Pi)\ge0$ by Prop.~\ref{prop:price}.
+
+(iii) Constancy on $E_\Pi(\Gg)$ for every $\Gg$ means $\tau(H)$ depends
+on $H$ only through the fiber of $Q_\Pi$ containing it. Setting
+$\bar\tau(q):=\tau(H)$ for any $H$ with $Q_\Pi(H)=q$ is therefore well
+defined, and $\tau=\bar\tau\circ Q_\Pi$.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:floor}]
+By Lemma~\ref{lem:reduction}(iii),
+$y^\star=V(\Pi_\bot)$. A fixed partition executes only arms in
+$\mathcal U(\Pi)$, so every incumbent satisfies
+\[
+ r_t=\mu(\hat a_t)-y^\star
+ \ge V(\Pi)-V(\Pi_\bot)=\Delta(\Pi).
+\]
+Summation gives $R_T\ge T\Delta(\Pi)$.
+\end{proof}
+
+\begin{proof}[Proof of Cor.~\ref{cor:recovery}]
+A visited $\Pi_J$ with $\Delta(\Pi_J)=0$ has an exploration set
+containing an optimal arm (Prop.~\ref{prop:price} and
+Eq.~\eqref{eq:value-link}). Consistency in the sense of
+Def.~\ref{def:consistency} gives
+$\mu(\hat a_t)\to V(\Pi_J)=y^\star$ almost surely, i.e.\ $r_t\to0$,
+and Ces\`aro averaging gives $R_T/T\to0$.
+\end{proof}
+
 \begin{proof}[Proof of Cor.~\ref{cor:adaptive_invariance}]
 Induct over phases. Within phase $j$, every graph-dependent component
 factors through $(\Pi_j,\Gg^{\Pi_j})$, while the trigger and split are
 functions of the trajectory and declared hierarchy. Equal phase-$j$
 quotients and prefixes therefore give the same phase trajectory by
-Theorem~\ref{thm:contract}, followed by the same trigger and partition
+Lemma~\ref{lem:contract}, followed by the same trigger and partition
 $\Pi_{j+1}$. Repeating through $\Pi_J$ proves equality of the adaptive
 trajectories. An edit inside a never-split cluster remains invisible at
 every visited quotient. An edit inside a split cluster is invisible before
 the split and may become visible afterward.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:identity}]
+Singleton clusters make the quotient map the identity on $\Gg^{*}$, so
+$\Gq=\Gg^{*}$, unions of singleton clusters are exactly the subsets of
+$\mathbf{X}$, and the MIS condition of Eq.~\eqref{eq:ccbo_exploration}
+coincides verbatim with Eq.~\eqref{eq:mis}. The prior construction poses the
+same do-calculus queries \CBO{} poses on the full graph, so priors coincide
+arm-for-arm.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:qsound}]
+Under causal sufficiency the fine SCM is Markov relative to $\Gg$ with
+mutually independent exogenous noises, so for any intervention
+$\doo(\mathbf{x}_S)$ on a union of clusters $S$ the fine truncated
+factorization gives
+$P(\mathbf{V}\mid\doo(\mathbf{x}_S))
+ = \prod_{k\notin S} P\big(X_k \mid \mathbf{X}_{\mathrm{pa}_{\Gg}(k)}\big)
+ \big|_{\mathbf{X}_S=\mathbf{x}_S}$.
+Group the factors by the clusters of $\Pi$. For a cluster $C\not\subseteq S$,
+the product of its members' factors is, by the chain rule applied in any
+topological order of $\Gg$ restricted to $C$, exactly the joint conditional
+$P\big(\mathbf{X}_C \mid \mathbf{X}_{\mathrm{pa}(C)}\big)$, where
+$\mathrm{pa}(C)$, the union of $C$'s parent clusters, contains every
+out-of-cluster variable appearing in a member's conditioning set (validity of
+$\Pi$ guarantees the quotient is acyclic, so $\mathrm{pa}(C)$ is well defined
+and precedes $C$ in C-DAG order). The fine factorization therefore equals the
+product over clusters of the joint cluster mechanisms with the clusters of
+$S$ clamped at $\mathbf{x}_S$: the cluster-level truncated factorization.
+Note both uses of sufficiency: independent noises across clusters (no
+bidirected edges) and the absence of unobserved common causes that would make
+a member's conditional depend on variables outside
+$\mathrm{pa}(C)\cup C$. Replacing
+$P(\mathbf{X}_C\mid\mathbf{X}_{\mathrm{pa}(C)})$ by the product of its
+per-member marginals would be exact iff the members are conditionally
+independent given $\mathrm{pa}(C)$, in particular when $C$ contains no
+intra-cluster edges. This proves why the construction uses a joint mechanism.
+\end{proof}
+
+\begin{proof}[Proof of Prop.~\ref{prop:qexposure}]
+Take $\mathbf{X}=\{X_2,X_3\}$ as one root cluster $C$, target
+$Y = X_2 + \varepsilon_Y$ its child, all noises standard normal and
+independent (sufficiency holds, and any $\Pi$ clustering $\{X_2,X_3\}$ is valid).
+Let $M_1$ have $X_2=\varepsilon_2$ and
+$X_3 = a X_2 + \varepsilon_3$. Let $M_2$ have
+$X_3=\varepsilon_3'$, $X_2 = a' X_3 + \varepsilon_2'$, with
+$a' = a/(1+a^2)$, $\mathrm{Var}(\varepsilon_3') = 1+a^2$, and
+$\mathrm{Var}(\varepsilon_2') = 1 - a^2/(1+a^2)$. Both induce the same
+zero-mean Gaussian joint on $(X_2,X_3)$, with covariance
+$\begin{psmallmatrix}1 & a\\ a & 1+a^2\end{psmallmatrix}$, hence the same
+joint cluster mechanism (here, the same root-cluster distribution), and the
+same $P(Y\mid\doo(\mathbf{x}_C))$ for the whole-cluster intervention (both
+set $X_2$ directly). But under the sub-cluster intervention $\doo(X_3=x)$:
+in $M_1$, $X_2=\varepsilon_2$ is unaffected, so
+$\mathbb{E}[Y\mid\doo(X_3{=}x)]=0$ for all $x$. In $M_2$,
+$X_2 = a'x$, so $\mathbb{E}[Y\mid\doo(X_3{=}x)] = a'x \neq 0$ for
+$x\neq 0$, $a\neq 0$. Every quotient-respecting input (the C-DAG, the
+joint cluster mechanisms, all whole-cluster interventional distributions)
+coincides between $M_1$ and $M_2$, yet the sub-cluster query differs.
+No function of those inputs can answer it.
 \end{proof}
 
 \section{MinimalBench: specification and oracles}\label{app:minibench}
@@ -1186,7 +1409,7 @@ the released runners (App.~\ref{app:repro}).
 \end{table*}
 
 \begin{table}[t]\centering
-  \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Theorem~\ref{thm:contract}). MCBO does.}
+  \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Lemma~\ref{lem:contract}). MCBO does.}
   \label{tab:qmcbo-e2}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e2}}
