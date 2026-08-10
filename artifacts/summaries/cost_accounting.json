@@ -1,0 +1,321 @@
+{
+  "convention": "Per-variable unit costs. Init = n_init * sum of arm sizes (3/arm MinimalBench, 10/arm family). Logged cum_cost excludes init; totals include it. HQCBO adds 3 points per arm exposed at its per-seed split trial. The init-phase trajectory is unlogged: curves start at the post-init incumbent placed at full init cost; Y at C* uses step interpolation above that point.",
+  "generated_by": "scripts/emit_cost_analysis.py",
+  "groups": {
+    "ParallelParent A0": {
+      "C_star": 95.16666666666667,
+      "methods": {
+        "CBO": {
+          "es": [
+            "X1",
+            "X2",
+            "X1+X2"
+          ],
+          "n_arms": 3,
+          "init_cost": 12,
+          "split_init_cost": 0,
+          "logged_cost_mean": 83.16666666666667,
+          "total_cost_mean": 95.16666666666667,
+          "final_y_mean": 0.002509449465878806,
+          "final_y_sem": 0.00041499451145538387,
+          "y_at_c_star": [
+            0.002527755521636566,
+            0.00041436981995413556
+          ]
+        },
+        "QCBO": {
+          "es": [
+            "X1+X2"
+          ],
+          "n_arms": 1,
+          "init_cost": 6,
+          "split_init_cost": 0,
+          "logged_cost_mean": 90.6,
+          "total_cost_mean": 96.6,
+          "final_y_mean": 0.0023825336584916207,
+          "final_y_sem": 0.0003407318003282028,
+          "y_at_c_star": [
+            0.0024533685856298402,
+            0.00033830601434545047
+          ]
+        }
+      }
+    },
+    "ParallelParent A1": {
+      "C_star": 48.56666666666667,
+      "methods": {
+        "CBO": {
+          "es": [
+            "X2"
+          ],
+          "n_arms": 1,
+          "init_cost": 3,
+          "split_init_cost": 0,
+          "logged_cost_mean": 45.56666666666667,
+          "total_cost_mean": 48.56666666666667,
+          "final_y_mean": 4.245370910628093,
+          "final_y_sem": 0.0025094995506299354,
+          "y_at_c_star": [
+            4.245370910628093,
+            0.0025094995506299354
+          ]
+        },
+        "QCBO": {
+          "es": [
+            "X1+X2"
+          ],
+          "n_arms": 1,
+          "init_cost": 6,
+          "split_init_cost": 0,
+          "logged_cost_mean": 90.6,
+          "total_cost_mean": 96.6,
+          "final_y_mean": 0.0023825336584916207,
+          "final_y_sem": 0.0003407318003282028,
+          "y_at_c_star": [
+            0.004147787568273307,
+            0.0006225372550618077
+          ]
+        }
+      }
+    },
+    "FrontDoor B0": {
+      "C_star": 52.766666666666666,
+      "methods": {
+        "CBO": {
+          "es": [
+            "X1",
+            "M"
+          ],
+          "n_arms": 2,
+          "init_cost": 6,
+          "split_init_cost": 0,
+          "logged_cost_mean": 46.766666666666666,
+          "total_cost_mean": 52.766666666666666,
+          "final_y_mean": 0.0008362340867541633,
+          "final_y_sem": 2.922519555699554e-05,
+          "y_at_c_star": [
+            0.0008362340867541633,
+            2.922519555699554e-05
+          ]
+        },
+        "QCBO": {
+          "es": [
+            "X1+M"
+          ],
+          "n_arms": 1,
+          "init_cost": 6,
+          "split_init_cost": 0,
+          "logged_cost_mean": 93.53333333333333,
+          "total_cost_mean": 99.53333333333333,
+          "final_y_mean": 0.00139474215810967,
+          "final_y_sem": 0.00019821811270246724,
+          "y_at_c_star": [
+            0.013002426075581284,
+            0.00418301979857123
+          ]
+        }
+      }
+    },
+    "MediatedChain C0": {
+      "C_star": 60.666666666666664,
+      "methods": {
+        "CBO": {
+          "es": [
+            "X1",
+            "X2"
+          ],
+          "n_arms": 2,
+          "init_cost": 6,
+          "split_init_cost": 0,
+          "logged_cost_mean": 54.666666666666664,
+          "total_cost_mean": 60.666666666666664,
+          "final_y_mean": 0.040239717249112204,
+          "final_y_sem": 0.00011948878367905719,
+          "y_at_c_star": [
+            0.040239717249112204,
+            0.00011948878367905719
+          ]
+        },
+        "QCBO": {
+          "es": [
+            "X1+X2"
+          ],
+          "n_arms": 1,
+          "init_cost": 6,
+          "split_init_cost": 0,
+          "logged_cost_mean": 109.33333333333333,
+          "total_cost_mean": 115.33333333333333,
+          "final_y_mean": 4.000303934024256,
+          "final_y_sem": 1.6493059200777426e-16,
+          "y_at_c_star": [
+            4.000303934024256,
+            1.6493059200777426e-16
+          ]
+        },
+        "HQCBO": {
+          "es": [
+            "X1+X2"
+          ],
+          "n_arms": 1,
+          "init_cost": 6,
+          "split_init_cost": 6,
+          "logged_cost_mean": 76.13333333333334,
+          "total_cost_mean": 88.13333333333334,
+          "final_y_mean": 0.040360036241975074,
+          "final_y_sem": 3.8672218036125784e-07,
+          "y_at_c_star": [
+            0.04036712333648694,
+            4.2967324301446605e-06
+          ]
+        }
+      }
+    },
+    "family Toy": {
+      "C_star": 51.5,
+      "methods": {
+        "CBO": {
+          "es": [
+            "X",
+            "Z"
+          ],
+          "n_arms": 2,
+          "init_cost": 20,
+          "split_init_cost": 0,
+          "logged_cost_mean": 31.5,
+          "total_cost_mean": 51.5,
+          "final_y_mean": -2.164110548093363,
+          "final_y_sem": 0.00043079910354128914,
+          "y_at_c_star": [
+            -2.164110548093363,
+            0.00043079910354128914
+          ]
+        },
+        "QCBO": {
+          "es": [
+            "X+Z"
+          ],
+          "n_arms": 1,
+          "init_cost": 20,
+          "split_init_cost": 0,
+          "logged_cost_mean": 63.0,
+          "total_cost_mean": 83.0,
+          "final_y_mean": -2.1311191799154194,
+          "final_y_sem": 0.0325678453008557,
+          "y_at_c_star": [
+            -2.0714133606169876,
+            0.04944469741255445
+          ]
+        }
+      }
+    },
+    "family Synthetic": {
+      "C_star": 95.5,
+      "methods": {
+        "CBO": {
+          "es": [
+            "B",
+            "D",
+            "E",
+            "B+D",
+            "B+E",
+            "D+E"
+          ],
+          "n_arms": 6,
+          "init_cost": 90,
+          "split_init_cost": 0,
+          "logged_cost_mean": 62.2,
+          "total_cost_mean": 152.2,
+          "final_y_mean": -3.1385728102888693,
+          "final_y_sem": 0.1902672367052666,
+          "y_at_c_star": [
+            -1.2711668168644306,
+            0.2800073168513806
+          ]
+        },
+        "QCBO": {
+          "es": [
+            "B",
+            "D+E"
+          ],
+          "n_arms": 2,
+          "init_cost": 30,
+          "split_init_cost": 0,
+          "logged_cost_mean": 65.5,
+          "total_cost_mean": 95.5,
+          "final_y_mean": -1.24510273489224,
+          "final_y_sem": 0.0684996408238445,
+          "y_at_c_star": [
+            -1.24510273489224,
+            0.0684996408238445
+          ]
+        }
+      }
+    },
+    "family Coral": {
+      "C_star": 217.0,
+      "methods": {
+        "CBO": {
+          "es": [
+            "C",
+            "D",
+            "N",
+            "O",
+            "T",
+            "C+D",
+            "C+N",
+            "C+O",
+            "C+T",
+            "D+N",
+            "D+O",
+            "D+T",
+            "N+O",
+            "N+T",
+            "O+T",
+            "C+D+N",
+            "C+D+O",
+            "C+D+T",
+            "C+N+O",
+            "C+N+T",
+            "C+O+T",
+            "D+N+O",
+            "D+N+T",
+            "D+O+T",
+            "N+O+T",
+            "C+D+N+O",
+            "C+D+N+T",
+            "C+D+O+T",
+            "C+N+O+T",
+            "D+N+O+T",
+            "C+D+N+O+T"
+          ],
+          "n_arms": 31,
+          "init_cost": 800,
+          "split_init_cost": 0,
+          "logged_cost_mean": 94.5,
+          "total_cost_mean": 894.5,
+          "final_y_mean": 36.07809622435797,
+          "final_y_sem": 0.019130804274939288,
+          "y_at_c_star": null
+        },
+        "QCBO": {
+          "es": [
+            "C+N+O",
+            "D+T",
+            "C+D+N+O+T"
+          ],
+          "n_arms": 3,
+          "init_cost": 100,
+          "split_init_cost": 0,
+          "logged_cost_mean": 117.0,
+          "total_cost_mean": 217.0,
+          "final_y_mean": 36.41741588967198,
+          "final_y_sem": 0.012624269852653806,
+          "y_at_c_star": [
+            36.41741588967198,
+            0.012624269852653806
+          ]
+        }
+      }
+    }
+  }
+}
