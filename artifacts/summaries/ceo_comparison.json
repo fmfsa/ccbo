@@ -141,7 +141,7 @@
           0.0317446713380478
         ]
       },
-      "posterior_mass_on_observable_projection_mean": 0.5439148008616548
+      "posterior_mass_on_directed_baseline_mean": 0.5439148008616548
     },
     "ParallelParent/A1": {
       "label": "PP A1 (del $X_1{\\to}Y$)",
@@ -282,7 +282,7 @@
           0.0317446713380478
         ]
       },
-      "posterior_mass_on_observable_projection_mean": 0.5462557528283555
+      "posterior_mass_on_directed_baseline_mean": 0.5462557528283555
     },
     "ParallelParent/A2": {
       "label": "PP A2 (add $X_1{\\to}X_2$)",
@@ -423,7 +423,7 @@
           0.0317446713380478
         ]
       },
-      "posterior_mass_on_observable_projection_mean": 0.5391483432217264
+      "posterior_mass_on_directed_baseline_mean": 0.5391483432217264
     },
     "ParallelParent/A3": {
       "label": "PP A3 (assume $X_1\\leftrightarrow Y$)",
@@ -564,7 +564,7 @@
           0.0316232221636802
         ]
       },
-      "posterior_mass_on_observable_projection_mean": 0.5439148008616548
+      "posterior_mass_on_directed_baseline_mean": 0.5439148008616548
     },
     "FrontDoor/B0": {
       "label": "FD B0 (correct)",
@@ -705,7 +705,7 @@
           0.027675209985832
         ]
       },
-      "posterior_mass_on_observable_projection_mean": null
+      "posterior_mass_on_directed_baseline_mean": null
     },
     "FrontDoor/B1": {
       "label": "FD B1 (assume $X_1\\leftrightarrow M$)",
@@ -846,7 +846,7 @@
           0.027675209985832
         ]
       },
-      "posterior_mass_on_observable_projection_mean": null
+      "posterior_mass_on_directed_baseline_mean": null
     },
     "MediatedChain/C0": {
       "label": "MC C0 (correct)",
@@ -987,7 +987,7 @@
           -3.9321890676550857
         ]
       },
-      "posterior_mass_on_observable_projection_mean": null
+      "posterior_mass_on_directed_baseline_mean": null
     }
   }
 }

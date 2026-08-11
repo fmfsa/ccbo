@@ -136,7 +136,7 @@ def ceo_method(ceo_dir: Path, scm: str, cond: str) -> dict:
     """CEO rows from run_ceo_minimal outputs: trajectory (current_optimal,
     T+1 rows, row 0 = initial incumbent at logged cost 0) + per-trial costs
     and init cost from the .meta.json (per-variable unit costs; CEO's
-    acquisition is NOT cost-weighted)."""
+    acquisition divides by the same per-variable cost, cost_type=1)."""
     import json as _json
     per_seed, finals, logged = [], [], []
     ic = n_arms = None

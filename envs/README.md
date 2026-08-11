@@ -53,8 +53,8 @@ running suites (`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`).
   `test_ceo_minimal_protocol.py`; skips depend on optional third-party
   stacks being fetched, so compare like-for-like).
 - `latexmk -pdf paper/qcbo_aistats.tex`, post-revision state: clean
-  build, zero undefined references, zero overfull boxes, 21 pages,
-  references beginning on p. 8, no rendered venue-branding strings.
+  build, zero undefined references, zero overfull boxes, 22 pages,
+  references beginning on PDF p. 10, no rendered venue-branding strings.
   (Pre-revision: 17 pages with a 207-character near-empty p. 8 — since
   eliminated.)
 

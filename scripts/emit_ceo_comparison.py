@@ -63,11 +63,12 @@ def finals_ceo(d, scm, cond):
     return vals, metas
 
 
-def projection_mass(meta):
-    """Posterior mass on the pool member equal to the TRUE graph's observable
-    projection. The true PP/FD graphs carry bidirected edges and are in no
-    pool, so this is NOT mass on the truth. Only meaningful for multi-graph
-    pools; returns None for singletons (trivially 1)."""
+def baseline_mass(meta):
+    """Posterior mass on the BASELINE OBSERVABLE DAG: the true graph's
+    directed edge set with bidirected edges dropped. (An observable/latent
+    projection would retain bidirected edges as an ADMG; no such graph is in
+    any pool, and this is NOT mass on the truth.) Only meaningful for
+    multi-graph pools; returns None for singletons (trivially 1)."""
     pool, post = meta.get("pool_pids"), meta.get("posterior_final")
     base = meta.get("baseline_observable_cond")
     if not pool or not post or base not in pool or len(pool) < 2:
@@ -112,7 +113,7 @@ def main():
     lines = [r"\begin{tabular}{@{}lccccc@{}}", r"\toprule",
              r"\textbf{Condition} & \textbf{\CBO{}} & \textbf{\QCBO{}} & "
              r"\textbf{\CEO{}} & \textbf{$\Delta$(\CEO{}$-$\QCBO{}) [95\% CI]}"
-             r" & \textbf{$P(\text{proj})$} \\", r"\midrule"]
+             r" & \textbf{$P(\text{A0})$} \\", r"\midrule"]
     payload = {}
     for scm, cond, label, alias_of in CONDS:
         cbo = finals_minimal(args.minimal_dir, scm, cond, "CBO")
@@ -128,7 +129,7 @@ def main():
         if n == 0:
             print(f"  {scm} {cond}: no complete pairs yet, skipped")
             continue
-        masses = [m for m in (projection_mass(metas[s]) for s in common)
+        masses = [m for m in (baseline_mass(metas[s]) for s in common)
                   if m is not None]
         dm, lo, hi, np_, d_per = paired_ci(
             {s: ceo[s] for s in common}, {s: qcbo[s] for s in common})
@@ -146,10 +147,10 @@ def main():
             "ceo_finals": {s: ceo[s] for s in common},
             "delta_ceo_minus_qcbo": {"mean": dm, "ci95": [lo, hi],
                                      "per_seed": d_per},
-            "posterior_mass_on_observable_projection_mean":
+            "posterior_mass_on_directed_baseline_mean":
                 float(np.mean(masses)) if masses else None,
         }
-        mass_str = f"  P(proj)={np.mean(masses):.3f}" if masses else ""
+        mass_str = f"  P(A0)={np.mean(masses):.3f}" if masses else ""
         print(f"  {scm} {cond}: n={np_}  "
               f"CEO {np.mean([ceo[s] for s in common]):.4f}  "
               f"D(CEO-QCBO)={dm:+.4f} [{lo:+.4f}, {hi:+.4f}]{mass_str}")

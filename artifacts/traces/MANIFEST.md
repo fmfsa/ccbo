@@ -80,9 +80,10 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 
 ## Packing
 
-Tarballs created 2026-08-10 with
-`tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-07-23 00:00Z' -czf`
-for deterministic re-packing. Apparent raw size 4.41 MB (directory `du`
+Tarballs packed with
+`tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=<pinned per suite> -czf`
+for deterministic re-packing (minimal/family/qdcbo packed 2026-08-10,
+qmcbo extended 2026-08-11, ceo_minimal corrected 2026-08-11). Apparent raw size 4.41 MB (directory `du`
 is dominated by filesystem block overhead on many small files).
 
 ## ceo_minimal.tar.gz — CEO comparator on MinimalBench (corrected 2026-08-11)
