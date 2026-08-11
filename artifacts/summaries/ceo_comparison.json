@@ -1,5 +1,5 @@
 {
-  "protocol": "run_ceo_minimal.py: same SCMs, conditions, seeds 0-29, trial counts (T=50/60), 3 init points per arm, shared n_obs=100 data; noiseless objective = closed-form E[Y|do]; noisy learning path = stochastic true-latent-SEM draws. Total initialization cost is NOT shared (CEO inits all subsets: 12 units vs QCBO's 6 on PP). min task, positive Delta = CEO worse. A3/B1 are observable-identical aliases. P(proj) = posterior mass on the truth's observable projection (truth itself, with bidirected edges, is in no pool); reported for multi-graph pools only.",
+  "protocol": "run_ceo_minimal.py: same SCMs, conditions, seeds 0-29, trial counts (T=50/60), 3 init points per arm, shared n_obs=100 data; noiseless objective = closed-form E[Y|do]; noisy learning path = stochastic true-latent-SEM draws. Total initialization cost is NOT shared (CEO inits all subsets: 12 units vs QCBO's 6 on PP). min task, positive Delta = CEO worse. A3/B1 are observable-identical aliases. P(A0) = posterior mass on the baseline observable DAG (the truth's directed edges with bidirected edges dropped); reported for multi-graph pools only.",
   "generated_by": "scripts/emit_ceo_comparison.py",
   "conditions": {
     "ParallelParent/A0": {

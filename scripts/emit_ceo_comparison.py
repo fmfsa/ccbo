@@ -14,7 +14,8 @@ pairs them by seed, and emits
                                         paired Delta(CEO - QCBO) with a
                                         paired-t 95% CI (min task: positive =
                                         CEO worse), and CEO's mean final
-                                        posterior mass on the true graph
+                                        posterior mass on the baseline
+                                        observable DAG
   artifacts/summaries/ceo_comparison.json   full per-seed detail
 
 Run:  PYTHONPATH=. python scripts/emit_ceo_comparison.py \
@@ -170,9 +171,9 @@ def main():
                     "latent-SEM draws. Total initialization cost is NOT "
                     "shared (CEO inits all subsets: 12 units vs QCBO's 6 "
                     "on PP). min task, positive Delta = CEO worse. A3/B1 "
-                    "are observable-identical aliases. P(proj) = posterior "
-                    "mass on the truth's observable projection (truth "
-                    "itself, with bidirected edges, is in no pool); "
+                    "are observable-identical aliases. P(A0) = posterior "
+                    "mass on the baseline observable DAG (the truth's "
+                    "directed edges with bidirected edges dropped); "
                     "reported for multi-graph pools only.",
         "generated_by": "scripts/emit_ceo_comparison.py",
         "conditions": payload,

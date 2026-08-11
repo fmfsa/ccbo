@@ -38,7 +38,8 @@ Protocol (prespecified before any result was seen)
 * Metrics (prespecified): final best-so-far E[Y|do]; full trajectory
   (trial_number, current_optimal; row 0 = initial incumbent); per-seed
   paired differences vs the archived CBO/QCBO trajectories on the same
-  seeds; CEO's final posterior mass on the true graph.
+  seeds; for multi-graph pools, CEO's final posterior mass on the baseline
+  observable DAG (the truth's directed edges with bidirected edges dropped).
 
 Run one unit:   PYTHONPATH=. python scripts/run_ceo_minimal.py \
                     --scm ParallelParent --cond A1 --seed 0
@@ -78,7 +79,7 @@ import ceo_adapter  # reused for ensure_ceo() stack patches only
 OUTDIR_DEFAULT = os.path.join(REPO, "results", "ceo_minimal")
 
 # ---------------------------------------------------------------------------
-# SCM registry: observable projection, collapsed SEM, closed-form oracle
+# SCM registry: observable DAG, collapsed SEM, closed-form oracle
 # ---------------------------------------------------------------------------
 # Collapsed SEMs preserve every interventional marginal the arms can reach
 # (each arm clamps at least one of the two upstream manipulables, so only
@@ -423,9 +424,9 @@ def run_unit(scm, cond, seed, outdir, num_anchor_points=35):
     meta = {
         "scm": scm, "cond": cond, "seed": seed, "trials": trials, "ninit": 3,
         "n_obs": 100, "pool_pids": pool_pids, "es": [list(e) for e in es_list],
-        # Pools contain OBSERVABLE projections only; the true PP/FD graphs
-        # carry bidirected edges and are in no pool. This names the pool
-        # member equal to the truth's observable projection, NOT the truth.
+        # The true PP/FD graphs carry bidirected edges and are in no pool.
+        # This names the baseline observable DAG: the pool member with the
+        # truth's directed edges and its bidirected edges dropped.
         "baseline_observable_cond": spec["true_cond"],
         "posterior_final": [float(p) for p in
                             normalize_log(deepcopy(ceo.posterior))],
