@@ -48,9 +48,10 @@ running suites (`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`).
 ## Verification baseline (2026-08-10)
 
 - `PYTHONPATH=. ~/venvs/ccbo/bin/python -m pytest` (default `-m 'not slow'`):
-  **52 passed, 11 skipped, 11 deselected** — recorded pre-revision and
-  re-verified unchanged after the revision (skips depend on optional
-  third-party stacks being fetched, so compare like-for-like).
+  **63 passed, 11 skipped, 11 deselected** as of 2026-08-11 (the
+  pre-revision baseline of 52 passed plus the 11 CEO-protocol tests in
+  `test_ceo_minimal_protocol.py`; skips depend on optional third-party
+  stacks being fetched, so compare like-for-like).
 - `latexmk -pdf paper/qcbo_aistats.tex`, post-revision state: clean
   build, zero undefined references, zero overfull boxes, 21 pages,
   references beginning on p. 8, no rendered venue-branding strings.

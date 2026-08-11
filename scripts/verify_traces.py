@@ -244,6 +244,81 @@ def verify_qmcbo(root: Path) -> None:
               f"mean|Δfinal| {md:.4f} ~ {pub_delta:.3f}")
 
 
+# -------------------------------------------------------------------- ceo ---
+
+CEO_UNITS = {  # (scm, cond) -> (trials, executed?, alias_of, pool_pids)
+    ("ParallelParent", "A0"): (50, True, None, ["A0", "A1", "A2"]),
+    ("ParallelParent", "A1"): (50, True, None, ["A1", "A0", "A2"]),
+    ("ParallelParent", "A2"): (50, True, None, ["A2", "A0", "A1"]),
+    ("ParallelParent", "A3"): (50, False, "A0", ["A0", "A1", "A2"]),
+    ("FrontDoor", "B0"): (50, True, None, ["B0"]),
+    ("FrontDoor", "B1"): (50, False, "B0", ["B0"]),
+    ("MediatedChain", "C0"): (60, True, None, ["C0"]),
+}
+# Published CEO finals at 2 decimals (corrected rerun, LSF 29090857).
+CEO_PUB: dict | None = {
+    ("ParallelParent", "A0"): 1.0,
+    ("ParallelParent", "A1"): 0.77,
+    ("ParallelParent", "A2"): 0.71,
+    ("ParallelParent", "A3"): 1.0,
+    ("FrontDoor", "B0"): 0.07,
+    ("FrontDoor", "B1"): 0.07,
+    ("MediatedChain", "C0"): 0.13,
+}
+CEO_SEEDS = range(30)
+
+
+def verify_ceo(root: Path) -> None:
+    d = root / "ceo_minimal"
+    if not d.exists():
+        check(False, "ceo_minimal directory present")
+        return
+    missing = [f"CEO_{scm}_{cond}_seed{s}.csv"
+               for (scm, cond) in CEO_UNITS for s in CEO_SEEDS
+               if not (d / f"CEO_{scm}_{cond}_seed{s}.csv").exists()]
+    check(not missing, f"ceo grid complete (150 executed + 60 aliases); "
+                       f"missing: {missing[:5]}")
+    if missing:
+        return
+    for (scm, cond), (trials, executed, alias_of, pool) in CEO_UNITS.items():
+        bad_len, bad_meta, bad_alias = [], [], []
+        finals = []
+        for s in CEO_SEEDS:
+            f = d / f"CEO_{scm}_{cond}_seed{s}.csv"
+            df = pd.read_csv(f)
+            if len(df) != trials + 1:
+                bad_len.append((s, len(df)))
+            finals.append(float(df.current_optimal.iloc[-1]))
+            meta = json.loads(
+                (d / f"CEO_{scm}_{cond}_seed{s}.meta.json").read_text())
+            if not (meta.get("cond") == cond and meta.get("trials") == trials
+                    and meta.get("ninit") == 3 and meta.get("n_obs") == 100
+                    and meta.get("pool_pids") == pool
+                    and meta.get("alias_of") == alias_of
+                    and len(meta.get("per_trial_cost", [])) == trials + 1
+                    and meta.get("per_trial_cost", [None])[0] == 0.0):
+                bad_meta.append(s)
+            if alias_of is not None:
+                base = d / f"CEO_{scm}_{alias_of}_seed{s}.csv"
+                if f.read_bytes() != base.read_bytes():
+                    bad_alias.append(s)
+        check(not bad_len and not bad_meta,
+              f"ceo {scm} {cond}: trajectories {trials + 1} rows, metadata "
+              f"protocol-consistent (len issues {bad_len[:3]}, "
+              f"meta issues {bad_meta[:3]})")
+        if alias_of is not None:
+            check(not bad_alias,
+                  f"ceo alias {scm} {cond} byte-equal to {alias_of}; "
+                  f"diffs: {bad_alias[:3]}")
+        if CEO_PUB is not None and (scm, cond) in CEO_PUB:
+            m = float(np.mean(finals))
+            check(close(m, CEO_PUB[(scm, cond)], 2),
+                  f"ceo {scm} {cond} final {m:.4f} ~ "
+                  f"{CEO_PUB[(scm, cond)]:.2f}")
+    if CEO_PUB is None:
+        note("ceo published-finals check skipped (CEO_PUB not yet frozen)")
+
+
 # ------------------------------------------------------------------- main ---
 
 def main() -> int:
@@ -257,6 +332,7 @@ def main() -> int:
     verify_family(root)
     verify_qdcbo(root)
     verify_qmcbo(root)
+    verify_ceo(root)
     print(f"\n{len(FAILURES)} failure(s).")
     return 1 if FAILURES else 0
 

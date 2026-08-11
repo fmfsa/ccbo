@@ -10,11 +10,17 @@ Protocol (prespecified before any result was seen)
 --------------------------------------------------
 * Objective seam: every method optimises E[Y | do(x)] of the TRUE SCM. The
   vendored CBO/QCBO arms estimate it with a common-random-numbers Monte
-  Carlo mean (``Intervention_function``, 100k samples); CEO receives the
-  same surface EXACTLY via MinimalBench's closed forms
-  (``ccbo.minibench.ORACLE``-family functions) patched in as its per-arm
-  target functions. ``seam_gate`` verifies the closed forms against a fresh
-  Monte-Carlo estimate of the true latent SEM at random levels per run.
+  Carlo mean (``Intervention_function``, 100k samples); CEO's NOISELESS
+  path (trajectory/incumbent scoring) receives the same surface EXACTLY
+  via MinimalBench's closed forms patched in as its per-arm noiseless
+  target functions. ``seam_gate`` verifies the closed forms against a
+  fresh Monte-Carlo estimate of the true latent SEM at random levels.
+* Learning seam: CEO's NOISY path — the samples that train its GPs and
+  update its graph posterior — consists of genuine stochastic draws from
+  the TRUE latent SEM (latent confounders included, then discarded),
+  drawn through CEO's own stateful per-seed RandomState. This is CEO's
+  native regime; the fine methods instead receive CRN-MC mean
+  evaluations, an asymmetry disclosed in the paper's protocol appendix.
 * CEO's candidate DAGs are over OBSERVABLES only (its machinery has no
   bidirected edges), so conditions that only add a latent confounder are
   observationally identical to their base condition and are ALIASED:
@@ -215,8 +221,39 @@ def load_observations(scm, n_obs=100):
 
 
 # ---------------------------------------------------------------------------
-# Oracle target functions (replace CEO's true-SEM sampler)
+# True-SEM sampling (noisy path) and oracle targets (noiseless path)
 # ---------------------------------------------------------------------------
+
+def sample_true(scm, iv, rng):
+    """One stochastic draw of the TRUE latent SEM under clamps ``iv``.
+
+    Latent confounders (U on ParallelParent/FrontDoor) are drawn and then
+    discarded; all observables are returned. Consumes exactly one
+    ``rng.randn(4)`` per call (stateful: consecutive calls differ).
+    """
+    z = rng.randn(4)
+    if scm == mb.PP_NAME:
+        U = mb.PP_SIGMA_U * z[0]
+        X1 = iv.get("X1", U + mb.PP_SIGMA_IN * z[1])
+        X2 = iv.get("X2", U + mb.PP_SIGMA_IN * z[2])
+        Y = (mb.PP_LAM * (X1 - mb.PP_A) ** 2 + (X2 - mb.PP_B) ** 2
+             + mb.SIGMA_Y * z[3])
+        return {"X1": float(X1), "X2": float(X2), "Y": float(Y)}
+    if scm == mb.FD_NAME:
+        U = mb.FD_SIGMA_U * z[0]
+        X1 = iv.get("X1", U + mb.PP_SIGMA_IN * z[1])
+        M = iv.get("M", mb.FD_B * X1 + mb.FD_SIGMA_M * z[2])
+        Y = (mb.FD_AMP * (1.0 - np.exp(
+            -(M - mb.FD_C) ** 2 / (2 * mb.FD_W ** 2)))
+            + mb.FD_G * U + mb.SIGMA_Y * z[3])
+        return {"X1": float(X1), "M": float(M), "Y": float(Y)}
+    if scm == mb.MC_NAME:
+        X1 = iv.get("X1", mb.MC_SIGMA_1 * z[1])
+        X2 = iv.get("X2", mb.MC_BETA * X1 + mb.MC_SIGMA_2 * z[2])
+        Y = (X2 - mb.MC_C) ** 2 + mb.SIGMA_Y * z[3]
+        return {"X1": float(X1), "X2": float(X2), "Y": float(Y)}
+    raise ValueError(scm)
+
 
 def forward_mean(scm, iv):
     """Noise-free forward pass with clamps ``iv``; Y replaced by the oracle."""
@@ -230,15 +267,23 @@ def forward_mean(scm, iv):
 
 
 def make_target_factory(scm):
-    """Same signature/contract as ceo_utils.evaluate_target_function_all_for_ceo."""
-    spec = SCMS[scm]
+    """Same signature/contract as ceo_utils.evaluate_target_function_all_for_ceo.
+
+    ``noisy=True``  -> genuine stochastic draw of the TRUE latent SEM through
+                       the shared stateful ``random_state`` (feeds CEO's GP
+                       targets and graph-posterior evidence).
+    ``noisy=False`` -> deterministic mean profile with the closed-form
+                       E[Y|do] oracle; consumes NO randomness (feeds only the
+                       trajectory/incumbent scoring).
+    """
 
     def factory(noisy, random_state, initial_structural_equation_model,
                 structural_equation_model, graph, exploration_set, all_vars, T):
         def target(current_target, intervention_levels, assigned_blanket):
             levels = np.atleast_1d(np.asarray(intervention_levels, dtype=float))
             iv = {v: float(levels[j]) for j, v in enumerate(exploration_set)}
-            sample = forward_mean(scm, iv)
+            sample = (sample_true(scm, iv, random_state) if noisy
+                      else forward_mean(scm, iv))
             return {k: np.array([v]) for k, v in sample.items()}
         return target
 
@@ -248,31 +293,10 @@ def make_target_factory(scm):
 def seam_gate(scm, rng, n=6, mc=200_000, sigmas=5.0):
     """Closed-form oracle == MC mean of the TRUE latent SEM, per arm."""
     spec = SCMS[scm]
-
-    def true_draw(iv, z):
-        if scm == mb.PP_NAME:
-            U = mb.PP_SIGMA_U * z[0]
-            X1 = iv.get("X1", U + mb.PP_SIGMA_IN * z[1])
-            X2 = iv.get("X2", U + mb.PP_SIGMA_IN * z[2])
-            return (mb.PP_LAM * (X1 - mb.PP_A) ** 2 + (X2 - mb.PP_B) ** 2
-                    + mb.SIGMA_Y * z[3])
-        if scm == mb.FD_NAME:
-            U = mb.FD_SIGMA_U * z[0]
-            X1 = iv.get("X1", U + mb.PP_SIGMA_IN * z[1])
-            M = iv.get("M", mb.FD_B * X1 + mb.FD_SIGMA_M * z[2])
-            return (mb.FD_AMP * (1.0 - np.exp(
-                -(M - mb.FD_C) ** 2 / (2 * mb.FD_W ** 2)))
-                + mb.FD_G * U + mb.SIGMA_Y * z[3])
-        U = None
-        X1 = iv.get("X1", mb.MC_SIGMA_1 * z[1])
-        X2 = iv.get("X2", mb.MC_BETA * X1 + mb.MC_SIGMA_2 * z[2])
-        return (X2 - mb.MC_C) ** 2 + mb.SIGMA_Y * z[3]
-
     for es in exploration_sets(scm):
         for _ in range(n):
             iv = {v: float(rng.uniform(*spec["domain"][v])) for v in es}
-            z = rng.randn(mc, 4)
-            ys = np.array([true_draw(iv, zi) for zi in z])
+            ys = np.array([sample_true(scm, iv, rng)["Y"] for _ in range(mc)])
             mean, se = float(np.mean(ys)), float(np.std(ys) / np.sqrt(mc))
             oracle = float(spec["oracle"](iv))
             assert abs(mean - oracle) <= sigmas * se + 1e-6, (
@@ -282,20 +306,30 @@ def seam_gate(scm, rng, n=6, mc=200_000, sigmas=5.0):
 
 
 def initial_interventional_data(scm, es_list, ninit, seed):
-    """ninit uniform points per arm; Y from the oracle (same objective)."""
+    """ninit uniform points per arm at SHARED levels: a noisy/noiseless pair.
+
+    Returns ``(D_noisy, D_noiseless)``: the same intervention levels per arm,
+    with noisy responses drawn from the true latent SEM (feeds CEO's GP and
+    graph posterior) and noiseless responses from the mean profile with the
+    closed-form oracle Y (feeds CEO's initial-incumbent selection).
+    """
     spec = SCMS[scm]
     rng = np.random.RandomState(seed)
     keys = spec["nodes"]
-    D = {}
+    D, Dn = {}, {}
     for es in es_list:
         rows = {k: [] for k in keys}
+        rows_n = {k: [] for k in keys}
         for _ in range(ninit):
             iv = {v: float(rng.uniform(*spec["domain"][v])) for v in es}
-            sample = forward_mean(scm, iv)
+            noisy = sample_true(scm, iv, rng)
+            clean = forward_mean(scm, iv)
             for k in keys:
-                rows[k].append(sample[k])
+                rows[k].append(noisy[k])
+                rows_n[k].append(clean[k])
         D[es] = {k: np.array(rows[k])[:, None] for k in keys}
-    return D
+        Dn[es] = {k: np.array(rows_n[k])[:, None] for k in keys}
+    return D, Dn
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +364,8 @@ def run_unit(scm, cond, seed, outdir, num_anchor_points=35):
     graphs, init_posterior, pool_pids = build_pool(scm, cond)
     es_list = exploration_sets(scm)
     d_obs = load_observations(scm)
-    d_int = initial_interventional_data(scm, es_list, ninit=3, seed=seed)
+    d_int, d_int_nl = initial_interventional_data(scm, es_list, ninit=3,
+                                                  seed=seed)
 
     class SEM:
         @staticmethod
@@ -350,7 +385,7 @@ def run_unit(scm, cond, seed, outdir, num_anchor_points=35):
         observation_samples=d_obs,
         intervention_domain={k: list(v) for k, v in spec["domain"].items()},
         intervention_samples=deepcopy(d_int),
-        intervention_samples_noiseless=deepcopy(d_int),
+        intervention_samples_noiseless=deepcopy(d_int_nl),
         exploration_sets=es_list,
         number_of_trials=trials + 1,
         base_target_variable="Y",
@@ -372,18 +407,36 @@ def run_unit(scm, cond, seed, outdir, num_anchor_points=35):
     traj = [float(v) for v in ceo.optimal_outcome_values_during_trials[0]]
     assert len(traj) == trials + 1, (len(traj), trials + 1)
 
+    # Per-trial history for initialization-inclusive cost accounting:
+    # per_trial_cost[0] == [0.0] + [len(es) per intervention trial] under
+    # cost_type=1 (1.0 per intervened variable = per-variable unit costs).
+    per_trial_cost = [float(c) for c in ceo.per_trial_cost[0]]
+    seq_es = [list(es) for es in
+              ceo.sequence_of_interventions_during_trials[0]]
+    assert len(per_trial_cost) == trials + 1, (len(per_trial_cost), trials + 1)
+    assert per_trial_cost[1:] == [float(len(e)) for e in seq_es], \
+        "per-trial cost does not match selected exploration sets"
+
     os.makedirs(outdir, exist_ok=True)
     pd.DataFrame({"trial_number": range(len(traj)),
                   "current_optimal": traj}).to_csv(out_csv, index=False)
     meta = {
         "scm": scm, "cond": cond, "seed": seed, "trials": trials, "ninit": 3,
         "n_obs": 100, "pool_pids": pool_pids, "es": [list(e) for e in es_list],
-        "true_cond": spec["true_cond"],
+        # Pools contain OBSERVABLE projections only; the true PP/FD graphs
+        # carry bidirected edges and are in no pool. This names the pool
+        # member equal to the truth's observable projection, NOT the truth.
+        "baseline_observable_cond": spec["true_cond"],
         "posterior_final": [float(p) for p in
                             normalize_log(deepcopy(ceo.posterior))],
+        "per_trial_cost": per_trial_cost,
+        "sequence_of_interventions": seq_es,
+        "init_cost": 3 * sum(len(e) for e in es_list),
         "wall_seconds": wall, "num_anchor_points": num_anchor_points,
-        "objective": "closed-form E[Y|do] (minibench oracles); seam-gated "
-                     "against 200k-sample MC of the true latent SEM",
+        "objective": "noiseless path: closed-form E[Y|do] (minibench "
+                     "oracles), seam-gated against 200k-sample MC of the "
+                     "true latent SEM; noisy path (GP + posterior "
+                     "evidence): stochastic draws of the true latent SEM",
     }
     with open(out_csv.replace(".csv", ".meta.json"), "w") as fh:
         json.dump(meta, fh, indent=2)
@@ -404,6 +457,7 @@ def materialize_aliases(outdir):
                     meta_src = src_csv.replace(".csv", ".meta.json")
                     if os.path.exists(meta_src):
                         meta = json.load(open(meta_src))
+                        meta["cond"] = alias
                         meta["alias_of"] = base
                         meta["note"] = ("observable edge set identical to "
                                         f"{base}; CEO cannot represent the "

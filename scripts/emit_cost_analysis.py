@@ -132,6 +132,39 @@ def minimal_method(root: Path, scm: str, cond: str, method: str,
     }
 
 
+def ceo_method(ceo_dir: Path, scm: str, cond: str) -> dict:
+    """CEO rows from run_ceo_minimal outputs: trajectory (current_optimal,
+    T+1 rows, row 0 = initial incumbent at logged cost 0) + per-trial costs
+    and init cost from the .meta.json (per-variable unit costs; CEO's
+    acquisition is NOT cost-weighted)."""
+    import json as _json
+    per_seed, finals, logged = [], [], []
+    ic = n_arms = None
+    es = None
+    for f in sorted(ceo_dir.glob(f"CEO_{scm}_{cond}_seed*.csv")):
+        meta = _json.loads(
+            f.with_name(f.name.replace(".csv", ".meta.json")).read_text())
+        ic, es = meta["init_cost"], meta["es"]
+        n_arms = len(es)
+        ptc = np.asarray(meta["per_trial_cost"], dtype=float)
+        df = pd.read_csv(f)
+        assert len(df) == len(ptc), (f, len(df), len(ptc))
+        total = np.cumsum(ptc) + ic
+        per_seed.append((total, df["current_optimal"].values.astype(float)))
+        finals.append(float(df["current_optimal"].iloc[-1]))
+        logged.append(float(ptc.sum()))
+    assert per_seed, f"no CEO units for {scm} {cond} in {ceo_dir}"
+    return {
+        "es": ["+".join(a) for a in es], "n_arms": n_arms,
+        "init_cost": ic, "split_init_cost": 0,
+        "logged_cost_mean": float(np.mean(logged)),
+        "total_cost_mean": float(np.mean([c[-1] for c, _ in per_seed])),
+        "final_y_mean": float(np.mean(finals)),
+        "final_y_sem": float(np.std(finals, ddof=1) / np.sqrt(len(finals))),
+        "_per_seed": per_seed,
+    }
+
+
 def family_es(dataset: str, arm: str) -> list[list[str]]:
     """Exploration set exactly as the family runner builds it (same code path)."""
     import sys
@@ -197,6 +230,10 @@ def main() -> None:
                     default=Path("artifacts/summaries/cost_accounting.json"))
     ap.add_argument("--skip-family", action="store_true",
                     help="skip the CBO-family block (needs the GPy stack)")
+    ap.add_argument("--ceo-dir", type=Path, default=None,
+                    help="results/ceo_minimal-style dir; adds CEO rows to "
+                         "the MinimalBench groups (needs per_trial_cost in "
+                         "the .meta.json sidecars)")
     args = ap.parse_args()
     root = args.results_dir
 
@@ -215,6 +252,9 @@ def main() -> None:
     for name, scm, cond, methods in MINIMAL_GROUPS:
         block = {m: minimal_method(root, scm, cond, m, trigger)
                  for m in methods}
+        if args.ceo_dir and list(args.ceo_dir.glob(
+                f"CEO_{scm}_{cond}_seed*.csv")):
+            block["CEO"] = ceo_method(args.ceo_dir, scm, cond)
         glines, gpayload = emit_group(name, block)
         lines += glines + [r"\addlinespace[2pt]"]
         payload[f"{scm} {cond}"] = gpayload

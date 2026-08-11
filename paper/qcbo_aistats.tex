@@ -848,20 +848,27 @@ intra-slice edit.
 
 \paragraph{Graph-uncertain comparator (\CEO{}).}
 We also run \CEO{} \citep{branchiniCausalEntropyOptimization2023} on
-the minimal suite under the same protocol---seeds, budgets, shared
-observational data, and the same objective
-(Table~\ref{tab:ceo}, App.~\ref{app:fulltables})---with a candidate
-pool holding the asserted observable DAG plus every observable-distinct
-variant. Online structure learning does buy robustness: under the A1
-deletion, hedged \CEO{} ends at $0.164$ where committed fine \CBO{}
-plateaus at $4.245$. But it pays a consistent premium over the quotient
-on every protected condition ($+0.08$ to $+0.28$ at $n{=}30$, while
-\QCBO{} is exactly invariant), its posterior never resolves the
-\textsc{ParallelParent} pool ($P(\text{truth})\approx0.53$), and it
-cannot represent the assumed-confounder errors A3/B1 at all (its
-candidate DAGs carry no bidirected edges). On the unprotected price
+the minimal suite (Table~\ref{tab:ceo}, App.~\ref{app:fulltables})
+with a candidate pool holding the asserted observable DAG plus every
+observable-distinct variant. Shared with the fine methods: seeds,
+trial counts, three initial points per arm, the observational data,
+and the objective surface. Not shared: total initialization cost
+(\CEO{} initializes every subset---$12$ units on
+\textsc{ParallelParent} against \QCBO{}'s $6$), a non-cost-weighted
+acquisition, and learning from single stochastic draws of the true
+SCM (its native regime) while incumbents are scored on the same mean
+surface; App.~\ref{app:repro} reports initialization-inclusive
+totals and matched-budget values. Online structure learning does buy
+robustness: under the A1 deletion, hedged \CEO{} ends at $0.77$
+where committed fine \CBO{} plateaus at $4.245$. But it pays a clear
+premium over the quotient on every protected condition ($+0.07$ to
+$+1.00$ at $n{=}30$, while \QCBO{} is exactly invariant), its
+posterior mass on the true graph's \emph{observable projection}
+plateaus near $0.54$---the true graph itself, carrying bidirected
+edges, is outside its candidate class---and it cannot represent the
+assumed-confounder errors A3/B1 at all. On the unprotected price
 condition the picture mirrors: \CEO{}'s fine action space reaches
-$0.117$ where fixed-partition \QCBO{} pays the full gap ($4.000$),
+$0.135$ where fixed-partition \QCBO{} pays the full gap ($4.000$),
 though \HQCBO{} recovers further ($0.040$). Committing to a quotient
 and learning over fine graphs are complementary: each wins exactly
 where its structural assumption binds.
@@ -1578,7 +1585,7 @@ protocols and are not re-costed.
 
 \paragraph{Reproducibility statement.}
 The repository archives the complete raw per-seed traces behind every
-figure and table (\texttt{artifacts/traces/}: four compressed archives
+figure and table (\texttt{artifacts/traces/}: five compressed archives
 with per-file SHA256 checksums and a provenance manifest recording
 source commits, generating scripts, and settings), pip-freeze
 snapshots of both experiment environments with platform details and
@@ -1617,17 +1624,27 @@ regenerate from the archived traces (App.~\ref{app:repro}).
 
 
 \begin{table}[ht]\centering
-  \caption{Graph-uncertain comparator: \CEO{} on the minimal suite
-  under the shared protocol (seeds $0$--$29$, $T{=}50$/$60$, three
-  initial points per arm, shared observational data, same closed-form
-  objective, seam-checked per run). Pool: asserted observable DAG
-  first, plus every observable-distinct variant of the same SCM,
-  uniform prior. A3/B1 add only an assumed latent confounder, so their
-  observable edge sets equal A0's/B0's: \CEO{} cannot represent this
-  error class and those rows are aliases of the base runs.
-  $\Delta$ is the per-seed paired difference (min task: positive =
-  \CEO{} worse); $P(\text{truth})$ is \CEO{}'s mean final posterior
-  mass on the true graph (trivially $1$ for singleton pools).}
+  \caption{Graph-uncertain comparator: \CEO{} on the minimal suite.
+  Shared with the fine methods: seeds $0$--$29$, trial counts
+  ($T{=}50$/$60$), three initial points per arm, the shared
+  observational data, and the objective surface (noiseless targets are
+  the closed-form $\E[Y\mid\doo(\cdot)]$, seam-checked per run
+  against the true latent SEM). Not shared: total initialization cost
+  (\CEO{} initializes all subsets: $12$ units vs.\ $6$ for \QCBO{}
+  on \textsc{ParallelParent}), a non-cost-weighted acquisition, and
+  learning from single stochastic true-SCM draws while the fine
+  methods receive common-random-number Monte-Carlo mean evaluations
+  (App.~\ref{app:repro} gives initialization-inclusive totals). Pool:
+  asserted observable DAG first plus every observable-distinct
+  variant, uniform prior. A3/B1 add only an assumed latent confounder,
+  so their observable edge sets equal A0's/B0's: those rows are
+  aliases of the base runs. $\Delta$ is the per-seed paired
+  difference (min task: positive = \CEO{} worse);
+  $P(\text{proj})$ is \CEO{}'s mean final posterior mass on the pool
+  member equal to the true graph's \emph{observable projection}---the
+  true \textsc{ParallelParent} and \textsc{FrontDoor} graphs carry
+  bidirected edges and are in no pool---reported for multi-graph pools
+  only.}
   \label{tab:ceo}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/ceo_minimal}}

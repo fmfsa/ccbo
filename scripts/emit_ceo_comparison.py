@@ -63,12 +63,16 @@ def finals_ceo(d, scm, cond):
     return vals, metas
 
 
-def truth_mass(meta):
+def projection_mass(meta):
+    """Posterior mass on the pool member equal to the TRUE graph's observable
+    projection. The true PP/FD graphs carry bidirected edges and are in no
+    pool, so this is NOT mass on the truth. Only meaningful for multi-graph
+    pools; returns None for singletons (trivially 1)."""
     pool, post = meta.get("pool_pids"), meta.get("posterior_final")
-    true_cond = meta.get("true_cond")
-    if not pool or not post or true_cond not in pool:
+    base = meta.get("baseline_observable_cond")
+    if not pool or not post or base not in pool or len(pool) < 2:
         return None
-    return float(post[pool.index(true_cond)])
+    return float(post[pool.index(base)])
 
 
 def msem(vals):
@@ -108,7 +112,7 @@ def main():
     lines = [r"\begin{tabular}{@{}lccccc@{}}", r"\toprule",
              r"\textbf{Condition} & \textbf{\CBO{}} & \textbf{\QCBO{}} & "
              r"\textbf{\CEO{}} & \textbf{$\Delta$(\CEO{}$-$\QCBO{}) [95\% CI]}"
-             r" & \textbf{$P$(truth)} \\", r"\midrule"]
+             r" & \textbf{$P(\text{proj})$} \\", r"\midrule"]
     payload = {}
     for scm, cond, label, alias_of in CONDS:
         cbo = finals_minimal(args.minimal_dir, scm, cond, "CBO")
@@ -124,7 +128,7 @@ def main():
         if n == 0:
             print(f"  {scm} {cond}: no complete pairs yet, skipped")
             continue
-        masses = [m for m in (truth_mass(metas[s]) for s in common)
+        masses = [m for m in (projection_mass(metas[s]) for s in common)
                   if m is not None]
         dm, lo, hi, np_, d_per = paired_ci(
             {s: ceo[s] for s in common}, {s: qcbo[s] for s in common})
@@ -142,10 +146,10 @@ def main():
             "ceo_finals": {s: ceo[s] for s in common},
             "delta_ceo_minus_qcbo": {"mean": dm, "ci95": [lo, hi],
                                      "per_seed": d_per},
-            "posterior_mass_on_truth_mean":
+            "posterior_mass_on_observable_projection_mean":
                 float(np.mean(masses)) if masses else None,
         }
-        mass_str = f"  P(truth)={np.mean(masses):.3f}" if masses else ""
+        mass_str = f"  P(proj)={np.mean(masses):.3f}" if masses else ""
         print(f"  {scm} {cond}: n={np_}  "
               f"CEO {np.mean([ceo[s] for s in common]):.4f}  "
               f"D(CEO-QCBO)={dm:+.4f} [{lo:+.4f}, {hi:+.4f}]{mass_str}")
@@ -158,11 +162,17 @@ def main():
     print(f"wrote {out}")
     args.summary.parent.mkdir(parents=True, exist_ok=True)
     args.summary.write_text(json.dumps({
-        "protocol": "run_ceo_minimal.py (prespecified): same SCMs, "
-                    "conditions, seeds 0-29, T=50/60, n_init=3/arm, "
-                    "n_obs=100, closed-form E[Y|do] objective; min task, "
-                    "positive Delta = CEO worse. A3/B1 are observable-"
-                    "identical aliases of A0/B0.",
+        "protocol": "run_ceo_minimal.py: same SCMs, conditions, seeds "
+                    "0-29, trial counts (T=50/60), 3 init points per arm, "
+                    "shared n_obs=100 data; noiseless objective = closed-"
+                    "form E[Y|do]; noisy learning path = stochastic true-"
+                    "latent-SEM draws. Total initialization cost is NOT "
+                    "shared (CEO inits all subsets: 12 units vs QCBO's 6 "
+                    "on PP). min task, positive Delta = CEO worse. A3/B1 "
+                    "are observable-identical aliases. P(proj) = posterior "
+                    "mass on the truth's observable projection (truth "
+                    "itself, with bidirected edges, is in no pool); "
+                    "reported for multi-graph pools only.",
         "generated_by": "scripts/emit_ceo_comparison.py",
         "conditions": payload,
     }, indent=2) + "\n")

@@ -28,7 +28,7 @@ echo "== python:  $PYTHON ($("$PYTHON" -V 2>&1))"
 echo "== workdir: $WORKDIR"
 
 echo "== 1/5 extract + checksum trace archives"
-for suite in minimal family_cbo qdcbo qmcbo; do
+for suite in minimal family_cbo qdcbo qmcbo ceo_minimal; do
     tar -C "$WORKDIR" -xzf "$REPO/artifacts/traces/$suite.tar.gz"
     (cd "$WORKDIR" && sha256sum --check --quiet \
         "$REPO/artifacts/traces/$suite.sha256")
@@ -47,7 +47,10 @@ cd "$REPO"
 "$PYTHON" scripts/emit_qmcbo_tables.py     --results-dir "$WORKDIR" \
                                            --summary "$WORKDIR/qmcbo_pilot.json"
 "$PYTHON" scripts/emit_paired_effects.py   --results-dir "$WORKDIR"
-"$PYTHON" scripts/emit_cost_analysis.py    --results-dir "$WORKDIR"
+"$PYTHON" scripts/emit_cost_analysis.py    --results-dir "$WORKDIR" \
+                                           --ceo-dir "$WORKDIR/ceo_minimal"
+"$PYTHON" scripts/emit_ceo_comparison.py   --ceo-dir "$WORKDIR/ceo_minimal" \
+                                           --minimal-dir "$WORKDIR/minimal"
 "$PYTHON" scripts/emit_dataset_tikz.py
 if ! diff -q "$WORKDIR/qmcbo_pilot.json" results/qmcbo_pilot.json >/dev/null 2>&1; then
     echo "   NOTE: regenerated qmcbo_pilot.json differs from the tracked copy" >&2

@@ -7,9 +7,11 @@ queue). `<suite>.sha256` lists the SHA256 of every archived file;
 
 Verification: `scripts/verify_traces.py` re-checks the full expected file
 grid, recomputes every published aggregate at the paper's displayed
-precision, and re-tests the exact-invariance pairs predicted by the quotient
-contract. Last run 2026-08-10 on both the original directories and a fresh
-extraction of these archives: **38 checks, 0 failures**.
+precision, re-tests the exact-invariance pairs predicted by the quotient
+contract, and validates the CEO comparator archive (grid, trajectory
+lengths, alias identity and metadata, protocol constants, finals).
+Last run 2026-08-11 on a fresh extraction of these archives:
+**54 checks, 0 failures**.
 
 ```bash
 mkdir -p /tmp/qcbo-traces && for t in artifacts/traces/*.tar.gz; do tar -C /tmp/qcbo-traces -xzf "$t"; done
@@ -83,18 +85,29 @@ Tarballs created 2026-08-10 with
 for deterministic re-packing. Apparent raw size 4.41 MB (directory `du`
 is dominated by filesystem block overhead on many small files).
 
-## ceo_minimal.tar.gz — CEO comparator on MinimalBench (added 2026-08-10)
+## ceo_minimal.tar.gz — CEO comparator on MinimalBench (corrected 2026-08-11)
 
+- **Supersedes the 2026-08-10 run (LSF job 29078320), which was
+  invalidated by PR-review finding 1**: the adapter's target factory
+  ignored CEO's `noisy` flag, so the graph posterior and GP targets
+  learned from exact mean pseudo-observations instead of valid
+  stochastic interventional samples. The corrected adapter draws the
+  noisy path from the true latent SEM (guarded by
+  `ccbo/tests/test_ceo_minimal_protocol.py`); rerun as LSF job
+  29090857, 150/150 elements, zero failures, 2026-08-11. The flawed
+  archive remains in git history.
 - 210 CSVs (`CEO_{scm}_{cond}_seed{0..29}.csv`, columns
   `trial_number,current_optimal`) + `.meta.json` sidecars (pool, final
-  graph posterior, wall time). 150 executed units (ParallelParent ×
-  {A0,A1,A2}, FrontDoor × B0, MediatedChain × C0) + 60 documented
-  observable-identical aliases (A3←A0, B1←B0).
+  graph posterior, per-trial intervention costs and exploration sets,
+  wall time). 150 executed units (ParallelParent × {A0,A1,A2},
+  FrontDoor × B0, MediatedChain × C0) + 60 documented
+  observable-identical aliases (A3←A0, B1←B0, alias `cond` set to the
+  alias name with `alias_of` preserving the source).
 - Generator: `scripts/run_ceo_minimal.py` over `third_party/CEO` @
-  `35dd277` (prespecified protocol: seeds 0–29, T=50/60, 3 init points
-  per arm, n_obs=100 shared dataset, closed-form E[Y|do] objective
-  seam-gated per run against 200k-sample MC of the true latent SEMs),
-  via `scripts/lsf/submit_ceo_minimal.sh`, LSF job 29078320, 150/150
-  elements completed with zero failures, 2026-08-10.
+  `35dd277`: seeds 0–29, T=50/60, 3 init points per arm, n_obs=100
+  shared dataset; noiseless objective = closed-form E[Y|do] seam-gated
+  per run against 200k-sample MC of the true latent SEMs; noisy
+  learning path = stochastic true-latent-SEM draws, via
+  `scripts/lsf/submit_ceo_minimal.sh`.
 - Aggregation: `scripts/emit_ceo_comparison.py` →
   `paper/tables/ceo_minimal.tex` + `artifacts/summaries/ceo_comparison.json`.
