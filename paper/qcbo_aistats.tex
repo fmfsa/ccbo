@@ -810,7 +810,7 @@ optimal arm.}
 \label{sec:exp-d}
 We compare each quotient method with its base in the base paper's released
 stack and metric. The suite contains three \CBO{} tasks ($10$ seeds), three
-DCBO tasks ($20$ seeds), and two MCBO tasks ($5$ seeds). Graphs and full
+DCBO tasks ($20$ seeds), and two MCBO tasks ($20$ seeds). Graphs and full
 protocols are in Apps.~\ref{app:dags} and~\ref{app:repro}.
 
 \begin{figure*}[t]\centering
@@ -825,22 +825,23 @@ maximization for MCBO.}
 Table~\ref{tab:family} reports finals and per-task \emph{paired}
 effects with $95\%$ confidence intervals. The quotient improves the
 final value on stat ($-0.29$, CI $[-0.41,-0.17]$), ind ($-2.45$, CI
-$[-2.72,-2.19]$), and---descriptively at $n{=}5$---MCBO ToyGraph
-($-1.01$, CI $[-1.76,-0.25]$), where \QMCBO{} reaches $2.150\pm0.013$
-against MCBO's $1.143\pm0.271$. It pays a clear price on Synthetic
+$[-2.72,-2.19]$), and MCBO ToyGraph ($-0.77$, CI $[-1.04,-0.50]$;
+$n{=}20$), where \QMCBO{} reaches $2.161\pm0.004$ against MCBO's
+$1.392\pm0.128$. It pays a clear price on Synthetic
 ($+1.89$, CI $[+1.40,+2.39]$), whose optimum splits a cluster, and on
 Coral ($+0.34$, CI $[+0.30,+0.37]$). It is statistically
 indistinguishable from its base on Toy ($+0.03$, CI $[-0.04,+0.11]$)
 and nonstat ($-1.69$, CI $[-3.57,+0.18]$); on PSAGraph the final
 difference is negligible at displayed precision while trajectories
-differ, and \QMCBO{} uses $3.0\times$ less wall-clock time. At matched
+differ, and \QMCBO{} uses $2.8\times$ less wall-clock time. At matched
 initialization-inclusive budgets the picture shifts further
 (App.~\ref{app:repro}): the Synthetic price disappears, and Coral's
 base has not completed initialization within the quotient's entire
 budget. Under quotient-invisible perturbations \QMCBO{}'s trajectories
 are identical on all $10$ environment--seed pairs, while MCBO's differ
-on $8$ of $10$; all five perturbed PSAGraph MCBO runs differ mid-run
-yet end at the same displayed final (both saturate at $-5.15$), so
+on $31$ of $40$; all twenty perturbed PSAGraph MCBO runs differ
+mid-run yet end within $0.001$ of the same final (both saturate at
+$-5.15$), so
 Table~\ref{tab:qmcbo-e2} reports trajectory identity and final
 deviation separately. \QDCBO{} is likewise invariant to its
 intra-slice edit.
@@ -870,8 +871,7 @@ where its structural assumption binds.
   final-performance effects $\Delta$ (quotient $-$ base in the task's
   own direction; positive = quotient worse) with paired-$t$ $95\%$
   CIs. These are finite-budget empirical effects, not estimates of the
-  action-space gap $\Delta(\Pi)$; the $n{=}5$ MCBO rows are
-  descriptive (per-seed values in App.~\ref{app:fulltables}).}
+  action-space gap $\Delta(\Pi)$.}
   \label{tab:family}
   \small
   \input{tables/family_effects}
@@ -966,8 +966,7 @@ Cor.~\ref{cor:recovery} is conditional on it. The experiments use
 per-variable unit intervention costs---cluster arms pay proportionally
 more per trial---and initialization budgets differ across methods with
 different arm counts; App.~\ref{app:repro} quantifies both and
-re-compares at matched total budgets. The MCBO family is evaluated at
-five paired seeds and reported descriptively. A \CEO{} comparison under the
+re-compares at matched total budgets. A \CEO{} comparison under the
 shared minimal-suite protocol is reported in \S\ref{sec:exp-d} and
 App.~\ref{app:fulltables}; GACBO, random-graph misspecification
 sweeps, and learned partitions remain deferred.
@@ -1596,24 +1595,13 @@ Tables~\ref{tab:qmcbo-e1} and~\ref{tab:qmcbo-e2}
 give the per-environment detail behind \S\ref{sec:exp-d}'s model-based
 rows: finals and wall-clock on MCBO's own tasks, and the within-family
 invariance counts under the intra-cluster perturbation of the model's
-graph view. Because the MCBO family runs only five paired seeds, its
-effects in Table~\ref{tab:family} are descriptive;
-Table~\ref{tab:qmcbo-paired} lists the raw per-seed paired differences
-behind them. Per-seed CSVs for every minimal-suite unit (trial,
+graph view. Per-seed CSVs for every minimal-suite unit (trial,
 incumbent, cumulative cost, selected arm, and intervention values)
 regenerate from the archived traces (App.~\ref{app:repro}).
 
-\begin{table}[ht]\centering
-  \caption{Per-seed paired differences $\Delta$ (base $-$ quotient;
-  maximization, so positive = quotient worse) behind the $n{=}5$ MCBO
-  rows of Table~\ref{tab:family}.}
-  \label{tab:qmcbo-paired}
-  \small
-  \input{tables/qmcbo_paired}
-\end{table}
 
 \begin{table}[ht]\centering
-  \caption{\QMCBO{} vs MCBO (its own harness and protocol; $5$ seeds,
+  \caption{\QMCBO{} vs MCBO (its own harness and protocol; $20$ seeds,
   $T{=}100$). Final $Y$ (all tasks maximized) and wall-clock per unit.}
   \label{tab:qmcbo-e1}
   \small
@@ -1621,7 +1609,7 @@ regenerate from the archived traces (App.~\ref{app:repro}).
 \end{table}
 
 \begin{table}[ht]\centering
-  \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Lemma~\ref{lem:contract}). MCBO does; on PSAGraph its five perturbed trajectories all differ mid-run yet end at the same displayed final.}
+  \caption{Invariance under an intra-cluster misspecification of the model's graph view (same seeds, deterministic runs): trajectories identical to the correct-graph run, and mean $|\Delta \text{final}|$. \QMCBO{} cannot move (Lemma~\ref{lem:contract}). MCBO does; on PSAGraph all twenty perturbed trajectories differ mid-run yet end within $0.001$ of the same final.}
   \label{tab:qmcbo-e2}
   \small
   \adjustbox{max width=\linewidth}{\input{tables/qmcbo_e2}}

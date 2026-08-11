@@ -202,36 +202,37 @@ def verify_qdcbo(root: Path) -> None:
 
 # ------------------------------------------------------------------ qmcbo ---
 
+QMCBO_SEEDS = 20   # extended 5 -> 20 on 2026-08-11 (LSF job 29078186)
 QMCBO_PUB = {  # env -> (MCBO final, QMCBO final), 2 decimals
-    "ToyGraph": (1.14, 2.15),
+    "ToyGraph": (1.39, 2.16),
     "PSAGraph": (-5.15, -5.15),
 }
 QMCBO_E2_IDENTICAL = {  # (env, method) -> (identical count, mean |Δfinal| 3dp)
-    ("ToyGraph", "MCBO"): (2, 0.299),
-    ("ToyGraph", "QMCBO"): (5, 0.000),
-    ("PSAGraph", "MCBO"): (0, 0.000),
-    ("PSAGraph", "QMCBO"): (5, 0.000),
+    ("ToyGraph", "MCBO"): (9, 0.277),
+    ("ToyGraph", "QMCBO"): (20, 0.000),
+    ("PSAGraph", "MCBO"): (0, 0.001),
+    ("PSAGraph", "QMCBO"): (20, 0.000),
 }
 
 
 def verify_qmcbo(root: Path) -> None:
     d = root / "qmcbo"
     missing = [f"{sub}trial_results_{m}_{env}_{s}.csv"
-               for env in QMCBO_PUB for m in ("MCBO", "QMCBO") for s in range(5)
+               for env in QMCBO_PUB for m in ("MCBO", "QMCBO") for s in range(QMCBO_SEEDS)
                for sub in ("", "_e2/")
                if not (d / sub / f"trial_results_{m}_{env}_{s}.csv").exists()]
-    check(not missing, f"qmcbo grid complete (20 E1 + 20 E2); missing: {missing[:5]}")
+    check(not missing, f"qmcbo grid complete ({QMCBO_SEEDS*4} E1 + {QMCBO_SEEDS*4} E2); missing: {missing[:5]}")
     if missing:
         return
     for env, (pub_m, pub_q) in QMCBO_PUB.items():
         for method, pub in (("MCBO", pub_m), ("QMCBO", pub_q)):
             finals = [pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
-                      .current_optimal.iloc[-1] for s in range(5)]
+                      .current_optimal.iloc[-1] for s in range(QMCBO_SEEDS)]
             m = float(np.mean(finals))
             check(close(m, pub, 2), f"qmcbo {env} {method} final {m:.4f} ~ {pub:.2f}")
     for (env, method), (pub_n, pub_delta) in QMCBO_E2_IDENTICAL.items():
         n_id, deltas = 0, []
-        for s in range(5):
+        for s in range(QMCBO_SEEDS):
             e1 = pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
             e2 = pd.read_csv(d / "_e2" / f"trial_results_{method}_{env}_{s}.csv")
             same = np.array_equal(e1.current_optimal.values, e2.current_optimal.values)
@@ -239,7 +240,7 @@ def verify_qmcbo(root: Path) -> None:
             deltas.append(abs(e1.current_optimal.iloc[-1] - e2.current_optimal.iloc[-1]))
         md = float(np.mean(deltas))
         check(n_id == pub_n and close(md, pub_delta, 3),
-              f"qmcbo E2 {env} {method}: {n_id}/5 identical (pub {pub_n}/5), "
+              f"qmcbo E2 {env} {method}: {n_id}/{QMCBO_SEEDS} identical (pub {pub_n}/{QMCBO_SEEDS}), "
               f"mean|Δfinal| {md:.4f} ~ {pub_delta:.3f}")
 
 

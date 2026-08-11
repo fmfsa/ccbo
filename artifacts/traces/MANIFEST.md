@@ -57,8 +57,13 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 
 ## qmcbo.tar.gz — MCBO vs QMCBO (Fig. 4 bottom, Tables 2/3/5)
 
-- 120 files: E1 and `_e2/` each holding
-  `trial_results_{MCBO,QMCBO}_{ToyGraph,PSAGraph}_{0..4}.csv` (columns
+- **Extended 5 → 20 seeds on 2026-08-11** (LSF job 29078186, 120 new
+  units, zero failures; identical protocol, verified field-by-field
+  against the original `_info.json` sidecars; the original five seeds
+  are byte-identical to the 2026-07-22 archive and still pass
+  `verify_qmcbo_release.py`).
+- E1 and `_e2/` each holding
+  `trial_results_{MCBO,QMCBO}_{ToyGraph,PSAGraph}_{0..19}.csv` (columns
   `trial_number,current_optimal`) + `_info.json` sidecars + run logs.
 - E2 ops: ToyGraph `del 0→1`, PSAGraph `add 2→3` (model's graph view only).
 - Generator: `scripts/run_qmcbo_pilot.sh` → `ccbo.qmcbo.runner` over

@@ -1,49 +1,49 @@
 {
   "e1": {
     "PSAGraph|MCBO": {
-      "final_mean": -5.152926176993028,
-      "final_sem": 0.00026752177484478355,
-      "secs": 6830.40275888443,
-      "n": 5
+      "final_mean": -5.152685604104544,
+      "final_sem": 0.00017098883610088794,
+      "secs": 6788.786456358433,
+      "n": 20
     },
     "ToyGraph|MCBO": {
-      "final_mean": 1.1433154226418354,
-      "final_sem": 0.27128671442865404,
-      "secs": 1409.6405577659607,
-      "n": 5
+      "final_mean": 1.3917535069685436,
+      "final_sem": 0.12821289667039648,
+      "secs": 1270.0199305295944,
+      "n": 20
     },
     "PSAGraph|QMCBO": {
-      "final_mean": -5.152827626577791,
-      "final_sem": 0.0003288041595933401,
-      "secs": 2265.8756362438203,
-      "n": 5
+      "final_mean": -5.1527837577755085,
+      "final_sem": 0.0001836193425420116,
+      "secs": 2454.6047665596006,
+      "n": 20
     },
     "ToyGraph|QMCBO": {
-      "final_mean": 2.150183355540928,
-      "final_sem": 0.013240072686762005,
-      "secs": 1569.8694409370423,
-      "n": 5
+      "final_mean": 2.1607763789842807,
+      "final_sem": 0.004175656400287399,
+      "secs": 1330.687279701233,
+      "n": 20
     }
   },
   "e2_identity": {
     "PSAGraph|MCBO": {
       "identical": 0,
-      "n": 5,
-      "mean_abs_dfinal": 0.00031886352249372863
+      "n": 20,
+      "mean_abs_dfinal": 0.0006181498292870735
     },
     "ToyGraph|MCBO": {
-      "identical": 2,
-      "n": 5,
-      "mean_abs_dfinal": 0.299388950987918
+      "identical": 9,
+      "n": 20,
+      "mean_abs_dfinal": 0.27697381102056073
     },
     "PSAGraph|QMCBO": {
-      "identical": 5,
-      "n": 5,
+      "identical": 20,
+      "n": 20,
       "mean_abs_dfinal": 0.0
     },
     "ToyGraph|QMCBO": {
-      "identical": 5,
-      "n": 5,
+      "identical": 20,
+      "n": 20,
       "mean_abs_dfinal": 0.0
     }
   }
