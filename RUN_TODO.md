@@ -74,37 +74,49 @@ PYTHONPATH=. conda run -n ccbo python scripts/audit_es_change.py \
 
 ## 4. Aggregate figures + tables (after step 2 completes)
 
+One command regenerates everything from the archived traces without
+touching `results/` (extracts into a fresh temp dir, verifies checksums
+and published aggregates, re-emits every figure/table, rebuilds the PDF,
+runs the grep gates):
+
 ```bash
-PYTHONPATH=. conda run -n ccbo python scripts/plot_family_suite.py
-#   -> paper/figures/family_suite.pdf   (3-row grid; needs all three suites)
-PYTHONPATH=. conda run -n ccbo python scripts/emit_family_price_table.py
-#   -> paper/tables/family_price.tex
-PYTHONPATH=. conda run -n ccbo python scripts/emit_qmcbo_tables.py
-#   -> paper/tables/qmcbo_e1.tex, qmcbo_e2.tex, results/qmcbo_pilot.json
+PYTHON=~/venvs/ccbo/bin/python bash scripts/reproduce_paper.sh
 ```
+
+Individual emitters accept `--dir` / `--results-dir` and never assume
+`results/`. `scripts/emit_family_price_table.py` is DEPRECATED —
+`scripts/emit_paired_effects.py` emits `paper/tables/family_effects.tex`
+(paired per-task effects with 95% CIs) and
+`artifacts/summaries/paired_effects.json`;
+`scripts/emit_cost_analysis.py` emits the initialization-inclusive cost
+table (`paper/tables/cost_accounting.tex`).
 
 ## 5. Paper numeric refresh (Track B) — `paper/qcbo_aistats.tex`
 
-- **§5.5** (`sec:exp-qmcbo`): refresh the MCBO/QMCBO finals and the E2
-  identical-trajectory counts from the new runs; replace "about a third of
-  the wall-clock" with the measured ratio (s/unit column of
-  `qmcbo_e1.tex`); re-verify the ToyGraph optimum claim
-  ($2.172\pm0.000$).
-- **§5.6** (`sec:exp-family`): recount "six of the eight experiments"
-  against the regenerated `family_price.tex`; verify the Toy sentence
-  ("…and still matches \CBO{}") holds in the new numbers.
-- **App. F** (`app:wrongpi`): verify "GAP stays within $0.06$" against
-  `clusterbench10_wrongpi.tex`.
+DONE in the 2026-08 revision (all numbers regenerated from
+`artifacts/traces/`, verified by `scripts/verify_traces.py`):
+"six of eight" replaced by per-task paired effects; exact $R_{60}$
+values added to §5.3; PSAGraph wording separates trajectory identity
+from final-value deviation. Any future rerun repeats
+`scripts/reproduce_paper.sh` and re-checks §5.4's inline CI values
+against `artifacts/summaries/paired_effects.json`.
 - Rebuild: `cd paper && latexmk -pdf qcbo_aistats.tex` — must exit 0 with
   **zero** LaTeX errors and **zero** undefined references.
 
 ## 6. Final verification sweep
 
 ```bash
-conda run -n ccbo python -m pytest                      # green (3 QMCBO skips ok)
+# Baseline recorded 2026-08-10 (envs/README.md): 52 passed, 11 skipped,
+# 11 deselected. Compare against that baseline, not a hard-coded count —
+# skips depend on which third-party stacks are fetched.
+PYTHONPATH=. ~/venvs/ccbo/bin/python -m pytest
 # zero hits allowed in paper/qcbo_aistats.tex and paper/tables/:
 grep -rn "PA-GAP\|byte-for-byte\|byte-identical\|uncapped\|cluster budget\|QMCBO-ind\|QMCBOJ\|ten-dimensional\|quarter of the wall" \
     paper/qcbo_aistats.tex paper/tables/
+grep -rn "six of eight\|six of the eight\|identifiable cluster unions\|thm:contract\|family_price\|TODO" \
+    paper/qcbo_aistats.tex
+grep -n "in the convention of" paper/figures/dataset_dags.tex   # stated once, in App. D preamble only
+pdftotext -q paper/qcbo_aistats.pdf - | grep -c "AISTATS 2026\|Under review by AISTATS"   # must be 0
 # CausalBO_Benchmark may appear ONLY in retirement/provenance notes:
 grep -rn "CausalBO_Benchmark" ccbo/ scripts/ README.md
 ```
@@ -121,40 +133,38 @@ grep -rn "CausalBO_Benchmark" ccbo/ scripts/ README.md
 
 ## 8. Paper-revision release gates
 
-Replace `paper/aistats2026.sty` with the official AISTATS 2026 author-pack
-file before submission. The checked-in file still identifies itself as the
-2025 style, so locally rendered footers remain 2025 until this gate is
-completed. Recompile after replacement and remove the temporary
-title-box `\hfuzz` workaround in `paper/qcbo_aistats.tex` if the official
-style no longer emits that warning.
+**Venue (open).** The paper targets AISTATS 2027. The checked-in
+`paper/aistats2026.sty` is the genuine 2026 style (2026 / Tangier /
+PMLR vol. 300 — an earlier note here claiming it self-identified as
+2025 was wrong), loaded with the `[preprint]` option so no venue
+branding renders. Swap in the official AISTATS **2027** author pack
+when it is released, drop `[preprint]`, and recompile (gate:
+`pdftotext` shows the correct year and notice).
 
-After regenerating `results/qmcbo/`, validate the five ToyGraph MCBO records:
+**Resolved in the 2026-08 revision:**
 
-```bash
-PYTHONPATH=. conda run -n ccbo python scripts/verify_qmcbo_release.py \
-    --dir results/qmcbo
-```
+- Raw trajectories, `_info.json` sidecars, dependency snapshots, and the
+  pinned external commits are archived under `artifacts/traces/` +
+  `envs/` (checksummed; `scripts/verify_traces.py` gates them).
+- `paper/figures/family_suite.pdf` regenerated from the archived traces
+  by `scripts/plot_family_suite.py` (hand-recolored copy replaced).
+- `paper/figures/minimal_refine.pdf` regenerated from the archived
+  traces (hand-shifted copy replaced, exact standard-error bands
+  restored), and §5.3 now reports the exact \(R_{60}\) values.
+- `verify_qmcbo_release.py` passes against the archived qmcbo traces.
 
-The current runner logs `best_score` during BO, so a flat CSV establishes
-only that the recorded best-so-far trajectory is flat across the 100 logged
-iterations. Before using the stronger phrase "never improves on its initial
-design", run an instrumented unit that records:
+**Still open (flat-MCBO wording).** The runner logs `best_score` during
+BO, so a flat CSV establishes only that the recorded best-so-far
+trajectory is flat across the 100 logged iterations. Before using the
+stronger phrase "never improves on its initial design", run an
+instrumented unit that records:
 
 1. the initial-design incumbent before BO;
 2. every proposed intervention;
 3. every raw objective evaluation;
 4. the updated incumbent and acquisition-optimizer status.
 
-Archive those raw trajectories, the `_info.json` files, dependency versions,
-and the pinned MCBO commit with the release. The checked-in family-suite
-figure has been recolored as a vector without changing its trajectory
-geometry. Regenerate it from the raw server traces before release to reproduce
-the six-color artifact directly from `scripts/plot_family_suite.py`.
-
-The checked-in \textsc{MediatedChain} mean regret curves have been shifted by
-their mean initial regret so that trial zero is zero, matching
-`ccbo.metrics.cumulative_regret`; the bottom-panel bands were removed because
-their corrected covariance cannot be recovered from the old PDF. Regenerate
-`paper/figures/minimal_refine.pdf` from `results/minimal/` to restore exact
-standard-error bands. The main paper intentionally reports no exact
-\(R_{60}\) values until that regeneration.
+**Still open (repo).** No LICENSE file is shipped; decide one before
+any public artifact release. A `uv.lock` of unknown provenance exists
+in a separate clone (see `envs/README.md`); establish its origin before
+using or archiving it.

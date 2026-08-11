@@ -1,4 +1,11 @@
-"""Emit the family price table: quotient vs base finals on the base paper's
+"""DEPRECATED: superseded by scripts/emit_paired_effects.py, which emits
+paper/tables/family_effects.tex with per-task PAIRED effects and 95% CIs
+(this script's separate-mean "Price" column conflated finite-budget
+empirical differences with the theoretical coarsening gap Delta(Pi), and
+its unpaired layout hid the seed pairing). Kept only for provenance of the
+retired family_price.tex.
+
+Emit the family price table: quotient vs base finals on the base paper's
 own experiments (same sources as scripts/plot_family_suite.py).
 
   CBO  vs QCBO   Toy / Synthetic / Coral      (min, 10 seeds, 40 trials)

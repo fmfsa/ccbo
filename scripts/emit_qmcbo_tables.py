@@ -56,6 +56,17 @@ def _mp(mean, sem, fmt="%.3f"):
 
 
 def main():
+    import argparse
+    global QDIR, OUTJSON
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--results-dir", default="results",
+                    help="root holding qmcbo/ (and qmcbo/_e2/)")
+    ap.add_argument("--summary", default=None,
+                    help="override the JSON summary path")
+    args = ap.parse_args()
+    QDIR = os.path.join(args.results_dir, "qmcbo")
+    OUTJSON = args.summary or os.path.join(args.results_dir,
+                                           "qmcbo_pilot.json")
     e1 = _collect(QDIR)
     e2 = _collect(os.path.join(QDIR, "_e2"))
 

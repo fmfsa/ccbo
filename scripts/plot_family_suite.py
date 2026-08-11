@@ -91,6 +91,18 @@ def mcbo_trajs(env, label):
 
 
 def main():
+    import argparse
+    global OUT, CBO_DIR, QDCBO_DIR, QMCBO_DIR
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--results-dir", default="results",
+                    help="root holding family_cbo/, qdcbo/, qmcbo/")
+    ap.add_argument("--out", default=OUT)
+    args = ap.parse_args()
+    CBO_DIR = os.path.join(args.results_dir, "family_cbo")
+    QDCBO_DIR = os.path.join(args.results_dir, "qdcbo")
+    QMCBO_DIR = os.path.join(args.results_dir, "qmcbo")
+    OUT = args.out
+
     fig, axes = plt.subplots(3, 3, figsize=(8.6, 6.4))
 
     for j, (ds, title) in enumerate(CBO_PANELS):
@@ -100,9 +112,9 @@ def main():
             _band(ax, base, *METHOD_STYLE["CBO"], label="CBO")
         if quot:
             _band(ax, quot, *METHOD_STYLE["QCBO"], label="QCBO")
-        ax.set_title(title, fontsize=9)
+        ax.set_title(title, fontsize=10)
         if j == 0:
-            ax.set_ylabel("best $E[Y|do]$", fontsize=8)
+            ax.set_ylabel("best $E[Y|do]$", fontsize=9)
 
     for j, (setup, title) in enumerate(DCBO_PANELS):
         ax = axes[1][j]
@@ -113,9 +125,9 @@ def main():
             _band(ax, quot, *METHOD_STYLE["QDCBO"], label="QDCBO")
         for xs in (10, 20):
             ax.axvline(xs - 0.5, color="black", lw=0.5, alpha=0.25)
-        ax.set_title(title + " (T=3)", fontsize=9)
+        ax.set_title(title + " (T=3)", fontsize=10)
         if j == 0:
-            ax.set_ylabel("best $Y$ per slice", fontsize=8)
+            ax.set_ylabel("best $Y$ per slice", fontsize=9)
 
     for j, (env, title) in enumerate(MCBO_PANELS):
         ax = axes[2][j]
@@ -124,22 +136,22 @@ def main():
             _band(ax, base, *METHOD_STYLE["MCBO"], label="MCBO")
         if quot:
             _band(ax, quot, *METHOD_STYLE["QMCBO"], label="QMCBO")
-        ax.set_title(title, fontsize=9)
+        ax.set_title(title, fontsize=10)
         if j == 0:
-            ax.set_ylabel("best reward", fontsize=8)
-        ax.set_xlabel("trial", fontsize=8)
-    axes[1][0].set_xlabel("trial (slices concatenated)", fontsize=7)
+            ax.set_ylabel("best reward", fontsize=9)
+        ax.set_xlabel("trial", fontsize=9)
+    axes[1][0].set_xlabel("trial (slices concatenated)", fontsize=8)
 
     # legend panel: one named entry per method
     ax = axes[2][2]
     ax.axis("off")
     for method, (color, ls) in METHOD_STYLE.items():
         ax.plot([], [], color=color, ls=ls, lw=1.6, label=method)
-    ax.legend(loc="center", fontsize=8, frameon=False, ncol=2)
+    ax.legend(loc="center", fontsize=9, frameon=False, ncol=2)
 
     for row in axes:
         for ax in row:
-            ax.tick_params(labelsize=7)
+            ax.tick_params(labelsize=8)
             for sp in ("top", "right"):
                 ax.spines[sp].set_visible(False)
 
