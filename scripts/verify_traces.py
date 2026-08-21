@@ -59,9 +59,11 @@ MINIMAL_SEEDS = range(30)
 
 
 def minimal_units() -> list[tuple[str, str, str]]:
+    # BO added 2026-08-21 (rerun/online-obs-v2): every condition also runs the
+    # plain-BO baseline arm, so the grid is 660 units (450 causal + 210 BO).
     units = []
     for p in PERTURBATIONS:
-        arms = ["CBO", "QCBO"]
+        arms = ["BO", "CBO", "QCBO"]
         if p["scm"] == MC_NAME and p["id"] == "C0":
             arms.append("HQCBO")
         for arm in arms:
@@ -81,10 +83,41 @@ def verify_minimal(root: Path) -> None:
         for s in MINIMAL_SEEDS
         if not (d / f"{scm}_{cond}_{arm}_seed{s}.csv").exists()
     ]
-    check(not missing, f"minimal grid complete (450 units); missing: {missing[:5]}")
+    check(not missing, f"minimal grid complete (660 units); missing: {missing[:5]}")
     check((d / "refine_info.json").exists(), "minimal refine_info.json present")
     if missing:
         return
+
+    # BO reads no graph structure, so its trajectory must be byte-identical
+    # across every misspecification condition of an SCM (free harness check;
+    # Table 1's BO sup|Delta| column must read 0 on every row).
+    for scm, conds in ((PP_NAME, ("A0", "A1", "A2", "A3")),
+                       (FD_NAME, ("B0", "B1"))):
+        bad = []
+        for s in MINIMAL_SEEDS:
+            payloads = {c: (d / f"{scm}_{c}_BO_seed{s}.csv").read_bytes()
+                        for c in conds}
+            if len(set(payloads.values())) != 1:
+                bad.append(s)
+        check(not bad,
+              f"BO byte-identical across {scm} conditions {conds}; "
+              f"leaking seeds: {bad[:5]}")
+
+    # Online-observation budget: n_obs=100, batch 20, N_max=150 allows at most
+    # ceil(50/20) = 3 observe actions per unit; BO takes none by construction.
+    over, bo_obs = [], []
+    for (scm, cond, arm) in minimal_units():
+        for s in MINIMAL_SEEDS:
+            df = load_minimal(root, scm, cond, arm, s)
+            body = df.iloc[1:]
+            n_obs = int((body.arm.isna()
+                         | (body.arm.astype(str).str.strip() == "")).sum())
+            if arm == "BO" and n_obs > 0:
+                bo_obs.append((scm, cond, s))
+            elif arm != "BO" and n_obs > 3:
+                over.append((scm, cond, arm, s, n_obs))
+    check(not over, f"observe actions per unit <= 3 (budget cap); over: {over[:5]}")
+    check(not bo_obs, f"BO units take no observe actions; violations: {bo_obs[:5]}")
 
     # Exact paired invariance on protected QCBO conditions (decisions + values).
     for scm, base in ((PP_NAME, "A0"), (FD_NAME, "B0")):
@@ -108,19 +141,21 @@ def verify_minimal(root: Path) -> None:
                       f"(negative control, sup|Δ|={sup:g})")
 
     # Experiment B numerics: fine-CBO finals and paired ΔR50 (y* = 0).
+    # Published values refreshed 2026-08-21 from the online-observation rerun
+    # (results/v2/minimal; artifacts/summaries/minimal_exact.json).
     fd_finals = {c: [load_minimal(root, FD_NAME, c, "CBO", s).best_y.iloc[-1]
                      for s in MINIMAL_SEEDS] for c in ("B0", "B1")}
-    check(close(float(np.mean(fd_finals["B0"])), 0.0003, 4),
-          f"FrontDoor CBO B0 final {np.mean(fd_finals['B0']):.5f} ~ 0.0003")
-    check(close(float(np.mean(fd_finals["B1"])), 0.0035, 4),
-          f"FrontDoor CBO B1 final {np.mean(fd_finals['B1']):.5f} ~ 0.0035")
+    check(close(float(np.mean(fd_finals["B0"])), 0.0001, 4),
+          f"FrontDoor CBO B0 final {np.mean(fd_finals['B0']):.5f} ~ 0.0001")
+    check(close(float(np.mean(fd_finals["B1"])), 0.0019, 4),
+          f"FrontDoor CBO B1 final {np.mean(fd_finals['B1']):.5f} ~ 0.0019")
     dr = [cumulative_regret(load_minimal(root, FD_NAME, "B1", "CBO", s).best_y.values, 0.0)
           - cumulative_regret(load_minimal(root, FD_NAME, "B0", "CBO", s).best_y.values, 0.0)
           for s in MINIMAL_SEEDS]
     m, se = float(np.mean(dr)), float(np.std(dr, ddof=1) / np.sqrt(len(dr)))
-    check(close(m, 5.9, 1), f"FrontDoor paired ΔR50 {m:.2f}±{se:.2f} ~ 5.9±1.0")
+    check(close(m, 6.2, 1), f"FrontDoor paired ΔR50 {m:.2f}±{se:.2f} ~ 6.2±1.1")
 
-    # Experiment C: finals 0.040 / 4.000 / 0.040 and trigger step 7.4.
+    # Experiment C: finals 0.040 / 4.000 / 0.040 and trigger step 7.3.
     for arm, pub in (("CBO", 0.040), ("QCBO", 4.000), ("HQCBO", 0.040)):
         finals = [load_minimal(root, MC_NAME, "C0", arm, s).best_y.iloc[-1]
                   for s in MINIMAL_SEEDS]
@@ -129,8 +164,8 @@ def verify_minimal(root: Path) -> None:
     info = json.loads((d / "refine_info.json").read_text())
     trig = [rec["trigger_step"] for rec in info.values() if rec.get("trigger_step")]
     tm = float(np.mean(trig))
-    check(len(trig) == 30 and close(tm, 7.4, 1),
-          f"refinement trigger mean {tm:.2f} over {len(trig)} seeds ~ 7.4")
+    check(len(trig) == 30 and close(tm, 7.3, 1),
+          f"refinement trigger mean {tm:.2f} over {len(trig)} seeds ~ 7.3")
 
     # Experiment A (informational): fine CBO under A1 plateaus near the 4.25 gap.
     a1 = float(np.mean([load_minimal(root, PP_NAME, "A1", "CBO", s).best_y.iloc[-1]
