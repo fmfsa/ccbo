@@ -22,7 +22,8 @@ CSV for the plateau-trigger time (falling back to computing it themselves).
 
 Run (from repo root):
     PYTHONPATH=. python scripts/run_minimal_suite.py \
-        --seeds 30 --trials 50 --mc-trials 60 --outdir results/minimal --jobs 12
+        --seeds 30 --trials 50 --mediated-trials 60 \
+        --outdir results/minimal --jobs 12
 
 Resumable: a unit whose CSV already exists with the expected number of rows
 is skipped.
@@ -56,9 +57,9 @@ warnings.filterwarnings("ignore")
 PP_CONDITIONS = ("A0", "A1", "A2", "A3")
 FD_CONDITIONS = ("B0", "B1")
 MC_CONDITIONS = ("C0",)
-PP_ARMS = ("CBO", "QCBO")
-FD_ARMS = ("CBO", "QCBO")
-MC_ARMS = ("CBO", "QCBO", "HQCBO")
+PP_ARMS = ("BO", "CBO", "QCBO")
+FD_ARMS = ("BO", "CBO", "QCBO")
+MC_ARMS = ("BO", "CBO", "QCBO", "HQCBO")
 
 
 def _csv_path(outdir, scm, cond, arm, seed):
@@ -95,9 +96,15 @@ def run_unit(scm, cond, arm, seed, trials, num_interventions,
         return unit
 
     try:
-        from ccbo.minimal_suite import run_plain_unit, run_refine_unit
+        from ccbo.minimal_suite import (run_plain_unit, run_refine_unit,
+                                        run_bo_unit)
 
-        if arm == "HQCBO":
+        if arm == "BO":
+            rows, info = run_bo_unit(
+                scm, cond, seed, trials, num_interventions,
+                initial_num_obs_samples, type_cost)
+            unit.update(uninformative_arms=[], es=info["es"])
+        elif arm == "HQCBO":
             coarse_traj = None
             qcbo_csv = _csv_path(outdir, scm, cond, "QCBO", seed)
             if _complete(qcbo_csv, trials):
@@ -129,11 +136,15 @@ def run_unit(scm, cond, arm, seed, trials, num_interventions,
 def main():
     ap = argparse.ArgumentParser(description="MinimalBench suite runner")
     ap.add_argument("--scms", default="ParallelParent,FrontDoor,MediatedChain")
+    ap.add_argument("--arms", default="",
+                    help="Comma-separated subset of arms to run "
+                         "(default: every arm declared for each SCM)")
     ap.add_argument("--seeds", type=int, default=30,
                     help="Number of seeds (runs seeds 0..N-1)")
     ap.add_argument("--trials", type=int, default=50,
                     help="Interventional budget for ParallelParent units")
-    ap.add_argument("--mc-trials", type=int, default=60,
+    ap.add_argument("--mediated-trials", "--mc-trials",
+                    dest="mediated_trials", type=int, default=60,
                     help="Interventional budget for MediatedChain units")
     # 3 initial interventional points per arm: on these 1-2D arms a larger
     # initial design already contains near-optimal points, hiding the role
@@ -143,23 +154,31 @@ def main():
     ap.add_argument("--type-cost", type=int, default=1)
     ap.add_argument("--outdir", default="results/minimal")
     ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="Print the expanded unit grid and exit without "
+                         "running anything.")
     args = ap.parse_args()
 
     scms = [s for s in args.scms.split(",") if s]
     os.makedirs(args.outdir, exist_ok=True)
 
+    wanted = {a for a in args.arms.split(",") if a}
+
+    def _keep(arms):
+        return [a for a in arms if not wanted or a in wanted]
+
     def _units(scm):
         if scm == "ParallelParent":
             return [(scm, c, a, s, args.trials)
-                    for c in PP_CONDITIONS for a in PP_ARMS
+                    for c in PP_CONDITIONS for a in _keep(PP_ARMS)
                     for s in range(args.seeds)]
         if scm == "FrontDoor":
             return [(scm, c, a, s, args.trials)
-                    for c in FD_CONDITIONS for a in FD_ARMS
+                    for c in FD_CONDITIONS for a in _keep(FD_ARMS)
                     for s in range(args.seeds)]
         if scm == "MediatedChain":
-            return [(scm, c, a, s, args.mc_trials)
-                    for c in MC_CONDITIONS for a in MC_ARMS
+            return [(scm, c, a, s, args.mediated_trials)
+                    for c in MC_CONDITIONS for a in _keep(MC_ARMS)
                     for s in range(args.seeds)]
         raise SystemExit(f"Unknown SCM {scm!r}")
 
@@ -170,8 +189,17 @@ def main():
 
     print(f"minimal suite: {len(units)} units "
           f"({len(wave1)} plain + {len(wave2)} refine) | scms={scms} "
-          f"seeds={args.seeds} T={args.trials}/{args.mc_trials} "
+          f"seeds={args.seeds} T={args.trials}/{args.mediated_trials} "
           f"jobs={args.jobs}", flush=True)
+
+    if args.dry_run:
+        from collections import Counter
+        for (scm, arm), n in sorted(Counter(
+                (u[0], u[2]) for u in units).items()):
+            print(f"  {scm:<16s} {arm:<6s} {n:4d} units", flush=True)
+        print(f"  {'TOTAL':<16s} {'':<6s} {len(units):4d} units "
+              f"-> {args.outdir}", flush=True)
+        return
 
     results, done = [], 0
 

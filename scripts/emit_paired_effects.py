@@ -109,7 +109,8 @@ def _delta_cell(r: dict) -> str:
 
 
 def _row(label: str, r: dict) -> str:
-    return (f"{label} & {_msem(r['base_mean'], r['base_sem'])} & "
+    direction = r"$\downarrow$" if r["task"] == "min" else r"$\uparrow$"
+    return (f"{label} {direction} & {_msem(r['base_mean'], r['base_sem'])} & "
             f"{_msem(r['quotient_mean'], r['quotient_sem'])} & "
             f"{_delta_cell(r)} \\\\")
 
@@ -154,7 +155,7 @@ def main() -> None:
     lines = [
         r"\begin{tabular}{@{}lccc@{}}", r"\toprule",
         r"\textbf{Experiment} & \textbf{Base final} & \textbf{Quotient final}"
-        r" & \textbf{Paired effect $\Delta$ [95\% CI]} \\",
+        r" & \textbf{Paired quotient disadvantage [95\% CI]} \\",
         r"\midrule",
         header(rf"\CBO{{}} vs \QCBO{{}} (min; $n{{=}}{n_cbo}$ paired seeds)"),
     ]

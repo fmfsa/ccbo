@@ -110,17 +110,17 @@ def verify_minimal(root: Path) -> None:
     # Experiment B numerics: fine-CBO finals and paired ΔR50 (y* = 0).
     fd_finals = {c: [load_minimal(root, FD_NAME, c, "CBO", s).best_y.iloc[-1]
                      for s in MINIMAL_SEEDS] for c in ("B0", "B1")}
-    check(close(float(np.mean(fd_finals["B0"])), 0.001, 3),
-          f"FrontDoor CBO B0 final {np.mean(fd_finals['B0']):.4f} ~ 0.001")
-    check(close(float(np.mean(fd_finals["B1"])), 0.006, 3),
-          f"FrontDoor CBO B1 final {np.mean(fd_finals['B1']):.4f} ~ 0.006")
+    check(close(float(np.mean(fd_finals["B0"])), 0.0003, 4),
+          f"FrontDoor CBO B0 final {np.mean(fd_finals['B0']):.5f} ~ 0.0003")
+    check(close(float(np.mean(fd_finals["B1"])), 0.0035, 4),
+          f"FrontDoor CBO B1 final {np.mean(fd_finals['B1']):.5f} ~ 0.0035")
     dr = [cumulative_regret(load_minimal(root, FD_NAME, "B1", "CBO", s).best_y.values, 0.0)
           - cumulative_regret(load_minimal(root, FD_NAME, "B0", "CBO", s).best_y.values, 0.0)
           for s in MINIMAL_SEEDS]
     m, se = float(np.mean(dr)), float(np.std(dr, ddof=1) / np.sqrt(len(dr)))
-    check(close(m, 6.1, 1), f"FrontDoor paired ΔR50 {m:.2f}±{se:.2f} ~ 6.1±1.0")
+    check(close(m, 5.9, 1), f"FrontDoor paired ΔR50 {m:.2f}±{se:.2f} ~ 5.9±1.0")
 
-    # Experiment C: finals 0.040 / 4.000 / 0.040 and trigger step 7.5.
+    # Experiment C: finals 0.040 / 4.000 / 0.040 and trigger step 7.4.
     for arm, pub in (("CBO", 0.040), ("QCBO", 4.000), ("HQCBO", 0.040)):
         finals = [load_minimal(root, MC_NAME, "C0", arm, s).best_y.iloc[-1]
                   for s in MINIMAL_SEEDS]
@@ -129,8 +129,8 @@ def verify_minimal(root: Path) -> None:
     info = json.loads((d / "refine_info.json").read_text())
     trig = [rec["trigger_step"] for rec in info.values() if rec.get("trigger_step")]
     tm = float(np.mean(trig))
-    check(len(trig) == 30 and close(tm, 7.5, 1),
-          f"refinement trigger mean {tm:.2f} over {len(trig)} seeds ~ 7.5")
+    check(len(trig) == 30 and close(tm, 7.4, 1),
+          f"refinement trigger mean {tm:.2f} over {len(trig)} seeds ~ 7.4")
 
     # Experiment A (informational): fine CBO under A1 plateaus near the 4.25 gap.
     a1 = float(np.mean([load_minimal(root, PP_NAME, "A1", "CBO", s).best_y.iloc[-1]

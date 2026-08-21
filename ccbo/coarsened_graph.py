@@ -209,7 +209,29 @@ class CoarsenedGraph(GraphStructure):
         return self.original_graph.fit_all_models()
 
     def refit_models(self, observational_samples):
-        """Refit GP models on new observational data."""
+        """Refresh ALL graph-side observational state, then refit.
+
+        This is the single place the graph learns about newly revealed
+        observational rows.  The structure, the MIS, and the C-DAG
+        identifiability verdict do not change when rows are only added --
+        what must be rebuilt is the *numerical* estimator behind each
+        identified functional.  ``get_all_do`` memoizes those estimators in
+        ``_do_cache`` and they close over ``_obs_samples``, so both are
+        invalidated here; a stale cache is what made online observation a
+        no-op on the prior.
+
+        A full rebuild is deliberate: with the runners' caps this happens at
+        most a handful of times per run.  Optimize with partial invalidation
+        only if profiling shows it matters.
+        """
+        self._obs_samples = observational_samples.copy()
+        for col in observational_samples.columns:
+            setattr(self, col,
+                    np.asarray(observational_samples[col])[:, np.newaxis])
+
+        self._do_cache = None
+        self._identification_info = {}
+
         return self.original_graph.refit_models(observational_samples)
 
     def get_cost_structure(self, type_cost):

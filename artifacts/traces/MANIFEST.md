@@ -25,12 +25,15 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
   `trigger_step`/`split_clusters`/`refused`).
 - Grid: ParallelParent × {A0,A1,A2,A3} × {CBO,QCBO}; FrontDoor × {B0,B1} ×
   {CBO,QCBO}; MediatedChain × C0 × {CBO,QCBO,HQCBO}; 30 seeds.
-- Generator: `scripts/run_minimal_suite.py` (defaults: seeds 0–29, T=50
+- Generator: `scripts/run_minimal_suite.py` using the internal exact
+  `population_do` dispatcher (defaults: seeds 0–29, T=50
   trials — 60 on MediatedChain, 3 initial interventional points per arm,
   n_obs=100 from one shared dataset per SCM, per-variable unit costs;
   HQCBO plateau trigger k=5, δ=1e-3).
-- Source: worktree `quotient-causal-optimization-paper-660283` @ `b02762b`,
-  file mtimes 2026-07-23.
+- Source: local exact-population rerun completed 2026-08-11; all 450 units
+  finished successfully. Observational samples remain stochastic and are
+  used for prior estimation; initial and sequential intervention targets are
+  exact population expectations.
 - Note: row 0 of each CSV is the incumbent of the initial interventional
   design **at cost 0** — `cum_cost` excludes initialization
   (see `ccbo/minimal_suite.py` docstring).
@@ -82,9 +85,12 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 
 Tarballs packed with
 `tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=<pinned per suite> -czf`
-for deterministic re-packing (minimal/family/qdcbo packed 2026-08-10,
-qmcbo extended 2026-08-11, ceo_minimal corrected 2026-08-11). Apparent raw size 4.41 MB (directory `du`
-is dominated by filesystem block overhead on many small files).
+for deterministic re-packing (family/qdcbo packed 2026-08-10,
+qmcbo extended 2026-08-11, ceo_minimal corrected 2026-08-11). The exact
+MinimalBench archive was repacked locally on 2026-08-11 and is covered by
+both per-file and archive checksums. Apparent raw size is about 4.41 MB
+(directory `du` is dominated by filesystem block overhead on many small
+files).
 
 ## ceo_minimal.tar.gz — CEO comparator on MinimalBench (corrected 2026-08-11)
 

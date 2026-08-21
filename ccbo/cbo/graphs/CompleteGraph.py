@@ -131,6 +131,7 @@ class CompleteGraph(graph.GraphStructure):
 
 
     def refit_models(self, observational_samples):
+        self._refresh_observational_attrs(observational_samples)
         A = np.asarray(observational_samples['A'])[:,np.newaxis]
         B = np.asarray(observational_samples['B'])[:,np.newaxis]
         C = np.asarray(observational_samples['C'])[:,np.newaxis]

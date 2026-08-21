@@ -111,6 +111,7 @@ class ToyGraph(graph.GraphStructure):
         return self._fit_models_from(self.X, self.Z, self.Y)
 
     def refit_models(self, observational_samples):
+        self._refresh_observational_attrs(observational_samples)
         X = np.asarray(observational_samples['X'])[:, np.newaxis]
         Z = np.asarray(observational_samples['Z'])[:, np.newaxis]
         Y = np.asarray(observational_samples['Y'])[:, np.newaxis]

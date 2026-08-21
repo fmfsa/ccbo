@@ -98,6 +98,7 @@ class ParallelParent(graph.GraphStructure):
         return self._fit_models_from(self.X1, self.X2, self.Y)
 
     def refit_models(self, observational_samples):
+        self._refresh_observational_attrs(observational_samples)
         X1 = np.asarray(observational_samples['X1'])[:, np.newaxis]
         X2 = np.asarray(observational_samples['X2'])[:, np.newaxis]
         Y = np.asarray(observational_samples['Y'])[:, np.newaxis]

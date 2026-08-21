@@ -2,9 +2,9 @@
 
 Panel (a) — exploration-set corruption (ParallelParent, A1): fine CBO under
 the correct graph reaches y* = 0; under the quotient-redundant deletion of
-X1->Y it permanently plateaus at the analytic gap G(LAM) = 4.25 LAM; QCBO's
-trajectories under A0 and A1 coincide exactly; the quotient-visible A3
-(negative control) visibly shifts QCBO.
+X1->Y it permanently plateaus at 4.25; QCBO's trajectories under A0 and A1
+coincide exactly; the quotient-visible A3 (negative control) visibly shifts
+QCBO.
 
 Panel (b) — prior corruption (FrontDoor, B1: assumed intra-cluster
 confounder X1<->M): both fine arms — including the optimal do(M) — drop to
@@ -67,17 +67,14 @@ def main():
     ap.add_argument("--out", default="paper/figures/minimal_misspec.pdf")
     args = ap.parse_args()
 
-    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.7))
+    # Stack the panels for a compact, single-column conference figure.
+    fig, axes = plt.subplots(2, 1, figsize=(3.45, 4.25), sharex=True)
     gap = mb.pp_gap()
 
     # ---- (a) Experiment A: exploration-set corruption ---------------------
     ax = axes[0]
     ax.axhline(0.0, color="black", lw=0.6, alpha=0.4)
     ax.axhline(gap, color=C_BASE, lw=0.8, ls=":", alpha=0.7)
-    ax.annotate(r"$G(\lambda)=4.25\lambda$", xy=(0.02, gap),
-                xytext=(0.02, gap + 0.55), fontsize=7, color=C_BASE,
-                xycoords=("axes fraction", "data"),
-                textcoords=("axes fraction", "data"))
     _band(ax, _trajs(args.dir, "A0", "CBO"), C_BASE, "CBO, correct")
     _band(ax, _trajs(args.dir, "A1", "CBO"), C_BASE,
           r"CBO, del $X_1\to Y$", ls="--")
@@ -90,7 +87,6 @@ def main():
     _band(ax, _trajs(args.dir, "A3", "QCBO"), C_NEG,
           r"QCBO, assume $X_1\leftrightarrow Y$", ls="-.", lw=1.3)
     ax.set_title("(a) exploration-set corruption", fontsize=9)
-    ax.set_ylabel(r"best $E[Y\,|\,\mathrm{do}]$", fontsize=8)
 
     # ---- (b) Experiment B: prior corruption (FrontDoor) -------------------
     ax = axes[1]
@@ -107,13 +103,15 @@ def main():
     ax.set_title("(b) prior corruption (FrontDoor)", fontsize=9)
 
     for ax in axes:
-        ax.set_xlabel("trial", fontsize=8)
         ax.tick_params(labelsize=7)
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
-        ax.legend(fontsize=6.5, frameon=False, loc="upper right")
+        ax.legend(fontsize=6.5, frameon=True, framealpha=0.9,
+                  facecolor="white", edgecolor="none", loc="upper right")
+    axes[1].set_xlabel("trial", fontsize=8)
+    fig.supylabel(r"best $E[Y\,|\,\mathrm{do}]$", fontsize=8, x=0.01)
 
-    fig.tight_layout()
+    fig.tight_layout(h_pad=0.8)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"wrote {args.out}")

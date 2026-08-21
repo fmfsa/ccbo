@@ -230,6 +230,7 @@ class SimplifiedCoralGraph(graph.GraphStructure):
 
 
     def refit_models(self, observational_samples):
+        self._refresh_observational_attrs(observational_samples)
         Y = np.asarray(observational_samples['Y'])[:,np.newaxis]
         N = np.asarray(observational_samples['N'])[:,np.newaxis]
         CO = np.asarray(observational_samples['CO'])[:,np.newaxis]

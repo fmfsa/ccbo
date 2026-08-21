@@ -276,6 +276,56 @@ def test_oracle_identities():
     assert mb.MC_BETA * o["x1_star"] > mb.MC_X2_BOX[1]
 
 
+@pytest.mark.parametrize(
+    "scm,arm,values,expected",
+    [
+        (mb.PP_NAME, ["X1"], [mb.PP_A],
+         mb.ORACLE[mb.PP_NAME]["best_do_x1"]),
+        (mb.PP_NAME, ["X2"], [mb.PP_B],
+         mb.ORACLE[mb.PP_NAME]["best_do_x2"]),
+        (mb.PP_NAME, ["X2", "X1"], [mb.PP_B, mb.PP_A], 0.0),
+        (mb.FD_NAME, ["X1"], [mb.FD_C / mb.FD_B],
+         mb.ORACLE[mb.FD_NAME]["best_do_x1"]),
+        (mb.FD_NAME, ["M"], [mb.FD_C], 0.0),
+        (mb.FD_NAME, ["M", "X1"], [mb.FD_C, -1.25], 0.0),
+        (mb.MC_NAME, ["X1"], [mb.ORACLE[mb.MC_NAME]["x1_star"]],
+         mb.ORACLE[mb.MC_NAME]["y_star"]),
+        (mb.MC_NAME, ["X2"], [mb.MC_X2_BOX[1]],
+         mb.ORACLE[mb.MC_NAME]["v_pi"]),
+        (mb.MC_NAME, ["X2", "X1"], [mb.MC_X2_BOX[1], -2.0],
+         mb.ORACLE[mb.MC_NAME]["v_pi"]),
+    ],
+)
+def test_population_do_dispatch(scm, arm, values, expected):
+    """The exact evaluator covers every fine and cluster-union arm and is
+    invariant to the arm ordering used by the quotient implementation."""
+    assert mb.population_do(scm, arm, np.asarray([values])) == \
+        pytest.approx(expected)
+
+
+def test_exact_interventional_data_uses_population_evaluator():
+    """Providing an exact evaluator must bypass SEM construction entirely."""
+    from collections import OrderedDict
+    from ccbo.data_generation import generate_interventional_data
+
+    def forbidden_sem():
+        raise AssertionError("the SEM sampler must not be called")
+
+    data = generate_interventional_data(
+        forbidden_sem,
+        [["X1", "X2"]],
+        OrderedDict([("X1", (-3.0, 3.0)), ("X2", (-3.0, 3.0))]),
+        num_points=4,
+        seed=7,
+        target_evaluator=mb.population_evaluator(mb.PP_NAME),
+    )
+    x, y = data[0][-2:]
+    expected = np.asarray([
+        mb.pp_do_joint(row[0], row[1]) for row in x
+    ]).reshape(-1, 1)
+    assert y == pytest.approx(expected)
+
+
 @pytest.mark.slow
 def test_mc_oracle_agreement():
     """Monte-Carlo arm values through the *implemented* SEMs match the

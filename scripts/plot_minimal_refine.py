@@ -3,9 +3,9 @@
 MediatedChain: fine CBO reaches y* = 0.04 through do(X1); fixed-partition
 QCBO is capped at V(Pi) = 4 (the whole-cluster arm clamps X2 into the
 policy box); HQCBO runs coarse until the plateau trigger, splits {X1, X2},
-and descends to y*. Top panel: best-so-far with the two analytic reference
-lines and the mean trigger time. Bottom panel: cumulative incumbent regret,
-excluding the shared initial incumbent, as in ``ccbo.metrics``.
+and descends to y*. The figure reports best-so-far value with the two
+analytic reference lines and the mean trigger time. Cumulative incumbent
+regret is reported numerically in the paper rather than repeated graphically.
 
 Style follows scripts/plot_family_suite.py (Okabe-Ito, mean +- s.e. bands).
 
@@ -60,9 +60,7 @@ def main():
     args = ap.parse_args()
 
     o = mb.ORACLE[mb.MC_NAME]
-    fig, (ax1, ax2) = plt.subplots(
-        2, 1, figsize=(3.5, 3.9), sharex=True,
-        gridspec_kw={"height_ratios": [1.5, 1.0]})
+    fig, ax1 = plt.subplots(figsize=(3.45, 2.25))
 
     data = {}
     for arm in ("CBO", "QCBO", "HQCBO"):
@@ -101,27 +99,14 @@ def main():
                          xytext=(np.mean(trig) + 1, 0.98))
     ax1.set_yscale("log")
     ax1.set_ylabel(r"best $E[Y\,|\,\mathrm{do}]$", fontsize=8)
-    ax1.legend(fontsize=6.5, frameon=False, loc="center right")
+    ax1.set_xlabel("trial", fontsize=8)
+    ax1.legend(fontsize=6.5, frameon=True, framealpha=0.9,
+               facecolor="white", edgecolor="none", loc="center right")
+    ax1.tick_params(labelsize=7)
+    for sp in ("top", "right"):
+        ax1.spines[sp].set_visible(False)
 
-    # ---- bottom: cumulative simple regret ---------------------------------
-    for arm, arr in data.items():
-        label, color, ls = LABELS[arm]
-        # Row 0 is the shared initial incumbent, not a BO trial.
-        trial_regret = np.maximum(arr[:, 1:] - o["y_star"], 0.0)
-        reg = np.concatenate(
-            [np.zeros((len(arr), 1)), np.cumsum(trial_regret, axis=1)],
-            axis=1,
-        )
-        _band(ax2, reg, color, label, ls)
-    ax2.set_ylabel(r"cum.\ regret", fontsize=8)
-    ax2.set_xlabel("trial", fontsize=8)
-
-    for ax in (ax1, ax2):
-        ax.tick_params(labelsize=7)
-        for sp in ("top", "right"):
-            ax.spines[sp].set_visible(False)
-
-    fig.tight_layout(h_pad=0.8)
+    fig.tight_layout()
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"wrote {args.out}")

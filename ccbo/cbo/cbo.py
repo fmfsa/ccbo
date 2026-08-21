@@ -12,11 +12,41 @@ from ccbo.cbo.utils import *
 
 
 
+def _check_observation_prefix(observational_samples, full_observational_samples,
+								cursor):
+	"""Validate the cursor contract: the current observational frame must be
+	the first ``cursor`` rows of the pool (all runners build it as
+	``full_obs[:n]``).  Compared on shared columns and by value, because the
+	frame is re-indexed on every observe action."""
+	if cursor > len(full_observational_samples):
+		raise ValueError(
+			f"observation cursor {cursor} exceeds the pool "
+			f"({len(full_observational_samples)} rows)")
+	if len(observational_samples) != cursor:
+		raise ValueError(
+			f"observational frame has {len(observational_samples)} rows but "
+			f"the cursor says {cursor}; the initial frame must be a prefix of "
+			f"full_observational_samples")
+	cols = [c for c in observational_samples.columns
+			if c in full_observational_samples.columns]
+	if not cols:
+		raise ValueError("observational frame shares no columns with the pool")
+	left = np.asarray(observational_samples[cols], dtype=float)
+	right = np.asarray(full_observational_samples[cols].iloc[:cursor], dtype=float)
+	if not np.allclose(left, right, equal_nan=True):
+		raise ValueError(
+			"observational frame is not the first "
+			f"{cursor} rows of full_observational_samples; pass "
+			"observation_cursor explicitly")
+
+
 def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y_list,  best_intervention_value, opt_y,
 					best_variable, dict_ranges, functions, observational_samples, coverage_total, graph,
 					num_additional_observations, costs, full_observational_samples, task = 'min', max_N = 200,
 					initial_num_obs_samples =100, num_interventions=10, Causal_prior=False,
-					state=None, return_state=False, intervention_callback=None):
+					state=None, return_state=False, intervention_callback=None,
+					target_evaluator=None, observation_cursor=None,
+					force_observe_on_entry=None):
 	"""
 	Causal Bayesian Optimization loop.
 
@@ -33,6 +63,30 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		Called after each intervention with signature:
 		  callback(intervention_vars, x_new, y_new, sem_fn)
 		Used by RCCBO to record full-variable samples for RePaRe.
+	target_evaluator : callable, optional
+		Exact population evaluator with signature ``(arm, values) -> float``.
+		Used by MinimalBench to avoid simulation-based target evaluations.
+	observation_cursor : int, optional
+		Position of the first not-yet-revealed row of
+		``full_observational_samples``.  Resolution order: this argument,
+		then ``state['obs_cursor']``, then ``len(observational_samples)``
+		(valid only because the initial frame is a prefix of the pool --
+		checked below).  Pass it explicitly to carry the observation
+		budget across a phase boundary (HQCBO) without re-revealing rows.
+	force_observe_on_entry : bool, optional
+		Whether trial 0 of *this call* forces an observation (budget
+		permitting).  Defaults to ``state is None``: a fresh run or a
+		fresh optimizer phase observes first, a resumed state does not.
+
+	Observation protocol
+	--------------------
+	Each observe action reveals a fresh, previously unseen batch of
+	``num_additional_observations`` rows; the final batch may be shorter.
+	The effective cap is ``min(max_N, len(full_observational_samples))``;
+	once it is reached the optimizer must intervene, forced or not.  Every
+	observation refreshes the graph's observational data, invalidates the
+	do-estimator cache, clears the point-wise prior caches, and rebuilds
+	all arm GPs -- see the observe branch below.
 	"""
 
 	if state is not None:
@@ -58,6 +112,11 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		index = state.get('index', 0)
 		data_x_list = state['data_x_list']
 		data_y_list = state['data_y_list']
+		obs_cursor = state.get('obs_cursor')
+		initial_obs_cursor = state.get('initial_obs_cursor')
+		num_observations_collected = state.get('num_observations_collected', 0)
+		models_fresh = state.get('models_fresh', False)
+		trial_log = list(state.get('trial_log', []))
 		resumed = True
 	else:
 		# === ORIGINAL INITIALIZATION (unchanged) ===
@@ -89,55 +148,146 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 												model = graph.define_SEM(), target_variable = 'Y',
 												min_intervention = list_interventional_ranges(graph.get_interventional_ranges(), exploration_set[s])[0],
 												max_intervention = list_interventional_ranges(graph.get_interventional_ranges(), exploration_set[s])[1])
+			if target_evaluator is not None:
+				_arm = tuple(exploration_set[s])
+				target_function_list[s] = lambda value, arm=_arm: np.asarray(
+					target_evaluator(arm, value), dtype=float)[np.newaxis, np.newaxis]
 
 		mean_functions_list = [None]*len(exploration_set)
 		var_functions_list = [None]*len(exploration_set)
+		obs_cursor = None
+		initial_obs_cursor = None
+		num_observations_collected = 0
+		models_fresh = False
+		trial_log = []
 		resumed = False
 
+
+	############################# OBSERVATION BUDGET
+	## Effective cap: the declared maximum, or the pool, whichever is smaller.
+	obs_cap = int(min(max_N, len(full_observational_samples)))
+
+	## Cursor contract. `len(observational_samples)` is a valid fallback only
+	## because every runner slices the initial frame as a *prefix* of the pool
+	## (`obs = full_obs[:n]`). Check that rather than assume it: a silently
+	## wrong cursor reproduces the very bug this replaces.
+	if observation_cursor is not None:
+		obs_cursor = int(observation_cursor)
+	elif obs_cursor is None:
+		obs_cursor = int(len(observational_samples))
+	obs_cursor = int(obs_cursor)
+
+	_check_observation_prefix(observational_samples, full_observational_samples,
+								obs_cursor)
+
+	if initial_obs_cursor is None:
+		initial_obs_cursor = obs_cursor
+
+	## Phase-entry policy: a fresh run (or a fresh optimizer phase) forces one
+	## observation; a resumed state does not.
+	fresh_phase = state is None
+	if force_observe_on_entry is None:
+		force_observe_on_entry = fresh_phase
 
 	############################# LOOP
 	start_time = time.perf_counter()
 	for i in range(num_trials):
 		print('Optimization step', i)
-		## Decide to observe or intervene and then recompute the obs coverage
-		coverage_obs = update_hull(observational_samples, manipulative_variables)
-		rescale = observational_samples.shape[0]/max_N
-		epsilon_coverage = (coverage_obs/coverage_total)/rescale
+		## Decide to observe or intervene and then recompute the obs coverage.
+		## The budget guard sits OUTSIDE the probabilistic decision: an
+		## exhausted pool always means intervene.
+		can_observe = obs_cursor < obs_cap
+		if can_observe:
+			epsilon_raw, epsilon_coverage = observation_probability(
+				observational_samples, manipulative_variables,
+				coverage_total, obs_cap)
+		else:
+			epsilon_raw, epsilon_coverage = 0.0, 0.0
 
+		## Drawn unconditionally so the guard never perturbs the RNG stream.
 		uniform = np.random.uniform(0.,1.)
 
-		## At least observe and intervene once (only on first-ever run, not on resume)
-		if not resumed:
-			if i == 0:
-				uniform = 0.
-			if i == 1:
-				uniform = 1.
+		## At least observe and intervene once (only on first-ever run/phase,
+		## not on resume). Expressed as explicit decisions rather than through
+		## doctored `uniform` values, so force_observe_on_entry=False really
+		## does permit an intervention at local step 0.
+		force_observe = bool(force_observe_on_entry) and i == 0 and can_observe
+		force_intervene = fresh_phase and i == 1
 
-		# Guarantee observation on first step regardless of epsilon_coverage value
-		# (handles degenerate case where epsilon_coverage == 0.0 exactly).
-		force_observe = (not resumed and i == 0)
+		if not can_observe:
+			choose_observe = False
+		elif force_intervene:
+			choose_observe = False
+		elif force_observe:
+			choose_observe = True
+		else:
+			choose_observe = uniform < epsilon_coverage
 
-		if force_observe or uniform < epsilon_coverage:
+		_log = {
+			'trial': i,
+			'epsilon_raw': float(epsilon_raw),
+			'epsilon': float(epsilon_coverage),
+			'u': float(uniform),
+			'exhausted': bool(not can_observe),
+			'n_obs_before': int(len(observational_samples)),
+			'forced': ('observe' if force_observe else
+						('intervene' if force_intervene else None)),
+		}
+
+		if choose_observe:
 			observed += 1
 			type_trial.append(0)
-			## Collect observations and append them to the current observational dataset
-			new_observational_samples = observe(num_observation = num_additional_observations,
-												complete_dataset = full_observational_samples,
-												initial_num_obs_samples= initial_num_obs_samples)
+			## Collect a FRESH batch of previously unseen rows and append it to
+			## the current observational dataset. Batches are disjoint
+			## positional slices; concatenate with ignore_index because the
+			## correctness property is disjointness, not label uniqueness.
+			_obs_start = obs_cursor
+			new_observational_samples, obs_cursor = observe(
+				full_observational_samples, obs_cursor,
+				num_additional_observations, obs_cap)
+			num_observations_collected += int(len(new_observational_samples))
 
-			observational_samples = pd.concat([observational_samples, new_observational_samples])
+			observational_samples = pd.concat(
+				[observational_samples, new_observational_samples],
+				ignore_index=True)
 
-			## Refit the models for the conditional distributions
+			## Refit the models for the conditional distributions. For a
+			## CoarsenedGraph this also refreshes the graph's observational
+			## data and invalidates its memoized do-estimator cache.
 			functions = graph.refit_models(observational_samples)
+
+			## Clear the point-wise causal-prior caches BEFORE rebuilding the
+			## mean/var functions: they are keyed by str(x) and would otherwise
+			## return pre-observation values at every already-queried point.
+			for _arm_cache in x_dict_mean.values():
+				_arm_cache.clear()
+			for _arm_cache in x_dict_var.values():
+				_arm_cache.clear()
 
 			## Update the mean functions and var functions given the current set of observational data. This is updating the prior.
 			mean_functions_list, var_functions_list = update_all_do_functions(graph, exploration_set, functions, dict_interventions,
 														observational_samples, x_dict_mean, x_dict_var)
 
+			## Rebuild every arm's causal GP now, so the returned state stays
+			## internally consistent even if the run ends right here. The
+			## intervene branch below skips its own all-arm rebuild while this
+			## flag holds, so an observation costs exactly one rebuild.
+			for s in range(len(exploration_set)):
+				model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s],
+													data_x_list[s], data_y_list[s], Causal_prior)
+			models_fresh = True
+
 			## Update current optimal solution. If I observe the cost and the optimal y are the same of the previous trial
 			global_opt.append(global_opt[-1])
 			current_cost.append(current_cost[-1])
 
+			_log.update(type='observe', obs_start=int(_obs_start),
+						obs_end=int(obs_cursor),
+						n_obs_after=int(len(observational_samples)),
+						arm=None, x=None,
+						cum_cost=float(current_cost[-1]),
+						incumbent=float(global_opt[-1]))
+			trial_log.append(_log)
 
 
 		else:
@@ -158,8 +308,27 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## via the DO calculus are changed
 			## If in the previous trial we have intervened we want to update only the BO model for the intervention for which we have collected additional data
 			## force_rebuild_all is set by RCCBO on resumed phases (and after partition refinement) to invalidate stale GP priors from the previous phase.
+			## The causal prior is normally built by the first observe trial.
+			## When the observational budget is already spent at phase entry
+			## there is no such trial, so build it here from the data we have
+			## -- otherwise update_BO_models receives mean_function=None.
+			## Lazy on purpose: for every run that does observe at step 0 this
+			## is a no-op, so existing trajectories are untouched.
+			if Causal_prior and any(f is None for f in mean_functions_list):
+				mean_functions_list, var_functions_list = update_all_do_functions(
+					graph, exploration_set, functions, dict_interventions,
+					observational_samples, x_dict_mean, x_dict_var)
+
 			_force_rebuild = (state or {}).pop('force_rebuild_all', False) if state else False
-			if _force_rebuild or len(type_trial) < 2 or type_trial[-2] == 0:
+			## `models_fresh` guards against rebuilding every arm twice: when the
+			## previous trial was an observation, its branch already rebuilt
+			## every arm from the enlarged dataset.
+			if _force_rebuild:
+				for s in range(len(exploration_set)):
+					model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s], data_x_list[s], data_y_list[s], Causal_prior)
+			elif models_fresh:
+				pass
+			elif len(type_trial) < 2 or type_trial[-2] == 0:
 				for s in range(len(exploration_set)):
 					model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s], data_x_list[s], data_y_list[s], Causal_prior)
 			else:
@@ -227,6 +396,15 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## Optimise BO model given the new data
 			model_list[index].optimize()
 
+			models_fresh = False
+			_log.update(type='intervene', obs_start=None, obs_end=None,
+						n_obs_after=int(len(observational_samples)),
+						arm='+'.join(exploration_set[index]),
+						x=[float(v) for v in np.ravel(x_new_list[index])],
+						cum_cost=float(current_cost[-1]),
+						incumbent=float(global_opt[-1]))
+			trial_log.append(_log)
+
 	## Compute total time for the loop
 	total_time = time.perf_counter() - start_time
 
@@ -255,6 +433,12 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			'index': index,
 			'data_x_list': data_x_list,
 			'data_y_list': data_y_list,
+			'obs_cursor': int(obs_cursor),
+			'initial_obs_cursor': int(initial_obs_cursor),
+			'obs_cap': int(obs_cap),
+			'num_observations_collected': int(num_observations_collected),
+			'models_fresh': bool(models_fresh),
+			'trial_log': trial_log,
 		}
 		return results, state_out
 

@@ -103,6 +103,7 @@ class FrontDoor(graph.GraphStructure):
         return self._fit_models_from(self.X1, self.M, self.Y)
 
     def refit_models(self, observational_samples):
+        self._refresh_observational_attrs(observational_samples)
         X1 = np.asarray(observational_samples['X1'])[:, np.newaxis]
         M = np.asarray(observational_samples['M'])[:, np.newaxis]
         Y = np.asarray(observational_samples['Y'])[:, np.newaxis]

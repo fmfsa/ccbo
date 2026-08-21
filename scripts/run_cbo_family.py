@@ -68,7 +68,7 @@ warnings.filterwarnings("ignore")
 
 
 DATASETS = ("ToyGraph", "CompleteGraph", "SimplifiedCoralGraph")
-ARMS = ("CBO", "QCBO")
+ARMS = ("BO", "CBO", "QCBO")
 
 # Partitions per (dataset, arm). CBO = identity on M (Prop. 1); QCBO = the
 # domain coarse partition (the representative coarsenings in
@@ -88,6 +88,15 @@ PARTITIONS = {
     ("SimplifiedCoralGraph", "QCBO"): [
         frozenset({"C", "N", "O"}), frozenset({"D", "T"}), frozenset({"Y"})],
 }
+
+# Standard BO reads no graph structure beyond the SEM, the intervention
+# ranges, and the costs, so its partition is bookkeeping only: reuse the
+# identity one and replace the exploration set with a single joint arm over
+# every manipulable variable. Consequence for the cost axis: BO pays
+# len(manip_vars) per trial under unit costs, against a causal method's
+# per-arm cost.
+for _ds in DATASETS:
+    PARTITIONS[(_ds, "BO")] = PARTITIONS[(_ds, "CBO")]
 
 
 def _csv_path(outdir, dataset, arm, seed):
@@ -144,6 +153,8 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         cg = CoarsenedGraph(graph, partition, dataset, obs,
                             num_mc_samples=2000)
         MIS, _, manip_vars = cg.get_sets()
+        if arm == "BO":
+            MIS = [list(manip_vars)]
 
         functions = cg.fit_all_models()
         dict_ranges = cg.get_interventional_ranges()
@@ -158,13 +169,28 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         x_list, y_list, best_x, opt_y, best_var = define_initial_data_CBO(
             int_data, num_interventions, MIS, 0, "min")
 
-        (current_cost, current_best_x, current_best_y, global_opt,
-         observed, total_time) = CBO(
-            trials, MIS, manip_vars, x_list, y_list, best_x, opt_y,
-            best_var, dict_ranges, functions, obs, coverage, cg,
-            20, costs, full_obs, "min",
-            initial_num_obs_samples + 50, initial_num_obs_samples,
-            num_interventions, Causal_prior=True)
+        if arm == "BO":
+            from ccbo.cbo.bo import NonCausal_BO
+            cost_arr, current_best_x, best_y_arr, total_time = NonCausal_BO(
+                trials, cg, dict_ranges, x_list[0], y_list[0], costs, obs,
+                functions, best_x, opt_y, list(manip_vars),
+                Causal_prior=False, task="min")
+            global_opt = [float(v) for v in np.asarray(
+                best_y_arr, dtype=float).ravel()]
+            current_cost = [float(v) for v in np.asarray(
+                cost_arr, dtype=float).ravel()]
+            current_best_y = {"".join(manip_vars): global_opt}
+            current_best_x = {"".join(manip_vars): [
+                np.ravel(current_best_x)]}
+            observed = 0
+        else:
+            (current_cost, current_best_x, current_best_y, global_opt,
+             observed, total_time) = CBO(
+                trials, MIS, manip_vars, x_list, y_list, best_x, opt_y,
+                best_var, dict_ranges, functions, obs, coverage, cg,
+                20, costs, full_obs, "min",
+                initial_num_obs_samples + 50, initial_num_obs_samples,
+                num_interventions, Causal_prior=True)
 
         # The loop appends to global_opt and current_cost in lockstep:
         # 1 initial row + 1 row per trial.
@@ -183,8 +209,9 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         # Best arm so far (diagnostic only; not persisted).
         best_arm = min(current_best_y, key=lambda k: np.min(current_best_y[k]))
         best_idx = int(np.argmin(current_best_y[best_arm]))
-        best_x = np.ravel(current_best_x[best_arm][best_idx]).tolist()
-        uninformative = sorted(
+        best_x = np.ravel(current_best_x[best_arm][
+            0 if arm == "BO" else best_idx]).tolist()
+        uninformative = [] if arm == "BO" else sorted(
             "".join(arm_vars) for arm_vars, ok_id
             in cg._arm_identifiable.items() if not ok_id)
         unit.update(
@@ -222,6 +249,8 @@ def main():
     ap.add_argument("--outdir", default="results/family_cbo")
     ap.add_argument("--jobs", type=int, default=1,
                     help="Process-parallel workers (each single-threaded)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="Print the expanded unit grid and exit.")
     args = ap.parse_args()
 
     datasets = [d for d in args.datasets.split(",") if d]
@@ -242,6 +271,14 @@ def main():
     print(f"family runner: {len(units)} units | datasets={datasets} "
           f"arms={arms} seeds={args.seeds} T={args.trials} "
           f"ninit={args.num_interventions} jobs={args.jobs}", flush=True)
+
+    if args.dry_run:
+        from collections import Counter
+        for (d, a), n in sorted(Counter((u[0], u[1]) for u in units).items()):
+            print(f"  {d:<22s} {a:<5s} {n:4d} units", flush=True)
+        print(f"  {'TOTAL':<22s} {'':<5s} {len(units):4d} units "
+              f"-> {args.outdir}", flush=True)
+        return
 
     results, done = [], 0
 

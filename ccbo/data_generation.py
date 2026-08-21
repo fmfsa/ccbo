@@ -14,7 +14,8 @@ from .generic_do import sample_from_model, intervene
 
 
 def generate_interventional_data(sem_fn, exploration_set, dict_ranges,
-                                 num_points=20, num_mc_samples=100000, seed=0):
+                                 num_points=20, num_mc_samples=100000, seed=0,
+                                 target_evaluator=None):
     """
     Generate interventional data for each element of the exploration set.
 
@@ -32,6 +33,9 @@ def generate_interventional_data(sem_fn, exploration_set, dict_ranges,
         Number of MC samples per evaluation.
     seed : int
         Random seed.
+    target_evaluator : callable, optional
+        Exact population evaluator with signature ``(arm, values) -> float``.
+        When provided, no SEM sampling is used for target evaluations.
 
     Returns
     -------
@@ -53,15 +57,18 @@ def generate_interventional_data(sem_fn, exploration_set, dict_ranges,
 
         # Evaluate the true target function at each point
         data_y = np.zeros((num_points, 1))
-        model = sem_fn()
+        model = None if target_evaluator is not None else sem_fn()
         for i in range(num_points):
-            intervention_dict = {var: data_x[i, j]
-                                 for j, var in enumerate(es_entry)}
-            mutilated = intervene(intervention_dict, model)
-            np.random.seed(seed + i)
-            samples = [sample_from_model(mutilated)
-                       for _ in range(num_mc_samples)]
-            data_y[i, 0] = np.mean([s['Y'] for s in samples])
+            if target_evaluator is not None:
+                data_y[i, 0] = target_evaluator(es_entry, data_x[i])
+            else:
+                intervention_dict = {var: data_x[i, j]
+                                     for j, var in enumerate(es_entry)}
+                mutilated = intervene(intervention_dict, model)
+                np.random.seed(seed + i)
+                samples = [sample_from_model(mutilated)
+                           for _ in range(num_mc_samples)]
+                data_y[i, 0] = np.mean([s['Y'] for s in samples])
 
         # Pack in the format expected by define_initial_data_CBO:
         # [num_vars, var_name_1, ..., var_name_k, data_x_array, data_y_array]

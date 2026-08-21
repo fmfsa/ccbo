@@ -47,3 +47,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 logs/
+
+# Scratch: local page renders, downloaded PDFs (7 MB, not project source).
+tmp/

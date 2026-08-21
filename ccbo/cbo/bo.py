@@ -21,7 +21,33 @@ from ccbo.cbo.utils import *
 
 
 def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interventional_data_y, costs, 
-			observational_samples, functions, min_intervention_value, min_y, intervention_variables, Causal_prior=False):
+			observational_samples, functions, min_intervention_value, min_y, intervention_variables, Causal_prior=False,
+			target_evaluator=None, task='min', intervention_callback=None):
+	"""Standard (non-causal) BO baseline over a single joint arm.
+
+	The arm is ``intervention_variables`` intervened on jointly, so under
+	per-variable unit costs this pays ``len(intervention_variables)`` per
+	trial -- more than a per-arm causal method. That is a property of the
+	baseline, not an accounting bug, and matters on cost-indexed plots.
+
+	Parameters
+	----------
+	intervention_callback : callable, optional
+		Called after each intervention with ``(intervention_vars, x_new,
+		y_new, sem_fn)`` -- the same signature ``CBO`` uses -- so runners can
+		record the played arm and values per trial.
+	target_evaluator : callable, optional
+		Exact population evaluator with signature ``(arm, values) -> float``,
+		the same hook ``CBO`` takes. Without it the target is evaluated by
+		simulation, which would make BO rows noisy while CBO/QCBO rows on the
+		same figure are exact.
+	task : {'min'}
+		Minimization only: the incumbent tracking below is hardcoded to
+		``np.min``. Asserted rather than generalized.
+	"""
+	if task != 'min':
+		raise NotImplementedError(
+			"vendored NonCausal_BO is minimization-only; got task=%r" % (task,))
 
 	## Compute input space dimension
 	input_space = len(intervention_variables)
@@ -56,6 +82,12 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 																min_intervention = list_interventional_ranges(graph.get_interventional_ranges(), intervention_variables)[0],
 																max_intervention = list_interventional_ranges(graph.get_interventional_ranges(), intervention_variables)[1])
 
+	## Exact population target, mirroring ccbo/cbo/cbo.py's target_evaluator hook.
+	if target_evaluator is not None:
+		_arm = tuple(intervention_variables)
+		target_function = lambda value, arm=_arm: np.asarray(
+			target_evaluator(arm, value), dtype=float)[np.newaxis, np.newaxis]
+
 
 	if Causal_prior==False:
 		#### Define the model without Causal prior
@@ -81,6 +113,10 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 		optimizer = GradientAcquisitionOptimizer(space_parameters)
 		x_new, _ = optimizer.optimize(acquisition)
 		y_new = target_function(x_new)
+
+		if intervention_callback is not None:
+			intervention_callback(intervention_variables, x_new, y_new,
+									graph.define_SEM)
 
 		## Append the data
 		data_x = np.append(data_x, x_new, axis=0)

@@ -1,16 +1,15 @@
 """MinimalBench: the minimal SCM family behind the mechanism-isolation suite.
 
-This module is the single source of truth for the *structure* of the two
+This module is the single source of truth for the *structure* of the three
 deliberately minimal SCMs used in the paper's controlled experiments
 (Experiments A-C), their coarse partitions, the perturbation taxonomy
 (paper Table 1 is emitted from ``PERTURBATIONS``), and the closed-form
-oracles. Numeric SEM implementations live in the paired GraphStructure
-classes (``ccbo/cbo/graphs/ParallelParent.py``, ``MediatedChain.py``);
-both read their coefficients from THIS module so nothing can drift.
+oracles. Numeric SEM implementations live in the corresponding
+GraphStructure classes, which read their coefficients from this module so
+nothing can drift.
 
-The two SCMs share one parameterization: quadratic bowls in the target,
-Gaussian roots, manipulable domains [-3, 3] (except the MediatedChain
-policy box), unit costs, no clipping — every arm value is closed-form.
+The SCMs use Gaussian disturbances, manipulable domains $[-3,3]$ (except
+the MediatedChain policy box), unit costs, and closed-form arm values.
 
 ParallelParent (Experiments A + B)
 ----------------------------------
@@ -92,7 +91,7 @@ HQCBO plateaus at V(Pi), splits C1 (REFINE_MAP), and descends toward y*.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ccbo import coarsening
 from ccbo.clusterbench10 import apply_ops, is_acyclic
@@ -101,7 +100,7 @@ from ccbo.clusterbench10 import apply_ops, is_acyclic
 # Shared parameterization
 # ---------------------------------------------------------------------------
 
-SIGMA_Y = 0.1          # target noise (both SCMs)
+SIGMA_Y = 0.1          # target noise (all three SCMs)
 DOMAIN = (-3.0, 3.0)   # default manipulable range
 
 # --- ParallelParent -------------------------------------------------------
@@ -235,6 +234,67 @@ def mc_do_x1(x1: float) -> float:
 def mc_do_x2(x2: float) -> float:
     """E[Y | do(X2=x2)] = (x2 - C)^2 (X1 becomes irrelevant)."""
     return (x2 - MC_C) ** 2
+
+
+def population_do(scm: str, arm: Sequence[str], values) -> float:
+    """Exact MinimalBench population objective for an intervention.
+
+    Parameters
+    ----------
+    scm:
+        One of the three MinimalBench SCM names.
+    arm:
+        Ordered intervention-variable names.
+    values:
+        Values in the same order as ``arm``. Scalars and the array shapes
+        used by Emukit (``(d,)`` and ``(1, d)``) are accepted.
+
+    This dispatcher is deliberately internal to MinimalBench.  It removes
+    simulation error from both the initial interventional design and the
+    sequential optimization objective while observational data remain
+    sampled from the SCM.
+    """
+    import numpy as np
+
+    names = list(arm)
+    flat = np.asarray(values, dtype=float).reshape(-1)
+    if len(names) != len(flat):
+        raise ValueError(
+            f"arm/value dimension mismatch: {names!r} vs {flat.tolist()!r}")
+    intervention: Mapping[str, float] = dict(zip(names, flat))
+    key = frozenset(names)
+
+    if scm == PP_NAME:
+        if key == frozenset({"X1"}):
+            return pp_do_x1(intervention["X1"])
+        if key == frozenset({"X2"}):
+            return pp_do_x2(intervention["X2"])
+        if key == frozenset({"X1", "X2"}):
+            return pp_do_joint(intervention["X1"], intervention["X2"])
+    elif scm == FD_NAME:
+        if key == frozenset({"X1"}):
+            return fd_do_x1(intervention["X1"])
+        if key == frozenset({"M"}):
+            return fd_do_m(intervention["M"])
+        if key == frozenset({"X1", "M"}):
+            # Once M is clamped, X1 has no directed effect on Y and the
+            # latent contribution has zero population mean.
+            return fd_do_m(intervention["M"])
+    elif scm == MC_NAME:
+        if key == frozenset({"X1"}):
+            return mc_do_x1(intervention["X1"])
+        if key == frozenset({"X2"}):
+            return mc_do_x2(intervention["X2"])
+        if key == frozenset({"X1", "X2"}):
+            # Clamping X2 severs the X1 -> X2 -> Y path.
+            return mc_do_x2(intervention["X2"])
+
+    raise ValueError(f"unsupported MinimalBench intervention: {scm} {names}")
+
+
+def population_evaluator(scm: str) -> Callable[[Sequence[str], object], float]:
+    """Return the exact population evaluator expected by experiment code."""
+    return lambda arm, values: population_do(scm, arm, values)
 
 
 def mc_price() -> float:

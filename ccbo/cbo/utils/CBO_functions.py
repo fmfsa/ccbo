@@ -27,10 +27,73 @@ def update_hull(observational_samples, manipulative_variables):
     return coverage_obs
 
 
-def observe(num_observation, complete_dataset = None, initial_num_obs_samples = None):
-    observational_samples = complete_dataset[initial_num_obs_samples:(initial_num_obs_samples+num_observation)]
-    return observational_samples
-    
+def observe(complete_dataset, start, batch_size, stop):
+    """Reveal the next unseen batch of observational rows.
+
+    Positional slicing (``.iloc``) so the result never depends on the
+    DataFrame's index labels.  The batch is truncated at ``stop`` (the
+    effective observational cap), so the final batch may be smaller than
+    ``batch_size`` and an exhausted pool yields an empty frame.
+
+    Parameters
+    ----------
+    complete_dataset : pandas.DataFrame
+        The full observational pool.
+    start : int
+        Cursor: position of the first not-yet-revealed row.
+    batch_size : int
+        Requested number of rows.
+    stop : int
+        Effective cap ``min(max_N, len(complete_dataset))``.
+
+    Returns
+    -------
+    (rows, new_cursor) : (pandas.DataFrame, int)
+    """
+    start = int(start)
+    stop = int(stop)
+    end = min(start + int(batch_size), stop)
+    if end <= start:
+        return complete_dataset.iloc[start:start].copy(), start
+    return complete_dataset.iloc[start:end].copy(), end
+
+
+def observation_probability(observational_samples, manipulative_variables,
+                            coverage_total, obs_cap):
+    """Probability of taking an *observe* action at the current trial.
+
+    This is the schedule of the released CBO implementation
+    (Aglietti et al. 2020),
+
+        eps_t = [ Vol(C(D_t^O)) / Vol(D(X)) ] / [ N_t / N_cap ],
+
+    i.e. the coverage ratio *divided* by the sample ratio.  Note this
+    differs from the multiplication-based expression printed in the paper;
+    we follow the reference code, and only clip the result to [0, 1] so it
+    is a valid probability.  Clipping is behaviour-neutral: the caller
+    draws u ~ U[0, 1), so any eps >= 1 selects observation either way.
+
+    ``obs_cap`` is the *effective* cap ``min(max_N, len(pool))`` rather
+    than the requested ``max_N``: the available pool may be shorter than
+    the declared maximum.
+
+    Returns
+    -------
+    (raw, clipped) : (float, float)
+        The unclipped value (for logging) and the probability to use.
+    """
+    n_obs = len(observational_samples)
+    if n_obs <= 0 or obs_cap <= 0 or coverage_total <= 0:
+        return 0.0, 0.0
+
+    coverage_obs = update_hull(observational_samples, manipulative_variables)
+    coverage_ratio = coverage_obs / coverage_total
+    rescale = n_obs / obs_cap
+
+    raw = float(coverage_ratio / rescale)
+    return raw, float(np.clip(raw, 0.0, 1.0))
+
+
 
 def compute_coverage(observational_samples, manipulative_variables, dict_ranges):
     list_variables = []

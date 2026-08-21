@@ -156,6 +156,18 @@ def patch_state_for_new_partition(old_state, old_graph, new_graph,
         'var_functions_list': var_functions_list,
         'functions': functions,
         'observational_samples': old_state['observational_samples'],
+        # Observation-pool state is *persistent run state*: it survives a
+        # partition change, so the refined phase never re-reveals rows the
+        # previous phase already consumed.
+        'obs_cursor': old_state.get('obs_cursor'),
+        'initial_obs_cursor': old_state.get('initial_obs_cursor'),
+        'obs_cap': old_state.get('obs_cap'),
+        'num_observations_collected': old_state.get(
+            'num_observations_collected', 0),
+        'trial_log': list(old_state.get('trial_log', [])),
+        # Every model_list entry is None below and force_rebuild_all is set,
+        # so no arm GP is fresh.
+        'models_fresh': False,
         'index': 0,
         'data_x_list': new_data_x,
         'data_y_list': new_data_y,
