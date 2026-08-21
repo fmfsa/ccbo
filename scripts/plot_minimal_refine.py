@@ -92,7 +92,7 @@ def main():
         if trig:
             ax1.axvline(np.mean(trig), color=C_REF, lw=0.8, ls="--",
                         alpha=0.6)
-            ax1.annotate(rf"trigger $\bar t={np.mean(trig):.0f}$",
+            ax1.annotate(rf"trigger $\bar t={np.mean(trig):.1f}$",
                          xy=(np.mean(trig), 0.98),
                          xycoords=("data", "axes fraction"),
                          fontsize=7, color=C_REF, ha="left", va="top",

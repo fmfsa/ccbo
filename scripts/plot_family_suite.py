@@ -32,6 +32,7 @@ QDCBO_DIR = "results/qdcbo"
 QMCBO_DIR = "results/qmcbo"
 
 METHOD_STYLE = {
+    "BO": ("#555555", ":"),
     "CBO": ("#0072B2", "-"),
     "QCBO": ("#E69F00", "--"),
     "DCBO": ("#009E73", "-"),
@@ -108,10 +109,25 @@ def main():
     for j, (ds, title) in enumerate(CBO_PANELS):
         ax = axes[0][j]
         base, quot = cbo_trajs(ds, "CBO"), cbo_trajs(ds, "QCBO")
+        bo = cbo_trajs(ds, "BO")
         if base:
             _band(ax, base, *METHOD_STYLE["CBO"], label="CBO")
         if quot:
             _band(ax, quot, *METHOD_STYLE["QCBO"], label="QCBO")
+        if bo:
+            if ds == "SimplifiedCoralGraph":
+                # BO's joint arm must clamp T and D to the benchmark's
+                # off-distribution ranges, so its floor is ~9.27e3 -- three
+                # orders above CBO/QCBO. Annotate instead of flattening the
+                # axis (see RERUN_ONLINE_OBS_REPORT.md).
+                bo_final = np.mean([t[-1] for t in bo])
+                ax.annotate(rf"BO $\approx${bo_final / 1e3:.2f}$\times$10$^3$"
+                            "\n(off-axis)",
+                            xy=(0.97, 0.68), xycoords="axes fraction",
+                            fontsize=7, color=METHOD_STYLE["BO"][0],
+                            ha="right", va="top")
+            else:
+                _band(ax, bo, *METHOD_STYLE["BO"], label="BO")
         ax.set_title(title, fontsize=10)
         if j == 0:
             ax.set_ylabel("best $E[Y|do]$", fontsize=9)

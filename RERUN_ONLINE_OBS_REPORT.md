@@ -261,7 +261,40 @@ Older sibling drafts (`qcbo_aistats_source/reordered/restructured/
 scaffold.tex`) still carry previous-generation numbers throughout and were
 deliberately left alone.
 
-## 9. Deviations from the runbook
+## 9. Addendum (post-review): BO in Figure 4, and why BO collapses on Coral
+
+Review of the first push caught that `plot_family_suite.py` still loaded
+only CBO/QCBO in its top row, so the 30 new family BO traces were run but
+never drawn. Fixed: BO is now plotted in the Toy and Synthetic panels
+(grey dotted), and the Coral panel carries an off-axis annotation
+("BO ≈ 9.28×10³") instead of a curve. The same pass fixed the Fig 3
+trigger annotation, which rounded the mean trigger to "7" (`.0f`); it now
+prints 7.3 (`.1f`).
+
+**Why BO ends at ~9279 on Coral — verified, not a bug.** The benchmark's
+declared intervention ranges for SimplifiedCoralGraph put T in [2300, 2400]
+and D in [2000, 2080], while the SEM's natural regime is T ≈ 4–8 and
+D ≈ 3–7 (observational data). A causal arm can intervene on N alone and
+leave T and D at natural values (Y ≈ 36); BO's arm is by definition a joint
+intervention on all five manipulable variables, so every BO query must
+clamp T and D into those off-distribution boxes. Monte-Carlo evaluation of
+the SEM over the joint box gives a floor of ≈ 9273.9 (best corner:
+C=0.3, D=2000, N=−2, O=3, T=2300; 400-point random search never beats
+9288.7). BO's recorded finals are min 9274.2 / mean 9279.5 ± 2.0 — i.e.
+**BO found the optimum of its own feasible set to within ~0.3**. The
+250× gap versus CBO/QCBO is structural (the price of being forced to act
+on every variable), not an optimizer or harness failure, and is why the
+Coral panel annotates BO rather than flattening the axis. Toy and
+Synthetic behave oppositely and are plotted normally: on Toy (2 manipulable
+variables, benign ranges) BO matches the causal arms (−2.17); on Synthetic
+it lands mid-field (−0.63 vs CBO's −3.47).
+
+Not addressed here, deliberately: the archived MCBO ToyGraph plateau
+(17/20 seeds flat from trial 0) predates this rerun, is recorded as an
+open instrumented-run TODO in `RUN_TODO.md`, and QMCBO reruns are out of
+scope per runbook §2.
+
+## 10. Deviations from the runbook
 
 None affecting results. Two operational notes: (i) Stage D extraction was
 performed while Stage C was still running (it touches only the unaffected
