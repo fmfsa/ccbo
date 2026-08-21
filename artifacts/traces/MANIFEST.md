@@ -10,8 +10,8 @@ grid, recomputes every published aggregate at the paper's displayed
 precision, re-tests the exact-invariance pairs predicted by the quotient
 contract, and validates the CEO comparator archive (grid, trajectory
 lengths, alias identity and metadata, protocol constants, finals).
-Last run 2026-08-11 on a fresh extraction of these archives:
-**54 checks, 0 failures**.
+Last run 2026-08-21 on a fresh extraction of these archives:
+**61 checks, 0 failures**.
 
 ```bash
 mkdir -p /tmp/qcbo-traces && for t in artifacts/traces/*.tar.gz; do tar -C /tmp/qcbo-traces -xzf "$t"; done
@@ -20,33 +20,44 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 
 ## minimal.tar.gz — MinimalBench (Experiments A–C; Figs. 2–3, Table 1)
 
-- 450 CSVs (`{scm}_{cond}_{arm}_seed{0..29}.csv`, columns
+- 660 CSVs (`{scm}_{cond}_{arm}_seed{0..29}.csv`, columns
   `trial,best_y,cum_cost,arm,x_values`) + `refine_info.json` (30 records,
   `trigger_step`/`split_clusters`/`refused`).
-- Grid: ParallelParent × {A0,A1,A2,A3} × {CBO,QCBO}; FrontDoor × {B0,B1} ×
-  {CBO,QCBO}; MediatedChain × C0 × {CBO,QCBO,HQCBO}; 30 seeds.
+- Grid: ParallelParent × {A0,A1,A2,A3} × {BO,CBO,QCBO}; FrontDoor ×
+  {B0,B1} × {BO,CBO,QCBO}; MediatedChain × C0 × {BO,CBO,QCBO,HQCBO};
+  30 seeds (450 causal + 210 BO units).
 - Generator: `scripts/run_minimal_suite.py` using the internal exact
   `population_do` dispatcher (defaults: seeds 0–29, T=50
   trials — 60 on MediatedChain, 3 initial interventional points per arm,
   n_obs=100 from one shared dataset per SCM, per-variable unit costs;
-  HQCBO plateau trigger k=5, δ=1e-3).
-- Source: local exact-population rerun completed 2026-08-11; all 450 units
-  finished successfully. Observational samples remain stochastic and are
-  used for prior estimation; initial and sequential intervention targets are
-  exact population expectations.
+  HQCBO plateau trigger k=5, δ=1e-3), via
+  `scripts/lsf/submit_minimal_v2.sh`.
+- Source: rerun after the online-observation protocol fix
+  (see `RERUN_ONLINE_OBS.md`; observe actions now reveal fresh 20-row
+  batches under budget N_max=150 and refresh the causal prior). LSF job
+  29163301 completed 2026-08-21, 660/660 units OK, repo @ `d23022e`.
+  Observational samples remain stochastic and are used for prior
+  estimation; initial and sequential intervention targets are exact
+  population expectations. The BO baseline arm takes no observation
+  actions and is byte-identical across the misspecification conditions
+  of an SCM (verified — Table 1's BO sup|Δ| column reads 0).
 - Note: row 0 of each CSV is the incumbent of the initial interventional
   design **at cost 0** — `cum_cost` excludes initialization
   (see `ccbo/minimal_suite.py` docstring).
 
 ## family_cbo.tar.gz — CBO vs QCBO on the CBO family (Fig. 4 top, Table 2)
 
-- 60 CSVs (`{ToyGraph,CompleteGraph,SimplifiedCoralGraph}_{CBO,QCBO}_seed{0..9}.csv`,
-  columns `trial,best_y,cum_cost`).
+- 90 CSVs (`{ToyGraph,CompleteGraph,SimplifiedCoralGraph}_{BO,CBO,QCBO}_seed{0..9}.csv`,
+  columns `trial,best_y,cum_cost`; observe trials are the rows with zero
+  `cum_cost` increment).
 - Generator: `scripts/run_cbo_family.py` (10 seeds, 40 trials, 10 initial
   interventional points per arm, 100 obs, unit cost, minimization) via
-  `scripts/lsf/submit_family.sh`.
-- Source: worktree `benchmark-suite-paper-refresh-9b33cd` @ `9d3c543`,
-  file mtimes 2026-07-22.
+  `scripts/lsf/submit_family_v2.sh`.
+- Source: rerun after the online-observation protocol fix
+  (see `RERUN_ONLINE_OBS.md`), plus the new plain-BO baseline arm
+  (one joint arm over all manipulable variables, no causal prior, no
+  observation actions). LSF job 29163302 completed 2026-08-21,
+  90/90 units OK, repo @ `d23022e`.
 
 ## qdcbo.tar.gz — DCBO vs QDCBO (Fig. 4 middle, Table 2)
 
@@ -85,12 +96,11 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 
 Tarballs packed with
 `tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=<pinned per suite> -czf`
-for deterministic re-packing (family/qdcbo packed 2026-08-10,
-qmcbo extended 2026-08-11, ceo_minimal corrected 2026-08-11). The exact
-MinimalBench archive was repacked locally on 2026-08-11 and is covered by
-both per-file and archive checksums. Apparent raw size is about 4.41 MB
-(directory `du` is dominated by filesystem block overhead on many small
-files).
+for deterministic re-packing (qdcbo packed 2026-08-10, qmcbo extended
+2026-08-11, ceo_minimal corrected 2026-08-11; minimal and family_cbo
+repacked 2026-08-21 from the online-observation rerun with
+`--mtime='2026-08-21 00:00Z'`). All archives are covered by both
+per-file and archive checksums.
 
 ## ceo_minimal.tar.gz — CEO comparator on MinimalBench (corrected 2026-08-11)
 

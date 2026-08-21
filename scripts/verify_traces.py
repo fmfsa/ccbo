@@ -175,23 +175,27 @@ def verify_minimal(root: Path) -> None:
 
 # ----------------------------------------------------------------- family ---
 
-FAMILY = {  # dataset -> (published CBO final, published QCBO final), 2 decimals
-    "ToyGraph": (-2.16, -2.13),
-    "CompleteGraph": (-3.14, -1.25),
-    "SimplifiedCoralGraph": (36.08, 36.42),
+# dataset -> (published BO, CBO, QCBO finals), 2 decimals.  Refreshed
+# 2026-08-21 from the online-observation rerun (results/v2/family_cbo);
+# BO baseline arm added in the same rerun (90-unit grid).
+FAMILY = {
+    "ToyGraph": (-2.17, -2.16, -2.17),
+    "CompleteGraph": (-0.63, -3.47, -1.28),
+    "SimplifiedCoralGraph": (9279.47, 36.07, 36.45),
 }
 
 
 def verify_family(root: Path) -> None:
     d = root / "family_cbo"
     missing = [f"{ds}_{arm}_seed{s}.csv"
-               for ds in FAMILY for arm in ("CBO", "QCBO") for s in range(10)
+               for ds in FAMILY for arm in ("BO", "CBO", "QCBO")
+               for s in range(10)
                if not (d / f"{ds}_{arm}_seed{s}.csv").exists()]
-    check(not missing, f"family_cbo grid complete (60); missing: {missing[:5]}")
+    check(not missing, f"family_cbo grid complete (90); missing: {missing[:5]}")
     if missing:
         return
-    for ds, (pub_cbo, pub_qcbo) in FAMILY.items():
-        for arm, pub in (("CBO", pub_cbo), ("QCBO", pub_qcbo)):
+    for ds, (pub_bo, pub_cbo, pub_qcbo) in FAMILY.items():
+        for arm, pub in (("BO", pub_bo), ("CBO", pub_cbo), ("QCBO", pub_qcbo)):
             finals = [pd.read_csv(d / f"{ds}_{arm}_seed{s}.csv").best_y.iloc[-1]
                       for s in range(10)]
             m = float(np.mean(finals))
