@@ -32,7 +32,9 @@ import matplotlib.pyplot as plt
 from ccbo import minibench as mb
 
 C_BASE, C_QUOT, C_REF = "#0072B2", "#D55E00", "#009E73"
-LABELS = {"CBO": ("CBO (fine)", C_BASE, "-"),
+C_BO = "#555555"
+LABELS = {"BO": ("BO (joint arm, no graph)", C_BO, ":"),
+          "CBO": ("CBO (fine)", C_BASE, "-"),
           "QCBO": ("QCBO (fixed coarse)", C_QUOT, "-"),
           "HQCBO": ("HQCBO (refine)", C_REF, "-")}
 
@@ -63,7 +65,7 @@ def main():
     fig, ax1 = plt.subplots(figsize=(3.45, 2.25))
 
     data = {}
-    for arm in ("CBO", "QCBO", "HQCBO"):
+    for arm in ("BO", "CBO", "QCBO", "HQCBO"):
         ts = _trajs(args.dir, arm)
         if ts:
             n = min(len(t) for t in ts)

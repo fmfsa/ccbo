@@ -38,6 +38,7 @@ import matplotlib.pyplot as plt
 
 from ccbo import minibench as mb
 
+C_BO = "#555555"  # plain BO: no graph, joint arm, no observations
 C_BASE, C_QUOT, C_AUX, C_NEG = "#0072B2", "#D55E00", "#E69F00", "#CC79A7"
 
 
@@ -86,6 +87,9 @@ def main():
           alpha=0.0)
     _band(ax, _trajs(args.dir, "A3", "QCBO"), C_NEG,
           r"QCBO, assume $X_1\leftrightarrow Y$", ls="-.", lw=1.3)
+    # BO reads no graph: identical under every condition (plot A0's copy).
+    _band(ax, _trajs(args.dir, "A0", "BO"), C_BO, "BO (no graph)",
+          ls=":", lw=1.2)
     ax.set_title("(a) exploration-set corruption", fontsize=9)
 
     # ---- (b) Experiment B: prior corruption (FrontDoor) -------------------
@@ -100,6 +104,8 @@ def main():
     _band(ax, _trajs(args.dir, "B1", "QCBO", mb.FD_NAME), "black",
           r"QCBO, assume $X_1\leftrightarrow M$ ($\equiv$)",
           ls=(0, (2, 2)), lw=0.8, alpha=0.0)
+    _band(ax, _trajs(args.dir, "B0", "BO", mb.FD_NAME), C_BO,
+          "BO (no graph)", ls=":", lw=1.2)
     ax.set_title("(b) prior corruption (FrontDoor)", fontsize=9)
 
     for ax in axes:
