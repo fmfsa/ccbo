@@ -68,10 +68,32 @@ N_INIT_MINIMAL = 3
 # Published MinimalBench aggregates (paper's displayed precision).  ``None``
 # until the engine-v3 numbers are frozen; the structural and invariance
 # checks below run regardless.
-MINIMAL_PUB: dict | None = None
-# e.g. {"fd_b0_cbo_final": (0.0001, 4), "fd_b1_cbo_final": (0.0019, 4),
-#       "fd_paired_dr50": (6.2, 1), "mc_finals": {"CBO": 0.040, "QCBO": 4.000,
-#       "HQCBO": 0.040, "HQCBOGF": 0.040}, "trigger_mean": (7.3, 1)}
+# Frozen 2026-09-09 from results/v3 (engine v3, LSF 29365450, engine SHA
+# f2a98e0): displayed-precision aggregates of the paper's MinimalBench numbers.
+MINIMAL_PUB: dict | None = {
+    "fd_b0_cbo_final": [
+        3e-05,
+        5
+    ],
+    "fd_b1_cbo_final": [
+        0.00393,
+        5
+    ],
+    "fd_paired_dr50": [
+        5.9,
+        1
+    ],
+    "mc_finals": {
+        "CBO": 0.04,
+        "QCBO": 4.0,
+        "HQCBO": 0.04,
+        "HQCBOGF": 0.04
+    },
+    "trigger_mean": [
+        7.0,
+        1
+    ]
+}
 
 
 def minimal_units() -> list[tuple[str, str, str]]:

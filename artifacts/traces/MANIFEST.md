@@ -18,32 +18,33 @@ mkdir -p /tmp/qcbo-traces && for t in artifacts/traces/*.tar.gz; do tar -C /tmp/
 PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 ```
 
-## minimal.tar.gz — MinimalBench (Experiments A–C; Figs. 2–3, Table 1)
+## minimal.tar.gz — MinimalBench (Experiments A–C; Figs. 2–3, Table 1, ablations)
 
-- 660 CSVs (`{scm}_{cond}_{arm}_seed{0..29}.csv`, columns
-  `trial,best_y,cum_cost,arm,x_values`) + `refine_info.json` (30 records,
-  `trigger_step`/`split_clusters`/`refused`).
-- Grid: ParallelParent × {A0,A1,A2,A3} × {BO,CBO,QCBO}; FrontDoor ×
-  {B0,B1} × {BO,CBO,QCBO}; MediatedChain × C0 × {BO,CBO,QCBO,HQCBO};
-  30 seeds (450 causal + 210 BO units).
-- Generator: `scripts/run_minimal_suite.py` using the internal exact
-  `population_do` dispatcher (defaults: seeds 0–29, T=50
-  trials — 60 on MediatedChain, 3 initial interventional points per arm,
-  n_obs=100 from one shared dataset per SCM, per-variable unit costs;
-  HQCBO plateau trigger k=5, δ=1e-3), via
-  `scripts/lsf/submit_minimal_v2.sh`.
-- Source: rerun after the online-observation protocol fix
-  (see `RERUN_ONLINE_OBS.md`; observe actions now reveal fresh 20-row
-  batches under budget N_max=150 and refresh the causal prior). LSF job
-  29163301 completed 2026-08-21, 660/660 units OK, repo @ `d23022e`.
-  Observational samples remain stochastic and are used for prior
-  estimation; initial and sequential intervention targets are exact
-  population expectations. The BO baseline arm takes no observation
-  actions and is byte-identical across the misspecification conditions
-  of an SCM (verified — Table 1's BO sup|Δ| column reads 0).
-- Note: row 0 of each CSV is the incumbent of the initial interventional
-  design **at cost 0** — `cum_cost` excludes initialization
-  (see `ccbo/minimal_suite.py` docstring).
+- **Engine v3 (2026-09-09)**: 1320 CSVs (`{scm}_{cond}_{arm}_seed{0..29}.csv`,
+  columns `trial,best_y,cum_cost,arm,x_values`) + 1320 `.decisions.json`
+  sidecars (full-precision per-trial decision logs, see `ccbo/decision_log.py`)
+  + `refine_info.json` (60 records keyed `{scm}_{cond}_{arm}_seed{N}`).
+- Grid: ParallelParent × {A0,A1,A2,A3} × {BO,BOS,CBO,CBONP,QCBO,QCBONP};
+  FrontDoor × {B0,B1} × same six arms; MediatedChain × C0 × the six arms +
+  {HQCBO, HQCBOGF}; 30 seeds.
+- Row convention: row 0 is the incumbent of the initial interventional design
+  at `cum_cost` = **charged** initial-design cost (3 points per arm, unit
+  per-variable costs); HQCBO / HQCBOGF add the split design (3 points per new
+  arm) at the trigger row; `x_values` at `repr` precision.
+- Generator: `scripts/run_minimal_suite.py` (seeds 0–29, T=50 / 60 on
+  MediatedChain, 3 initial points per arm, n_obs=100 from one shared pool,
+  batch 20, N_max=150, plateau k=5, δ=1e-3) via
+  `scripts/lsf/submit_minimal_v3.sh`; LSF job 29365450, 1320/1320 units OK,
+  engine `f2a98e0` (branch `fix/engine-v3`; see `RERUN_ENGINE_V3.md`).
+- Engine changes vs the 2026-08-21 archive: integrated front-door /
+  g-computation priors, corrected causal-prior gradients, CBO-faithful prior
+  variance, GP noise fixed at 1e-10, exact cache keys, tri-state ID gate,
+  charged cost axis, graph-free refinement arm, no-prior and all-subsets
+  ablation arms. Observational samples remain stochastic; intervention
+  targets are exact population expectations.
+- Invariance: QCBO and QCBONP identical at full decision-log precision under
+  A1, A2, B1 (QCBONP also under A3); BO and BOS byte-identical across every
+  condition of an SCM.
 
 ## family_cbo.tar.gz — CBO vs QCBO on the CBO family (Fig. 4 top, Table 2)
 

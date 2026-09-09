@@ -65,7 +65,7 @@ def main():
     _band(ax, _trajs(d, mb.PP_NAME, "A0", "BOS"), C["BOS"], "BO-S (all subsets)", ls="-.")
     _band(ax, _trajs(d, mb.PP_NAME, "A0", "BO"), C["BO"], "BO (joint arm)", ls=":")
     ax.axhline(mb.pp_gap(), color=C["AUX"], lw=0.7, ls=":", alpha=0.6)
-    ax.set_title("(a) ParallelParent: prior vs arm menu", fontsize=9)
+    ax.set_title("(a) ParallelParent", fontsize=9)
 
     ax = axes[1]
     _band(ax, _trajs(d, mb.FD_NAME, "B0", "CBO"), C["CBO"], "CBO (B0)")
@@ -74,7 +74,7 @@ def main():
     _band(ax, _trajs(d, mb.FD_NAME, "B0", "QCBO"), C["QCBO"], "QCBO", lw=2.0)
     _band(ax, _trajs(d, mb.FD_NAME, "B0", "QCBONP"), C["QCBO"], "QCBO, no prior", ls="--")
     _band(ax, _trajs(d, mb.FD_NAME, "B0", "BOS"), C["BOS"], "BO-S", ls="-.")
-    ax.set_title("(b) FrontDoor: prior corruption vs no prior", fontsize=9)
+    ax.set_title("(b) FrontDoor", fontsize=9)
 
     ax = axes[2]
     _band(ax, _trajs(d, mb.MC_NAME, "C0", "CBO"), C["CBO"], "CBO (fine)", alpha=0.08)
@@ -85,7 +85,7 @@ def main():
     ax.axhline(o["v_pi"], color=C["QCBO"], lw=0.7, ls=":", alpha=0.6)
     ax.axhline(o["y_star"], color="black", lw=0.7, ls=":", alpha=0.6)
     ax.set_yscale("log")
-    ax.set_title("(c) MediatedChain: refinement variants", fontsize=9)
+    ax.set_title("(c) MediatedChain", fontsize=9)
 
     for ax in axes:
         ax.set_xlabel("trial", fontsize=8)

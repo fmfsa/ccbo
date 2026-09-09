@@ -264,25 +264,28 @@ misspecification conditions of an SCM (Table~\ref{tab:minimal-taxonomy}).
 
 **Random stream $\omega$ (§4.1 definition of $\xi$):** "…all coupled randomness: optimization, observational sampling, numerical causal-effect estimation and experimental outcomes."
 
-## 5.2–5.5 Numbers — `PENDING-RESULTS`
+## 5.2–5.5 Numbers — minimal suite `FINAL (v3)`, family / dynamic `PENDING-RESULTS`
 
 | Location | Written | Should read | Emitter |
 |---|---|---|---|
-| §5.2 correct-graph CBO final | `0.0016±0.0002` | `«NEW»` | `artifacts/summaries/minimal_exact.json` → `groups.ParallelParent_A0_CBO` |
-| §5.2 misspecified CBO final | `4.2500±0.0000` | `«NEW»` (expected unchanged) | `…ParallelParent_A1_CBO` |
-| §5.2 regrets | `4.21±0.37` and `216.23±1.12` | `«NEW»`, `«NEW»` | same groups, `cumulative_regret_*` |
-| §5.2 A3 deviation | `21.45` | `«NEW»` | `paired.ParallelParent_A0_vs_A3_QCBO.sup_incumbent_deviation` |
-| §5.3 paired ΔR50 | `5.91±1.04` | `«NEW»` | `paired.FrontDoor_B1_minus_B0_CBO_cumulative_regret` |
-| §5.3 finals | `0.0003±0.0003` / `0.0035±0.0022` | `«NEW»` / `«NEW»` | `groups.FrontDoor_B0_CBO`, `…B1_CBO` |
-| §5.4 finals | `0.0400, 4.0000, 0.0400` | `«NEW»` ×3 (+ \HQCBOGF{} `«NEW»`) | `groups.MediatedChain_C0_{CBO,QCBO,HQCBO,HQCBOGF}` |
-| §5.4 regrets | `5.46±1.61, 243.23±0.90, 36.97±1.18` | `«NEW»` ×3 (+ \HQCBOGF{}) | same |
-| §5.4 trigger | `7.4±0.1` | `«NEW»` | `refinement.HQCBO.trigger_mean/se` |
-| §5.4 new sentence | — | "Graph-free \HQCBOGF{} finishes at `«NEW»` with $R_{60}=$ `«NEW»`; paired against \HQCBO{}: Δfinal `«NEW»` [CI], Δ$R_{60}$ `«NEW»` [CI]." | `refinement.HQCBOGF_minus_HQCBO` |
-| §5.2/5.3 ablation sentences | — | "Without causal priors, \CBONP{} reaches `«NEW»` (A0) and \QCBONP{} `«NEW»`; \BOS{} `«NEW»`; \BO{} `«NEW»`." | `paper/tables/minimal_ablations.tex` |
-| Table 3 CBO rows | `−2.16/−2.13`, `−3.14±0.19/−1.25±0.07`, `36.08/36.42` | `«NEW»` | `paper/tables/family_effects.tex` (switch to `\input`) |
-| Table 3 DCBO/MCBO rows | as printed | `«NEW»` (both baselines and quotients rerun) | same |
+| §5.2 correct-graph CBO final | `0.0016±0.0002` | **`0.0002±0.0001`** (raw 2.20e-04) | `artifacts/summaries/minimal_exact.json` → `groups.ParallelParent_A0_CBO` |
+| §5.2 misspecified CBO final | `4.2500±0.0000` | **`4.2500±0.0000`** (unchanged) | `…ParallelParent_A1_CBO` |
+| §5.2 regrets | `4.21±0.37` and `216.23±1.12` | **`3.61±0.36` and `216.10±1.09`** | same groups, `cumulative_regret_*` |
+| §5.2 A3 deviation | `21.45` | **`21.50`** (Table 1 prints 21.5) | `paired.ParallelParent_A0_vs_A3_QCBO` |
+| §5.3 paired ΔR50 | `5.91±1.04` | **`5.91±1.06`** (95 % CI [3.73, 8.08]) | `paired.FrontDoor_B1_minus_B0_CBO_cumulative_regret` |
+| §5.3 finals | `0.0003±0.0003` / `0.0035±0.0022` | **`0.00003±0.00001` / `0.00393±0.00223`** (5 dp; B0 is $3\times10^{-5}$) | `groups.FrontDoor_B0_CBO`, `…B1_CBO` |
+| §5.4 finals | `0.0400, 4.0000, 0.0400` | **`0.0400±0.0000`, `4.0000±0.0000`, `0.0400±0.0000`**; \HQCBOGF{} **`0.0400±0.0000`** | `groups.MediatedChain_C0_*` |
+| §5.4 regrets | `5.46±1.61, 243.23±0.90, 36.97±1.18` | **`5.79±1.78`, `243.15±0.90`, `35.34±1.00`**; \HQCBOGF{} **`37.61±1.37`** | same |
+| §5.4 trigger | `7.4±0.1` | **`7.0±0.0`** (all 30 seeds trigger at trial 7; all splits accepted) | `refinement.HQCBO` |
+| §5.4 new sentence | — | "Graph-free \HQCBOGF{} finishes at the same `0.0400±0.0000` with $R_{60}=37.61±1.37$; paired against \HQCBO{}: $\Delta$final $+3.5e-07$ (indistinguishable), $\Delta R_{60}=+2.27$ $[+0.90,\,+3.64]$ — the causal priors after the split buy about two regret units, not the optimum." | `refinement.HQCBOGF_minus_HQCBO` |
+| §5.2 ablation sentence | — | "On the correct graph the no-prior \CBONP{} reaches `0.0004±0.0001` ($R_{50}=23.03±2.61$ vs `3.61±0.36` with priors), \QCBONP{} `0.0006±0.0002` (`19.09±2.17`), the structure-free \BOS{} `0.0005±0.0002` (`17.49±2.08`) and \BO{} `0.0037±0.0035` (`5.83±1.23`); under A1 \CBONP{} is confined to the same `4.2500±0.0000` floor as \CBO{}, while \BOS{} and \BO{} are unaffected by construction." | `paper/tables/minimal_ablations.tex` |
+| §5.3 ablation sentence | — | "Without priors the B1 corruption cannot act: \CBONP{} is identical under B0 and B1 ($\Delta R_{50}=0$) at `0.0011±0.0003` ($R_{50}=8.17±0.92$), so the 5.9-unit paired increase is entirely the price of a corrupted prior; \QCBONP{} `0.0009±0.0003` (`15.63±1.89`) vs \QCBO{} `0.0015±0.0006` (`11.18±1.37`); \BOS{} `0.0013±0.0004` (`12.58±1.53`); \BO{} `0.40±0.15` (`30.62±6.59`)." | same |
+| §5.4 ablation sentence | — | "\CBONP{} also reaches $y^\star$ ($R_{60}=8.44±1.96$, paired $+2.65$ [1.49, 3.80] over \CBO{}); \QCBONP{} sits on the same floor as \QCBO{} (`245.32±1.11`); \BOS{}, which owns the $\{X_1\}$ arm, reaches $y^\star$ with $R_{60}=12.00±2.76$; \BO{}'s joint arm shares the fixed-partition floor (`4.008±0.008`)." | same |
+| Table 3 CBO rows | `−2.16/−2.13`, `−3.14±0.19/−1.25±0.07`, `36.08/36.42` | `«NEW»` (family v3 pending) | `paper/tables/family_effects.tex` (switch to `\input`) |
+| Table 3 DCBO/MCBO rows | as printed | `«NEW»` (both baselines and quotients rerun with corrected semantics) | same |
 | §5.5 "60 paired dynamic runs / 40 model-based" | counts | unchanged counts; add "at decision level" | `verify_traces.py` |
-| Table 1 | `\input{tables/minimal_taxonomy}` | regenerated (A3 `«NEW»`; BO column 0) | `emit_minimal_taxonomy.py` |
+| Table 1 | `\input{tables/minimal_taxonomy}` | regenerated: A1 0, A2 0, **A3 21.5**, B1 0; BO column 0 | `emit_minimal_taxonomy.py` |
+| §5.2 new invariance sentence | — | "The no-prior \QCBONP{} is invariant under A1, A2 \emph{and} the quotient-visible A3: on this SCM the A3 edit changes the quotient prior only, so an arm without priors cannot see it." | `verify_traces.py` (QCBONP A3 check) |
 | Cost table (if included) | — | regenerated | `paper/tables/cost_accounting.tex` |
 
 ## Captions — `KNOWN-NOW`
