@@ -22,6 +22,7 @@ bsub <<EOF2
 cd "$REPO"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export CCBO_GIT_SHA="$SHA"
+export PYTHONHASHSEED=0   # belt and braces: the engine is hash-independent (test_hash_independence)
 PYTHONPATH=. PY="\$HOME/venvs/mcbo/bin/python" \\
   SEEDS="\$(seq -s ' ' 0 19)" \\
   bash scripts/run_qmcbo_pilot.sh results/v3/qmcbo 16

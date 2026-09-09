@@ -64,36 +64,16 @@ MINIMAL_SEEDS = range(30)
 PLAIN_ARMS = ("BO", "BOS", "CBO", "CBONP", "QCBO", "QCBONP")
 REFINE_ARMS = ("HQCBO", "HQCBOGF")
 N_INIT_MINIMAL = 3
+# Prior-variance policy every static-suite sidecar must record (engine v3,
+# 2026-09-10): the predictive law of total variance under the fitted GP.
+PRIOR_VARIANCE_POLICY = "predictive"
 
 # Published MinimalBench aggregates (paper's displayed precision).  ``None``
 # until the engine-v3 numbers are frozen; the structural and invariance
 # checks below run regardless.
-# Frozen 2026-09-09 from results/v3 (engine v3, LSF 29365450, engine SHA
-# f2a98e0): displayed-precision aggregates of the paper's MinimalBench numbers.
-MINIMAL_PUB: dict | None = {
-    "fd_b0_cbo_final": [
-        3e-05,
-        5
-    ],
-    "fd_b1_cbo_final": [
-        0.00393,
-        5
-    ],
-    "fd_paired_dr50": [
-        5.9,
-        1
-    ],
-    "mc_finals": {
-        "CBO": 0.04,
-        "QCBO": 4.0,
-        "HQCBO": 0.04,
-        "HQCBOGF": 0.04
-    },
-    "trigger_mean": [
-        7.0,
-        1
-    ]
-}
+# 2026-09-09 freeze (LSF 29365450, SHA f2a98e0, variance policy "total")
+# retired 2026-09-10: re-frozen after the predictive-policy rerun.
+MINIMAL_PUB: dict | None = None
 
 
 def minimal_units() -> list[tuple[str, str, str]]:
@@ -141,10 +121,13 @@ def verify_minimal(root: Path) -> None:
     # budget, gate status, split charge at the trigger.
     bad_init, over, bo_obs, gate_err, bad_split = [], [], [], [], []
     trig = {}
+    policies, shas = set(), set()
     for (scm, cond, arm) in units:
         for s in MINIMAL_SEEDS:
             df = load_minimal(root, scm, cond, arm, s)
             log = load_sidecar(root, scm, cond, arm, s)
+            policies.add(log["unit"].get("estimator", {}).get("variance_policy"))
+            shas.add(log["unit"].get("engine_sha"))
             es = log["init"]["es"]
             ic = float(log["init"]["init_cost"])
             if abs(df.cum_cost.iloc[0] - ic) > 1e-9 or abs(ic - N_INIT_MINIMAL * sum(len(a) for a in es)) > 1e-9:
@@ -165,6 +148,9 @@ def verify_minimal(root: Path) -> None:
                     if charged + 1e-9 < float(ref.get("split_init_cost", 0.0)):
                         bad_split.append((arm, s, float(charged), ref.get("split_init_cost")))
     check(not bad_init, f"row 0 cum_cost == charged initial design (3 pts/arm, unit costs); bad: {bad_init[:3]}")
+    check(policies == {PRIOR_VARIANCE_POLICY},
+          f"minimal sidecars record variance_policy == {PRIOR_VARIANCE_POLICY!r} (seen {sorted(map(str, policies))})")
+    check(len(shas) == 1, f"minimal sidecars record one engine SHA (seen {sorted(map(str, shas))})")
     check(not over, f"observe actions per causal unit <= 3 (budget cap); over: {over[:3]}")
     check(not bo_obs, f"BO / BOS units take no observe actions; violations: {bo_obs[:3]}")
     check(not gate_err, f"no identification-gate error state in any unit; errors: {gate_err[:3]}")
@@ -236,6 +222,8 @@ def verify_minimal(root: Path) -> None:
 
 # dataset -> (published BO, CBO, QCBO finals), 2 decimals.  ``None`` until the
 # engine-v3 family numbers are frozen.
+# 2026-09-09 freeze (LSF 29365451, SHA f2a98e0, variance policy "total") retired
+# 2026-09-10: its priors were hash-seed dependent and the policy was replaced.
 FAMILY_PUB: dict | None = None
 FAMILY_DATASETS = ("ToyGraph", "CompleteGraph", "SimplifiedCoralGraph")
 N_INIT_FAMILY = 10
@@ -253,16 +241,22 @@ def verify_family(root: Path) -> None:
     if missing:
         return
     bad_init = []
+    policies, shas = set(), set()
     for ds in FAMILY_DATASETS:
         for arm in ("BO", "CBO", "QCBO"):
             for s in range(10):
                 df = pd.read_csv(d / f"{ds}_{arm}_seed{s}.csv")
                 log = read(str(d / f"{ds}_{arm}_seed{s}.decisions.json"))
+                policies.add(log["unit"].get("estimator", {}).get("variance_policy"))
+                shas.add(log["unit"].get("engine_sha"))
                 ic = float(log["init"]["init_cost"])
                 expect = N_INIT_FAMILY * sum(len(a) for a in log["init"]["es"])
                 if abs(df.cum_cost.iloc[0] - ic) > 1e-9 or abs(ic - expect) > 1e-9:
                     bad_init.append((ds, arm, s, float(df.cum_cost.iloc[0]), ic, expect))
     check(not bad_init, f"family row 0 cum_cost == charged initial design (10 pts/arm); bad: {bad_init[:3]}")
+    check(policies == {PRIOR_VARIANCE_POLICY},
+          f"family sidecars record variance_policy == {PRIOR_VARIANCE_POLICY!r} (seen {sorted(map(str, policies))})")
+    check(len(shas) == 1, f"family sidecars record one engine SHA (seen {sorted(map(str, shas))})")
     if FAMILY_PUB is None:
         note("family published-final checks skipped (FAMILY_PUB not yet frozen)")
         return
@@ -352,8 +346,9 @@ QMCBO_ENVS = ("ToyGraph", "PSAGraph")
 # frozen.  Pre-v3 archive: ToyGraph (1.39, 2.16), PSAGraph (-5.15, -5.15);
 # E2 identical: ToyGraph MCBO 9/20 (0.277), QMCBO 20/20; PSAGraph MCBO 0/20
 # (0.001), QMCBO 20/20.
-QMCBO_PUB: dict | None = None
-QMCBO_E2_IDENTICAL: dict | None = None
+# Frozen 2026-09-09 from results/v3 (LSF 29365483, engine SHA 9f25b41).
+QMCBO_PUB: dict | None = {"ToyGraph": [1.39, 2.16], "PSAGraph": [-5.15, -5.15]}
+QMCBO_E2_IDENTICAL: dict | None = {("ToyGraph", "MCBO"): (9, 0.277), ("ToyGraph", "QMCBO"): (20, 0.0), ("PSAGraph", "MCBO"): (0, 0.001), ("PSAGraph", "QMCBO"): (20, 0.0)}
 
 
 def verify_qmcbo(root: Path) -> None:

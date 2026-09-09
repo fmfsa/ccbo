@@ -21,6 +21,7 @@ bsub <<EOF2
 
 cd "$REPO"
 export CCBO_GIT_SHA="$SHA"
+export PYTHONHASHSEED=0   # belt and braces: the engine is hash-independent (test_hash_independence)
 PYTHONPATH=. PY="\$HOME/venvs/ccbo/bin/python" \\
   bash scripts/run_qdcbo_pilot.sh results/v3/qdcbo 16
 EOF2

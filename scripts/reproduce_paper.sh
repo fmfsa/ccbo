@@ -24,6 +24,7 @@ mkdir -p "$WORKDIR"
 
 export PYTHONPATH="$REPO"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+export PYTHONHASHSEED=0
 
 echo "== repo:    $REPO"
 echo "== python:  $PYTHON ($("$PYTHON" -V 2>&1))"

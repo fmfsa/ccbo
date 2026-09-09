@@ -17,9 +17,10 @@ and the plan in the PR description):
    input gradients (rank-one term ignored, `gradients_X_diag` = 0), the
    causal mean function had no input gradient, and the σ_f² hyperparameter
    gradient used the full kernel. All three feed L-BFGS. Fixed.
-3. **Prior variance** is now the CBO-faithful `Var[Y | do]` with the GP's
-   epistemic term removed; **GP noise fixed at 1e-10**; exact byte cache
-   keys; identification gate tri-state and fail-closed.
+3. **Prior variance** is the predictive `Var[Y | do]` under the fitted
+   plug-in model (`lik_var + spread + GP epistemic`; see §11 for why the
+   epistemic-free variant was retired); **GP noise fixed at 1e-10**; exact
+   byte cache keys; identification gate tri-state and fail-closed.
 4. **HQCBO** now charges its split design, and a graph-free variant
    (`HQCBOGF`) is added; the initial design is charged on row 0 for every
    arm; every unit writes a full-precision decision log.
@@ -116,3 +117,49 @@ regenerated summaries, then re-run). Repack `minimal` and `family_cbo`
 * BO or BOS differing across conditions; QCBO **or QCBONP** differing under a
   protected edit at full precision; a gate `error` state in any sidecar.
 * Any temptation to change the ε_t schedule or to reuse `results/v2`.
+
+## 11. Addendum 2026-09-10 — second static rerun (hash order, variance policy)
+
+Two defects surfaced while auditing the 2026-09-09 static results
+(`results/v3_prelim/{minimal,family_cbo}`, kept for comparison, never reused):
+
+1. **Hash-seed dependence of the prior.** `ccbo/adjustment.py` sorted
+   frozenset-typed C-DAG vertices with a bare `sorted()`, which is only a
+   partial order. The adjustment set chosen among equal-size candidates, the
+   GP input column order and the g-computation step order therefore followed
+   `PYTHONHASHSEED`. On the family suite the CompleteGraph and Coral priors
+   differed between interpreters (Coral joint arm mean 57 / 275 / 26 under
+   three hash seeds; QCBO's C+N+O arm switched adjustment set). The minimal
+   suite, QDCBO (runner pins the seed) and QMCBO were already independent.
+   Fix: canonical `_vkey` ordering everywhere (`_sorted_v`,
+   `lexicographical_topological_sort`); `ccbo/tests/test_hash_independence.py`
+   runs the prior in two interpreters with different seeds. `PYTHONHASHSEED=0`
+   is additionally exported by every LSF script and by `reproduce_paper.sh`.
+2. **Epistemic-free prior variance kills the surrogate off support.** With
+   `VARIANCE_POLICY="total"` the joint/D/T arms of Coral (intervention ranges
+   D∈[2000,2080], T∈[2300,2400] against observational support D∈[3,7],
+   T∈[4,8]) get prior mean 0 and prior variance ≤ 1e-6 (the outcome GP
+   interpolates, `lik_var` at its floor, no between-row spread), while the
+   discarded epistemic term is 1e4–7e7. A ~0 variance adjustment makes the
+   CausalRBF kernel identically zero: the arm's GP can never move away from
+   its (wrong) prior mean, EI's σ=0 branch reports a certain improvement, and
+   the optimizer pulls that arm forever — the flat Coral CBO/QCBO curves of
+   the preliminary run (0 improvements in 10/10 seeds, 390/400 QCBO pulls on
+   the joint arm at y≈9300). The CBO reference implementation averages
+   `gp.predict(rows)[1]`, i.e. it *keeps* epistemic + noise. New default
+   `VARIANCE_POLICY="predictive"` = `lik_var + spread + epistemic`;
+   `"total"` stays selectable (`CCBO_VARIANCE_POLICY=total`) for comparison.
+
+Procedure (same stages as above; sidecars now record the policy and the gate
+checks it):
+
+```bash
+bash scripts/lsf/submit_minimal_v3.sh                                   # results/v3/minimal    (predictive)
+bash scripts/lsf/submit_family_v3.sh                                    # results/v3/family_cbo (predictive)
+CCBO_VARIANCE_POLICY=total OUTDIR=$PWD/results/v3_total/family_cbo bash scripts/lsf/submit_family_v3.sh   # comparison
+```
+
+`results/v3_prelim/minimal` already *is* the minimal suite under the retired
+policy (the canonical-order fix is byte-neutral there — verified on a 16-unit
+probe), so no `v3_total/minimal` run is needed. Freeze `MINIMAL_PUB` /
+`FAMILY_PUB` from the predictive runs only.

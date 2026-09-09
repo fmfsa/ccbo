@@ -29,7 +29,7 @@ def test_roundtrip_is_bit_exact(tmp_path):
     assert back['phases'][0]['trials'][0]['x'] == xs          # exact doubles
     assert back['rows'][1]['x'] == xs
     assert dlog.decisions_signature(back) == dlog.decisions_signature(payload)
-    assert back['unit']['estimator']['variance_policy'] == 'total'
+    assert back['unit']['estimator']['variance_policy'] == 'predictive'
     assert back['unit']['estimator']['noise_fixed'] == 1e-10
 
 

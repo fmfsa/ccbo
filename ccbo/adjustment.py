@@ -39,6 +39,7 @@ CBO-faithful ``Var[Y | do]`` with the GP's epistemic term excluded.
 GPs are fitted ONCE when the do-function is created, not at each evaluation.
 """
 
+import os
 import warnings
 
 import numpy as np
@@ -67,6 +68,21 @@ def _fit_gp(X, Y):
 # 2. Backdoor and frontdoor criterion
 # ---------------------------------------------------------------------------
 
+def _vkey(v):
+    """Canonical sort key for DAG / ADMG vertices (strings or frozenset
+    clusters).  Every candidate enumeration and every returned variable
+    order in this module goes through it, so identification and the GP
+    input layout are independent of Python's per-process hash seed
+    (``sorted()`` on frozensets is a partial order and is NOT canonical)."""
+    if isinstance(v, frozenset):
+        return (1, tuple(sorted(str(x) for x in v)))
+    return (0, (str(v),))
+
+
+def _sorted_v(vs):
+    return sorted(vs, key=_vkey)
+
+
 def find_backdoor_set(dag, S, Y, observed):
     """
     Find a minimal valid backdoor adjustment set Z for do(S) on Y.
@@ -77,7 +93,7 @@ def find_backdoor_set(dag, S, Y, observed):
         desc_S |= nx.descendants(dag, s)
     desc_S -= S_set
 
-    candidates = sorted(observed - S_set - desc_S - {Y})
+    candidates = _sorted_v(observed - S_set - desc_S - {Y})
 
     dag_no_out = dag.copy()
     for s in S_set:
@@ -92,7 +108,7 @@ def find_backdoor_set(dag, S, Y, observed):
                 for s in S_set
             )
             if separated:
-                return sorted(Z_set)
+                return _sorted_v(Z_set)
 
     return None
 
@@ -102,7 +118,7 @@ def find_frontdoor_set(dag, S, Y, observed):
     Find a valid frontdoor adjustment set M for do(S) on Y.
     """
     S_set = set(S)
-    candidates = sorted(observed - S_set - {Y})
+    candidates = _sorted_v(observed - S_set - {Y})
 
     for size in range(1, len(candidates) + 1):
         for M_tuple in combinations(candidates, size):
@@ -147,7 +163,7 @@ def find_frontdoor_set(dag, S, Y, observed):
             if not cond3:
                 continue
 
-            return sorted(M_set)
+            return _sorted_v(M_set)
 
     return None
 
@@ -164,12 +180,12 @@ def find_gcomputation_plan(dag, S, Y, observed):
     S_set = set(S)
 
     obs_dag = nx.DiGraph()
-    for u, v in dag.edges():
-        if u in observed and v in observed:
-            obs_dag.add_edge(u, v)
-    obs_dag.add_nodes_from(observed)
+    obs_dag.add_nodes_from(_sorted_v(observed))
+    for u, v in _sorted_v((u, v) for u, v in dag.edges()
+                          if u in observed and v in observed):
+        obs_dag.add_edge(u, v)
 
-    topo = list(nx.topological_sort(obs_dag))
+    topo = list(nx.lexicographical_topological_sort(obs_dag, key=_vkey))
 
     affected = set()
     for s in S_set:
@@ -183,7 +199,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
     for v in topo:
         if v in S_set or v == Y or v not in affected:
             continue
-        obs_parents = sorted(set(obs_dag.predecessors(v)))
+        obs_parents = _sorted_v(set(obs_dag.predecessors(v)))
         
         # Check against latent confounders between v and its observed parents
         v_latents = set(dag.predecessors(v)) - observed
@@ -204,7 +220,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
             propagation.append((v, obs_parents))
             propagated.add(v)
 
-    obs_parents_Y = sorted(set(obs_dag.predecessors(Y)))
+    obs_parents_Y = _sorted_v(set(obs_dag.predecessors(Y)))
     
     # Check against latent confounders between Y and its observed parents
     Y_latents = set(dag.predecessors(Y)) - observed
@@ -224,7 +240,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
     if not parents_ready:
         return None
 
-    final_conditioning = sorted(
+    final_conditioning = _sorted_v(
         set(obs_parents_Y) | (observed - S_set - {Y} - affected)
     )
 
@@ -232,7 +248,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
         'method': 'gcomputation',
         'propagation_order': propagation,
         'conditioning_vars': final_conditioning,
-        'affected_vars': sorted(affected - {Y}),
+        'affected_vars': _sorted_v(affected - {Y}),
     }
 
 
@@ -268,25 +284,47 @@ def identify_adjustment(dag, S, Y, observed):
 #
 # Estimator policy (engine v3, 2026-09).  Every predictor returns
 # ``(mean, v)``: ``mean`` is the plug-in estimate of ``E[Y | do(A=a)]`` and
-# ``v`` is the CBO-faithful prior variance ``Var[Y | do(A=a)]`` obtained by
-# applying the *same* identified functional to ``Y^2``:
+# ``v`` the prior variance handed to the arm surrogate's CausalRBF kernel.
+# ``moments()`` exposes the full decomposition over the mixture of
+# adjustment / mediator / propagation rows (weights ``w_i``):
 #
-#     Var[Y | do(a)] = E_mix[Var(Y | pa)] + Var_mix(E[Y | pa])
-#                    = lik_var + sum_i w_i (mu_i - mean)^2 ,
+#     spread     = sum_i w_i (mu_i - mean)^2        Var_mix(E[Y | pa])
+#     lik_var    = fitted noise of the outcome GP   E_mix[Var(Y | pa)]
+#     epistemic  = sum_i w_i var_f(pa_i)            GP posterior variance
 #
-# with the mixture running over the adjustment / mediator / propagation rows
-# and the GP's *epistemic* posterior variance deliberately excluded
-# (``include_likelihood=False``).  Conditional laws of intermediate variables
-# are the fitted plug-in Gaussians ``N(mu_hat(pa), sigma_hat^2)``; they are
-# integrated by Gauss-Hermite quadrature (front-door) or by seeded
-# common-random-number draws (g-computation) -- never by substituting their
-# mean, which is biased for any nonlinear outcome mechanism.
+# VARIANCE_POLICY selects ``v``:
+#
+#   "predictive" (default): v = lik_var + spread + epistemic -- the law of
+#       total variance of Y under do(a) *under the fitted plug-in model*,
+#       integrating the GP posterior over the outcome regression.  This is the
+#       quantity the CBO reference implementation averages
+#       (``np.mean(gp.predict(rows)[1])`` = epistemic + noise) plus the
+#       between-row spread that a mixture over adjustment rows adds.
+#   "total": v = lik_var + spread -- the plug-in Var[Y | do(a)] with the GP
+#       epistemic term removed.  Kept for comparison runs: off the
+#       observational support (or for an interpolating outcome fit) it
+#       collapses to ~0, which makes the CausalRBF kernel identically zero
+#       and the arm surrogate unable to learn from its own pulls (the
+#       2026-09-09 preliminary family run: flat Coral trajectories).
+#   "epistemic": diagnostic only.
+#
+# Override with the environment variable ``CCBO_VARIANCE_POLICY`` *before*
+# import; the value is recorded in every decision-log sidecar.
+# Conditional laws of intermediate variables are the fitted plug-in
+# Gaussians ``N(mu_hat(pa), sigma_hat^2)``; they are integrated by
+# Gauss-Hermite quadrature (front-door) or by seeded common-random-number
+# draws (g-computation) -- never by substituting their mean, which is
+# biased for any nonlinear outcome mechanism.
 
 GH_NODES = 20            # Gauss-Hermite nodes per mediator (product grid <= 2)
 MC_DRAWS = 400           # seeded draws when there are more than two mediators
 GCOMP_REPS = 4           # replications of the observational rows in g-comp draws
 ESTIMATOR_SEED = 0       # fixed: part of the quotient-contract coupling
-VARIANCE_POLICY = "total"   # "total" = Var[Y|do] (CBO); "epistemic" = diagnostic only
+VARIANCE_POLICIES = ("predictive", "total", "epistemic")
+VARIANCE_POLICY = os.environ.get("CCBO_VARIANCE_POLICY", "predictive")
+if VARIANCE_POLICY not in VARIANCE_POLICIES:
+    raise ValueError(f"CCBO_VARIANCE_POLICY={VARIANCE_POLICY!r}; "
+                     f"expected one of {VARIANCE_POLICIES}")
 
 ESTIMATOR_INFO = {
     'gh_nodes': GH_NODES, 'mc_draws': MC_DRAWS, 'gcomp_reps': GCOMP_REPS,
@@ -327,7 +365,9 @@ def _mixture_moments(mu, var_f, lik_var, weights, n_obs):
     epistemic = float(np.sum(w * var_f))
     aleatoric = float(lik_var) + spread
     sampling = spread / max(int(n_obs), 1)
-    if VARIANCE_POLICY == "total":
+    if VARIANCE_POLICY == "predictive":
+        v = aleatoric + epistemic
+    elif VARIANCE_POLICY == "total":
         v = aleatoric
     elif VARIANCE_POLICY == "epistemic":
         v = epistemic + sampling
@@ -583,8 +623,8 @@ def _expand_admg_to_dag(admg_dict):
         name -> frozenset({u, v}) for each introduced latent.
     """
     dag = nx.DiGraph()
-    dag.add_nodes_from(admg_dict['vertices'])
-    for u, v in admg_dict['di']:
+    dag.add_nodes_from(_sorted_v(admg_dict['vertices']))
+    for u, v in _sorted_v(admg_dict['di']):
         dag.add_edge(u, v)
     observed = set(admg_dict['vertices'])
     latent_to_bi = {}

@@ -67,7 +67,7 @@ def test_ident_dicts_carry_gate_status_and_estimator_info():
     do_fn, ident = adj.make_cdag_do_function(
         cg._coarsened_admg, ["X1"], cg.partition, "Y", obs)
     assert ident["gate_status"] == "identified"
-    assert ident["estimator"]["variance_policy"] == "total"
+    assert ident["estimator"]["variance_policy"] == "predictive"
     assert "gate_deferred" not in ident
     assert do_fn is not None and hasattr(do_fn, "moments")
 

@@ -135,11 +135,28 @@ def test_variance_policy_decomposition():
     assert r["aleatoric"] == pytest.approx(0.05 + spread)
     assert r["epistemic"] == pytest.approx(0.2)
     assert r["sampling"] == pytest.approx(spread / 3)
-    assert r["v"] == pytest.approx(r["aleatoric"])        # VARIANCE_POLICY == "total"
-    assert adj.VARIANCE_POLICY == "total"
+    assert adj.VARIANCE_POLICY == "predictive"              # engine default
+    assert r["v"] == pytest.approx(r["aleatoric"] + r["epistemic"])
 
 
-def test_backdoor_predictor_excludes_gp_epistemic_variance():
+def test_variance_policy_switch(monkeypatch):
+    mu, var_f, w = np.array([1.0, 3.0]), np.array([0.1, 0.3]), np.full(2, 0.5)
+    monkeypatch.setattr(adj, "VARIANCE_POLICY", "total")
+    r = adj._mixture_moments(mu, var_f, 0.05, w, n_obs=2)
+    assert r["v"] == pytest.approx(r["aleatoric"]) and r["v"] == pytest.approx(0.05 + 1.0)
+    monkeypatch.setattr(adj, "VARIANCE_POLICY", "epistemic")
+    r = adj._mixture_moments(mu, var_f, 0.05, w, n_obs=2)
+    assert r["v"] == pytest.approx(0.2 + 1.0 / 2)
+    monkeypatch.setattr(adj, "VARIANCE_POLICY", "bogus")
+    with pytest.raises(ValueError):
+        adj._mixture_moments(mu, var_f, 0.05, w, n_obs=2)
+
+
+def test_backdoor_predictor_variance_grows_off_support(monkeypatch):
+    """The predictive policy keeps the GP's epistemic term, so the prior
+    variance grows where the outcome regression is unsupported; the "total"
+    policy collapses there (documented failure mode: a ~0 variance
+    adjustment zeroes the CausalRBF kernel and the arm can never learn)."""
     rng = np.random.default_rng(2)
     n = 80
     Z = rng.normal(size=n)
@@ -147,12 +164,14 @@ def test_backdoor_predictor_excludes_gp_epistemic_variance():
     Y = np.sin(S) + Z + 0.1 * rng.normal(size=n)
     df = pd.DataFrame({"S": S, "Z": Z, "Y": Y})
     pred = adj._build_backdoor_predictor(["S"], ["Z"], "Y", df)
-    m = pred.moments([0.3])
-    assert m["v"] == pytest.approx(m["lik_var"] + m["spread"])
-    # far outside the support the GP's epistemic variance blows up but v does not
-    far = pred.moments([25.0])
+    m, far = pred.moments([0.3]), pred.moments([25.0])
+    assert m["v"] == pytest.approx(m["lik_var"] + m["spread"] + m["epistemic"])
     assert far["epistemic"] > 10 * m["epistemic"]
-    assert far["v"] == pytest.approx(far["lik_var"] + far["spread"])
+    assert far["v"] > 10 * m["v"]
+    monkeypatch.setattr(adj, "VARIANCE_POLICY", "total")
+    far_total = pred.moments([25.0])
+    assert far_total["v"] == pytest.approx(far_total["lik_var"] + far_total["spread"])
+    assert far_total["v"] < far["v"] / 10
 
 
 # ------------------------------------------------------ fitted path (slow)
