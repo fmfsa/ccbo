@@ -90,3 +90,31 @@ def test_fine_cbo_pays_the_analytic_gap_under_a1(seed):
         f"A1 fine CBO should land near the analytic gap {gap}: {traj[-1]}")
     assert traj[-1] > gap / 2, (
         "A1 fine CBO must stay bounded away from y* = 0 (permanent damage)")
+
+
+# ---------------------------------------------------------------------------
+# Engine v3 arms
+# ---------------------------------------------------------------------------
+
+@pytest.mark.slow
+@pytest.mark.parametrize("seed", SEEDS)
+def test_qcbonp_invariant_under_protected_edits(seed):
+    """The no-prior quotient arm reads the graph only through the coarse
+    arm set, so it must be exactly invariant under A1/A2 as well."""
+    traj0, arms0, _ = _run("A0", "QCBONP", seed)
+    for cond in ("A1", "A2"):
+        traj, arms, _ = _run(cond, "QCBONP", seed)
+        assert arms == arms0
+        assert np.allclose(traj, traj0, atol=ATOL)
+
+
+@pytest.mark.slow
+def test_bo_and_bos_byte_identical_across_conditions():
+    """BO and BOS read no graph: every condition of an SCM yields the same
+    rows (the free harness check behind Table 1's BO column)."""
+    from ccbo.minimal_suite import run_plain_unit, run_bo_unit
+    seed = SEEDS[0]
+    bos = {c: run_plain_unit(mb.PP_NAME, c, "BOS", seed, TRIALS)[0] for c in ("A0", "A1", "A3")}
+    bo = {c: run_bo_unit(mb.PP_NAME, c, seed, TRIALS)[0] for c in ("A0", "A1", "A3")}
+    assert bos["A0"] == bos["A1"] == bos["A3"]
+    assert bo["A0"] == bo["A1"] == bo["A3"]

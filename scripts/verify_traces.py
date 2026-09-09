@@ -7,6 +7,11 @@ Given a results root holding the four suite directories
     <root>/qdcbo/        DCBO vs QDCBO (+ _e2/)  (Fig 4 middle, Tab 2 rows 4-6)
     <root>/qmcbo/        MCBO vs QMCBO (+ _e2/)  (Fig 4 bottom, Tab 2 rows 7-8, Tabs 3/5)
 
+(engine v3, 2026-09: MinimalBench carries 1320 units over the arms
+BO/BOS/CBO/CBONP/QCBO/QCBONP (+HQCBO/HQCBOGF on MediatedChain), every unit
+has a full-precision ``.decisions.json`` sidecar, and ``cum_cost`` row 0 is
+the charged initial design)
+
 this script (1) checks the exact expected file grid by *parsing* filenames,
 (2) recomputes the published aggregates from the raw rows and compares them at
 the paper's displayed precision, and (3) re-checks the exact-invariance pairs
@@ -56,16 +61,25 @@ def close(mean: float, published: float, decimals: int) -> bool:
 # ---------------------------------------------------------------- minimal ---
 
 MINIMAL_SEEDS = range(30)
+PLAIN_ARMS = ("BO", "BOS", "CBO", "CBONP", "QCBO", "QCBONP")
+REFINE_ARMS = ("HQCBO", "HQCBOGF")
+N_INIT_MINIMAL = 3
+
+# Published MinimalBench aggregates (paper's displayed precision).  ``None``
+# until the engine-v3 numbers are frozen; the structural and invariance
+# checks below run regardless.
+MINIMAL_PUB: dict | None = None
+# e.g. {"fd_b0_cbo_final": (0.0001, 4), "fd_b1_cbo_final": (0.0019, 4),
+#       "fd_paired_dr50": (6.2, 1), "mc_finals": {"CBO": 0.040, "QCBO": 4.000,
+#       "HQCBO": 0.040, "HQCBOGF": 0.040}, "trigger_mean": (7.3, 1)}
 
 
 def minimal_units() -> list[tuple[str, str, str]]:
-    # BO added 2026-08-21 (rerun/online-obs-v2): every condition also runs the
-    # plain-BO baseline arm, so the grid is 660 units (450 causal + 210 BO).
     units = []
     for p in PERTURBATIONS:
-        arms = ["BO", "CBO", "QCBO"]
+        arms = list(PLAIN_ARMS)
         if p["scm"] == MC_NAME and p["id"] == "C0":
-            arms.append("HQCBO")
+            arms += list(REFINE_ARMS)
         for arm in arms:
             units.append((p["scm"], p["id"], arm))
     return units
@@ -75,126 +89,162 @@ def load_minimal(root: Path, scm: str, cond: str, arm: str, seed: int) -> pd.Dat
     return pd.read_csv(root / "minimal" / f"{scm}_{cond}_{arm}_seed{seed}.csv")
 
 
+def load_sidecar(root: Path, scm: str, cond: str, arm: str, seed: int) -> dict:
+    from ccbo.decision_log import read
+    return read(str(root / "minimal" / f"{scm}_{cond}_{arm}_seed{seed}.decisions.json"))
+
+
+def _n_observe(df: pd.DataFrame) -> int:
+    body = df.iloc[1:]
+    return int((body.arm.isna() | (body.arm.astype(str).str.strip() == "")).sum())
+
+
 def verify_minimal(root: Path) -> None:
+    from ccbo.decision_log import decisions_signature
     d = root / "minimal"
-    missing = [
-        f"{scm}_{cond}_{arm}_seed{s}.csv"
-        for (scm, cond, arm) in minimal_units()
-        for s in MINIMAL_SEEDS
-        if not (d / f"{scm}_{cond}_{arm}_seed{s}.csv").exists()
-    ]
-    check(not missing, f"minimal grid complete (660 units); missing: {missing[:5]}")
+    units = minimal_units()
+    missing = [f"{scm}_{cond}_{arm}_seed{s}.csv"
+               for (scm, cond, arm) in units for s in MINIMAL_SEEDS
+               if not (d / f"{scm}_{cond}_{arm}_seed{s}.csv").exists()]
+    check(not missing, f"minimal grid complete ({len(units) * 30} units); missing: {missing[:5]}")
+    no_side = [f"{scm}_{cond}_{arm}_seed{s}.decisions.json"
+               for (scm, cond, arm) in units for s in MINIMAL_SEEDS
+               if not (d / f"{scm}_{cond}_{arm}_seed{s}.decisions.json").exists()]
+    check(not no_side, f"minimal decision-log sidecars present; missing: {no_side[:5]}")
     check((d / "refine_info.json").exists(), "minimal refine_info.json present")
-    if missing:
+    if missing or no_side:
         return
 
-    # BO reads no graph structure, so its trajectory must be byte-identical
-    # across every misspecification condition of an SCM (free harness check;
-    # Table 1's BO sup|Delta| column must read 0 on every row).
-    for scm, conds in ((PP_NAME, ("A0", "A1", "A2", "A3")),
-                       (FD_NAME, ("B0", "B1"))):
-        bad = []
-        for s in MINIMAL_SEEDS:
-            payloads = {c: (d / f"{scm}_{c}_BO_seed{s}.csv").read_bytes()
-                        for c in conds}
-            if len(set(payloads.values())) != 1:
-                bad.append(s)
-        check(not bad,
-              f"BO byte-identical across {scm} conditions {conds}; "
-              f"leaking seeds: {bad[:5]}")
-
-    # Online-observation budget: n_obs=100, batch 20, N_max=150 allows at most
-    # ceil(50/20) = 3 observe actions per unit; BO takes none by construction.
-    over, bo_obs = [], []
-    for (scm, cond, arm) in minimal_units():
+    # ---- Structural: row 0 = charged initial design (unit costs), observe
+    # budget, gate status, split charge at the trigger.
+    bad_init, over, bo_obs, gate_err, bad_split = [], [], [], [], []
+    trig = {}
+    for (scm, cond, arm) in units:
         for s in MINIMAL_SEEDS:
             df = load_minimal(root, scm, cond, arm, s)
-            body = df.iloc[1:]
-            n_obs = int((body.arm.isna()
-                         | (body.arm.astype(str).str.strip() == "")).sum())
-            if arm == "BO" and n_obs > 0:
-                bo_obs.append((scm, cond, s))
-            elif arm != "BO" and n_obs > 3:
+            log = load_sidecar(root, scm, cond, arm, s)
+            es = log["init"]["es"]
+            ic = float(log["init"]["init_cost"])
+            if abs(df.cum_cost.iloc[0] - ic) > 1e-9 or abs(ic - N_INIT_MINIMAL * sum(len(a) for a in es)) > 1e-9:
+                bad_init.append((scm, cond, arm, s, float(df.cum_cost.iloc[0]), ic))
+            n_obs = _n_observe(df)
+            if arm in ("BO", "BOS") and n_obs > 0:
+                bo_obs.append((scm, cond, arm, s))
+            elif arm not in ("BO", "BOS") and n_obs > 3:
                 over.append((scm, cond, arm, s, n_obs))
-    check(not over, f"observe actions per unit <= 3 (budget cap); over: {over[:5]}")
-    check(not bo_obs, f"BO units take no observe actions; violations: {bo_obs[:5]}")
+            if any(v == "error" for v in log["init"].get("gate_status", {}).values()):
+                gate_err.append((scm, cond, arm, s))
+            if arm in REFINE_ARMS:
+                ref = log.get("refine") or {}
+                t = ref.get("trigger_step")
+                trig[(arm, s)] = t
+                if t is not None:
+                    charged = df.cum_cost.iloc[t] - df.cum_cost.iloc[t - 1]
+                    if charged + 1e-9 < float(ref.get("split_init_cost", 0.0)):
+                        bad_split.append((arm, s, float(charged), ref.get("split_init_cost")))
+    check(not bad_init, f"row 0 cum_cost == charged initial design (3 pts/arm, unit costs); bad: {bad_init[:3]}")
+    check(not over, f"observe actions per causal unit <= 3 (budget cap); over: {over[:3]}")
+    check(not bo_obs, f"BO / BOS units take no observe actions; violations: {bo_obs[:3]}")
+    check(not gate_err, f"no identification-gate error state in any unit; errors: {gate_err[:3]}")
+    check(not bad_split, f"split design charged at the trigger row; bad: {bad_split[:3]}")
+    same_trig = all(trig.get(("HQCBO", s)) == trig.get(("HQCBOGF", s)) for s in MINIMAL_SEEDS)
+    check(same_trig, "HQCBO and HQCBOGF share the QCBO plateau trigger on every seed")
 
-    # Exact paired invariance on protected QCBO conditions (decisions + values).
+    # ---- BO and BOS read no graph: byte-identical across an SCM's conditions.
+    for scm, conds in ((PP_NAME, ("A0", "A1", "A2", "A3")), (FD_NAME, ("B0", "B1"))):
+        for arm in ("BO", "BOS"):
+            bad = [s for s in MINIMAL_SEEDS
+                   if len({(d / f"{scm}_{c}_{arm}_seed{s}.csv").read_bytes() for c in conds}) != 1]
+            check(not bad, f"{arm} byte-identical across {scm} conditions {conds}; leaking seeds: {bad[:5]}")
+
+    # ---- Exact paired invariance (CSV + full-precision sidecar signatures).
     for scm, base in ((PP_NAME, "A0"), (FD_NAME, "B0")):
         for p in PERTURBATIONS:
             if p["scm"] != scm or p["id"] == base:
                 continue
-            diffs, decisions_equal = [], True
-            for s in MINIMAL_SEEDS:
-                a = load_minimal(root, scm, base, "QCBO", s)
-                b = load_minimal(root, scm, p["id"], "QCBO", s)
-                diffs.append(float(np.max(np.abs(a.best_y.values - b.best_y.values))))
-                decisions_equal &= a.arm.equals(b.arm) and a.x_values.equals(b.x_values)
-            sup = max(diffs)
-            if p["protected"]:
-                check(sup == 0.0 and decisions_equal,
-                      f"QCBO invariant under {scm} {p['id']} (sup|Δ|={sup:g}, "
-                      f"decisions equal={decisions_equal})")
-            else:
-                check(sup > 0.0,
-                      f"QCBO differs under quotient-visible {scm} {p['id']} "
-                      f"(negative control, sup|Δ|={sup:g})")
+            for arm in ("QCBO", "QCBONP"):
+                diffs, decisions_equal, sig_equal = [], True, True
+                for s in MINIMAL_SEEDS:
+                    a = load_minimal(root, scm, base, arm, s)
+                    b = load_minimal(root, scm, p["id"], arm, s)
+                    diffs.append(float(np.max(np.abs(a.best_y.values - b.best_y.values))))
+                    decisions_equal &= a.arm.equals(b.arm) and a.x_values.equals(b.x_values)
+                    sig_equal &= (decisions_signature(load_sidecar(root, scm, base, arm, s))
+                                  == decisions_signature(load_sidecar(root, scm, p["id"], arm, s)))
+                sup = max(diffs)
+                if p["protected"] or arm == "QCBONP" and p["id"] == "A3":
+                    # QCBONP carries no prior, so even the prior-only A3 edit
+                    # cannot move it; every protected edit must leave both arms.
+                    check(sup == 0.0 and decisions_equal and sig_equal,
+                          f"{arm} invariant under {scm} {p['id']} (sup|Δ|={sup:g}, "
+                          f"decisions equal={decisions_equal}, full-precision log equal={sig_equal})")
+                else:
+                    check(sup > 0.0 or not sig_equal,
+                          f"{arm} differs under quotient-visible {scm} {p['id']} "
+                          f"(negative control, sup|Δ|={sup:g})")
 
-    # Experiment B numerics: fine-CBO finals and paired ΔR50 (y* = 0).
-    # Published values refreshed 2026-08-21 from the online-observation rerun
-    # (results/v2/minimal; artifacts/summaries/minimal_exact.json).
+    # ---- Published aggregates (skipped until frozen).
+    if MINIMAL_PUB is None:
+        note("minimal published-aggregate checks skipped (MINIMAL_PUB not yet frozen)")
+        return
     fd_finals = {c: [load_minimal(root, FD_NAME, c, "CBO", s).best_y.iloc[-1]
                      for s in MINIMAL_SEEDS] for c in ("B0", "B1")}
-    check(close(float(np.mean(fd_finals["B0"])), 0.0001, 4),
-          f"FrontDoor CBO B0 final {np.mean(fd_finals['B0']):.5f} ~ 0.0001")
-    check(close(float(np.mean(fd_finals["B1"])), 0.0019, 4),
-          f"FrontDoor CBO B1 final {np.mean(fd_finals['B1']):.5f} ~ 0.0019")
+    v, dec = MINIMAL_PUB["fd_b0_cbo_final"]
+    check(close(float(np.mean(fd_finals["B0"])), v, dec), f"FrontDoor CBO B0 final {np.mean(fd_finals['B0']):.5f} ~ {v}")
+    v, dec = MINIMAL_PUB["fd_b1_cbo_final"]
+    check(close(float(np.mean(fd_finals["B1"])), v, dec), f"FrontDoor CBO B1 final {np.mean(fd_finals['B1']):.5f} ~ {v}")
     dr = [cumulative_regret(load_minimal(root, FD_NAME, "B1", "CBO", s).best_y.values, 0.0)
           - cumulative_regret(load_minimal(root, FD_NAME, "B0", "CBO", s).best_y.values, 0.0)
           for s in MINIMAL_SEEDS]
     m, se = float(np.mean(dr)), float(np.std(dr, ddof=1) / np.sqrt(len(dr)))
-    check(close(m, 6.2, 1), f"FrontDoor paired ΔR50 {m:.2f}±{se:.2f} ~ 6.2±1.1")
-
-    # Experiment C: finals 0.040 / 4.000 / 0.040 and trigger step 7.3.
-    for arm, pub in (("CBO", 0.040), ("QCBO", 4.000), ("HQCBO", 0.040)):
-        finals = [load_minimal(root, MC_NAME, "C0", arm, s).best_y.iloc[-1]
-                  for s in MINIMAL_SEEDS]
-        check(close(float(np.mean(finals)), pub, 3),
-              f"MediatedChain {arm} final {np.mean(finals):.4f} ~ {pub:.3f}")
+    v, dec = MINIMAL_PUB["fd_paired_dr50"]
+    check(close(m, v, dec), f"FrontDoor paired ΔR50 {m:.2f}±{se:.2f} ~ {v}")
+    for arm, pub in MINIMAL_PUB["mc_finals"].items():
+        finals = [load_minimal(root, MC_NAME, "C0", arm, s).best_y.iloc[-1] for s in MINIMAL_SEEDS]
+        check(close(float(np.mean(finals)), pub, 3), f"MediatedChain {arm} final {np.mean(finals):.4f} ~ {pub:.3f}")
     info = json.loads((d / "refine_info.json").read_text())
-    trig = [rec["trigger_step"] for rec in info.values() if rec.get("trigger_step")]
-    tm = float(np.mean(trig))
-    check(len(trig) == 30 and close(tm, 7.3, 1),
-          f"refinement trigger mean {tm:.2f} over {len(trig)} seeds ~ 7.3")
-
-    # Experiment A (informational): fine CBO under A1 plateaus near the 4.25 gap.
-    a1 = float(np.mean([load_minimal(root, PP_NAME, "A1", "CBO", s).best_y.iloc[-1]
-                        for s in MINIMAL_SEEDS]))
-    note(f"ParallelParent CBO A1 mean final {a1:.3f} (analytic floor 4.25)")
+    tr = [rec["trigger_step"] for k, rec in info.items()
+          if "_HQCBO_" in k and rec.get("trigger_step") is not None]
+    tm = float(np.mean(tr))
+    v, dec = MINIMAL_PUB["trigger_mean"]
+    check(len(tr) == 30 and close(tm, v, dec), f"refinement trigger mean {tm:.2f} over {len(tr)} seeds ~ {v}")
 
 
 # ----------------------------------------------------------------- family ---
 
-# dataset -> (published BO, CBO, QCBO finals), 2 decimals.  Refreshed
-# 2026-08-21 from the online-observation rerun (results/v2/family_cbo);
-# BO baseline arm added in the same rerun (90-unit grid).
-FAMILY = {
-    "ToyGraph": (-2.17, -2.16, -2.17),
-    "CompleteGraph": (-0.63, -3.47, -1.28),
-    "SimplifiedCoralGraph": (9279.47, 36.07, 36.45),
-}
+# dataset -> (published BO, CBO, QCBO finals), 2 decimals.  ``None`` until the
+# engine-v3 family numbers are frozen.
+FAMILY_PUB: dict | None = None
+FAMILY_DATASETS = ("ToyGraph", "CompleteGraph", "SimplifiedCoralGraph")
+N_INIT_FAMILY = 10
 
 
 def verify_family(root: Path) -> None:
+    from ccbo.decision_log import read
     d = root / "family_cbo"
     missing = [f"{ds}_{arm}_seed{s}.csv"
-               for ds in FAMILY for arm in ("BO", "CBO", "QCBO")
+               for ds in FAMILY_DATASETS for arm in ("BO", "CBO", "QCBO")
                for s in range(10)
-               if not (d / f"{ds}_{arm}_seed{s}.csv").exists()]
-    check(not missing, f"family_cbo grid complete (90); missing: {missing[:5]}")
+               if not (d / f"{ds}_{arm}_seed{s}.csv").exists()
+               or not (d / f"{ds}_{arm}_seed{s}.decisions.json").exists()]
+    check(not missing, f"family_cbo grid complete (90 units + sidecars); missing: {missing[:5]}")
     if missing:
         return
-    for ds, (pub_bo, pub_cbo, pub_qcbo) in FAMILY.items():
+    bad_init = []
+    for ds in FAMILY_DATASETS:
+        for arm in ("BO", "CBO", "QCBO"):
+            for s in range(10):
+                df = pd.read_csv(d / f"{ds}_{arm}_seed{s}.csv")
+                log = read(str(d / f"{ds}_{arm}_seed{s}.decisions.json"))
+                ic = float(log["init"]["init_cost"])
+                expect = N_INIT_FAMILY * sum(len(a) for a in log["init"]["es"])
+                if abs(df.cum_cost.iloc[0] - ic) > 1e-9 or abs(ic - expect) > 1e-9:
+                    bad_init.append((ds, arm, s, float(df.cum_cost.iloc[0]), ic, expect))
+    check(not bad_init, f"family row 0 cum_cost == charged initial design (10 pts/arm); bad: {bad_init[:3]}")
+    if FAMILY_PUB is None:
+        note("family published-final checks skipped (FAMILY_PUB not yet frozen)")
+        return
+    for ds, (pub_bo, pub_cbo, pub_qcbo) in FAMILY_PUB.items():
         for arm, pub in (("BO", pub_bo), ("CBO", pub_cbo), ("QCBO", pub_qcbo)):
             finals = [pd.read_csv(d / f"{ds}_{arm}_seed{s}.csv").best_y.iloc[-1]
                       for s in range(10)]
