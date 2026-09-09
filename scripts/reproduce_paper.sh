@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # One-command regeneration: archived raw traces -> every figure/table -> PDF.
+# Engine v3 (2026-09): archives carry per-unit .decisions.json sidecars and
+# charged initial designs; verify_traces.py gates both.
 #
 # Usage:
 #   bash scripts/reproduce_paper.sh [WORKDIR]
@@ -43,6 +45,10 @@ cd "$REPO"
 "$PYTHON" scripts/emit_minimal_taxonomy.py --dir "$WORKDIR/minimal"
 "$PYTHON" scripts/plot_minimal_misspec.py  --dir "$WORKDIR/minimal"
 "$PYTHON" scripts/plot_minimal_refine.py   --dir "$WORKDIR/minimal"
+"$PYTHON" scripts/plot_minimal_ablations.py --dir "$WORKDIR/minimal"
+"$PYTHON" scripts/plot_cost_indexed.py     --dir "$WORKDIR/minimal"
+"$PYTHON" scripts/summarize_minimal_exact.py --dir "$WORKDIR/minimal"
+"$PYTHON" scripts/emit_minimal_ablation_table.py
 "$PYTHON" scripts/plot_family_suite.py     --results-dir "$WORKDIR"
 "$PYTHON" scripts/emit_qmcbo_tables.py     --results-dir "$WORKDIR" \
                                            --summary "$WORKDIR/qmcbo_pilot.json"
