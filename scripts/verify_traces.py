@@ -279,7 +279,8 @@ def verify_family(root: Path) -> None:
 # Published finals (2 dp); ``None`` until the engine-v3 (corrected stock
 # semantics) numbers are frozen.  Pre-v3 archive values were
 # {"stat": (-6.14, -6.43), "ind": (-3.12, -5.57), "nonstat": (8.03, 6.33)}.
-QDCBO_PUB: dict | None = None
+# Frozen 2026-09-09 from results/v3 (LSF 29365482, engine SHA 9f25b41, corrected stock semantics).
+QDCBO_PUB: dict | None = {"stat": [-6.12, -6.4], "ind": [-3.13, -5.55], "nonstat": [7.01, 5.78]}
 QDCBO_SETUPS = ("stat", "ind", "nonstat")
 
 

@@ -75,7 +75,21 @@ Readings: the causal prior is worth 2.6 [1.5, 3.8] regret units to CBO and 2.2 [
 
 ## 7. Family, QDCBO, QMCBO
 
-«pending — filled when LSF 29365451 / 29365482 / 29365483 complete»
+### 7.1 QDCBO (LSF 29365482) — complete
+
+240/240 units, zero failures, every unit with a decision sidecar and `stock_quirks=false`. Gate: grid, sidecars, corrected semantics, **QDCBO E2-invariant on all 60 units at value and at full-precision decision level** — all PASS; `QDCBO_PUB` frozen.
+
+| Setup (T=3, min) | v2 DCBO / QDCBO | v3 DCBO / QDCBO | paired QDCBO − DCBO (v3) [95 % CI] |
+|---|---|---|---|
+| stat | -6.14 / -6.43 | **-6.12±0.05 / -6.40±0.03** | -0.27 [-0.39, -0.15] |
+| ind | -3.12 / -5.57 | **-3.13±0.06 / -5.55±0.13** | -2.43 [-2.69, -2.17] |
+| nonstat | 8.03 / 6.33 | **7.01±0.83 / 5.78±0.02** | -1.23 [-2.98, +0.52] |
+
+The corrected transition fitting (regress each child on its lagged parents instead of the stock slice mix-up) moves the nonstationary setup most — both the DCBO baseline and QDCBO improve, and the quotient advantage there is no longer significant at 95 % — while stat and ind are essentially unchanged.
+
+### 7.2 Family (LSF 29365451) — «pending»
+
+### 7.3 QMCBO (LSF 29365483) — «pending»
 
 ## 8. What changed in `verify_traces.py`
 

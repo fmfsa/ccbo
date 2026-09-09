@@ -62,15 +62,26 @@ PYTHONPATH=. python scripts/verify_traces.py --results-dir /tmp/qcbo-traces
 
 ## qdcbo.tar.gz — DCBO vs QDCBO (Fig. 4 middle, Table 2)
 
-- 720 files: 120 E1 CSVs + sidecar `_info.json` + run logs, and the same
-  for E2 under `_e2/`
+- **Engine v3 (2026-09-09)**: 960 files — 120 E1 CSVs + `_info.json` +
+  `.decisions.json` + run logs, and the same for E2 under `_e2/`
   (`{dcbo,qdcbo}_{stat,ind,nonstat}[_e2]_best_so_far_seed{0..19}_T3_trials10_reps1.csv`,
-  columns `method,replicate,time_index,trial_index,best_so_far_value,y`).
-- E2 = intra-slice perturbation of the model's DAG view, objective fixed.
+  columns `method,replicate,time_index,trial_index,best_so_far_value,y`;
+  the decision sidecar records per time slice the chosen intervention sets,
+  their levels, outcomes, best-so-far, per-trial costs and the closing
+  blanket).
+- **Corrected stock semantics** (`ccbo/qdcbo/stock_fixes.py`, applied to the
+  DCBO baseline *and* QDCBO): transition mechanisms regress each child at its
+  own slice on its parents at theirs (the stock code mixed slices), and
+  intervention clamping tests `is not None` (the stock truthiness test dropped
+  `do(X = 0.0)`). Every `_info.json` / sidecar records `stock_quirks: false`.
+  The historical stock behaviour survives only as `--stock-quirks` for the
+  finest-partition identity test (which passes in both modes).
+- E2 = intra-slice perturbation of the model's DAG view, objective fixed;
+  QDCBO is E2-invariant on all 60 units at value level and at full-precision
+  decision level.
 - Generator: `scripts/run_qdcbo_pilot.sh` → `ccbo.qdcbo.runner` over
-  `third_party/DCBO` @ `85a9bdf`, via `scripts/lsf/submit_qdcbo.sh`.
-- Source: worktree `benchmark-suite-paper-refresh-9b33cd` @ `9d3c543`,
-  file mtimes 2026-07-22.
+  `third_party/DCBO` @ `85a9bdf`, via `scripts/lsf/submit_qdcbo_v3.sh`;
+  LSF job 29365482, 240/240 units, zero failures, engine `9f25b41`.
 
 ## qmcbo.tar.gz — MCBO vs QMCBO (Fig. 4 bottom, Tables 2/3/5)
 
