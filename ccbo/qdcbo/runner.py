@@ -121,13 +121,20 @@ def sample_observations(sem_class, change_points, T: int, n_obs: int,
 
 def run_unit(setup: str, algo: str, T: int, trials: int, seed: int,
              misspec: str = "", n_obs: int = 100,
-             num_anchor_points: int = 100, partition=None):
+             num_anchor_points: int = 100, partition=None,
+             stock_quirks: bool = False):
     """One (setup, algo, seed) run; returns (model, wall_seconds).
 
     Both algorithms receive byte-identical observational data and RNG states;
     ``--misspec e2`` perturbs ONLY the graph the model reasons with.
+    ``stock_quirks=False`` (engine v3 default) runs BOTH the stock DCBO
+    baseline and QDCBO with corrected transition fitting and ``is not None``
+    intervention clamping (:mod:`ccbo.qdcbo.stock_fixes`); ``True`` is the
+    historical-reproduction mode.
     """
     assert algo in ("DCBO", "QDCBO"), algo
+    from ccbo.qdcbo import stock_fixes
+    stock_fixes.apply(stock_quirks)
     from dcbo.methods.dcbo import DCBO
     from dcbo.utils.sem_utils.sem_estimate import build_sem_hat
 
@@ -181,7 +188,8 @@ def run_unit(setup: str, algo: str, T: int, trials: int, seed: int,
     if algo == "DCBO":
         model = DCBO(**common)
     else:
-        model = QDCBO(partition=partition or PARTITIONS[setup], **common)
+        model = QDCBO(partition=partition or PARTITIONS[setup],
+                      stock_quirks=stock_quirks, **common)
     model.run()
     wall = time.time() - t0
     return model, wall
@@ -191,6 +199,59 @@ def trajectory(model) -> list:
     """best-so-far per (time_index, trial_index), the run_dcbo.py contract."""
     return [list(map(float, model.optimal_outcome_values_during_trials[t]))
             for t in range(model.T)]
+
+
+def _plain(x):
+    """JSON-safe copy (ndarray -> list, nan -> None, tuple -> list)."""
+    if isinstance(x, dict):
+        return {str(k): _plain(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_plain(v) for v in x]
+    if isinstance(x, np.ndarray):
+        return _plain(x.tolist())
+    if isinstance(x, (np.floating, float)):
+        f = float(x)
+        return None if f != f else f
+    if isinstance(x, (np.integer,)):
+        return int(x)
+    if isinstance(x, (np.bool_,)):
+        return bool(x)
+    return x
+
+
+def decisions_payload(model, algo: str, setup: str, T: int, trials: int,
+                      seed: int, misspec: str, stock_quirks: bool) -> dict:
+    """Full-precision per-(time slice, trial) decision record (engine v3):
+    chosen intervention set, its level, the outcome, the best-so-far value,
+    the per-trial cost and the blanket the slice was closed with."""
+    per_t = []
+    for t in range(model.T):
+        levels = {}
+        for es in model.exploration_sets:
+            lv = model.optimal_intervention_levels[t][es]
+            levels["+".join(es)] = _plain(list(lv)) if lv is not None else None
+        per_t.append({
+            "t": t,
+            "chosen_sets": _plain([list(es) for es in
+                                   model.sequence_of_interventions_during_trials[t]]),
+            "levels_by_set": levels,
+            "outcome_values": _plain(list(model.outcome_values[t])),
+            "best_so_far": _plain(list(model.optimal_outcome_values_during_trials[t])),
+            "per_trial_cost": _plain(list(model.per_trial_cost[t])),
+            "optimal_intervention_set": _plain(
+                list(model.optimal_intervention_sets[t]) if model.optimal_intervention_sets[t] else None),
+        })
+    return {
+        "schema": 1,
+        "unit": {"suite": "qdcbo", "setup": setup, "algo": algo, "T": T,
+                 "trials": trials, "seed": seed, "misspec": misspec,
+                 "stock_quirks": bool(stock_quirks),
+                 "partition": _plain(getattr(getattr(model, "_spec", None), "clusters", None)),
+                 "engine_sha": os.environ.get("CCBO_GIT_SHA")},
+        "exploration_sets": [list(es) for es in model.exploration_sets],
+        "assigned_blanket": _plain(model.assigned_blanket),
+        "per_t": per_t,
+    }
 
 
 def write_csv(model, algo: str, setup: str, T: int, trials: int, seed: int,
@@ -240,17 +301,28 @@ def main():
     ap.add_argument("--n-obs", type=int, default=100)
     ap.add_argument("--num-anchor-points", type=int, default=100)
     ap.add_argument("--outdir", default=DEFAULT_OUTDIR)
+    ap.add_argument("--stock-quirks", action="store_true",
+                    help="historical mode: reproduce the stock backend's "
+                         "transition-slice and truthiness-clamp semantics")
     args = ap.parse_args()
 
     model, wall = run_unit(args.setup, args.algo, args.T, args.trials,
                            args.seed, args.misspec, args.n_obs,
-                           args.num_anchor_points)
+                           args.num_anchor_points,
+                           stock_quirks=args.stock_quirks)
     path = write_csv(model, args.algo, args.setup, args.T, args.trials,
                      args.seed, args.misspec, args.outdir)
+    payload = decisions_payload(model, args.algo, args.setup, args.T,
+                                args.trials, args.seed, args.misspec,
+                                args.stock_quirks)
+    with open(path.replace(".csv", ".decisions.json"), "w") as f:
+        json.dump(payload, f, indent=1, sort_keys=True)
     finals = [tr[-1] for tr in trajectory(model)]
     info = {"setup": args.setup, "algo": args.algo, "T": args.T,
             "trials": args.trials, "seed": args.seed,
             "misspec": args.misspec, "n_obs": args.n_obs,
+            "stock_quirks": bool(args.stock_quirks),
+            "engine_sha": os.environ.get("CCBO_GIT_SHA"),
             "final_best_so_far_per_t": finals, "secs": wall, "csv": path}
     with open(path.replace(".csv", "_info.json"), "w") as f:
         json.dump(info, f, indent=2)

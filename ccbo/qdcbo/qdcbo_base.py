@@ -30,13 +30,14 @@ Reduction guarantees (tested in ccbo/tests/test_qdcbo.py):
 * intra-cluster edge edits of the ASSUMED graph leave the quotient — and
   hence the whole QDCBO trajectory — byte-identical (E2 invariance).
 
-Faithfully mirrored stock quirks (needed for the exact finest-partition
-reduction; both are properties of the authors' code, not choices of ours):
-* transition mechanisms are fitted on the parent variables' columns at the
-  CHILD's time slice (``fit_arcs`` uses ``data[pa][:, t]`` with ``t`` the
-  child's index) even though they are evaluated at the t-1 values downstream;
-* intervention clamping uses truthiness (``if interventions[var][t]:``), so a
-  0.0-valued intervention falls through to the mechanism.
+Stock quirks (engine v3, 2026-09).  The authors' code has two numerical
+defects — transition mechanisms fitted on the wrong time slice, and
+truthiness-based intervention clamping that drops ``do(X = 0.0)`` — which
+QDCBO used to mirror unconditionally.  They are now behind
+``stock_quirks`` (default ``False`` = corrected semantics; ``True`` =
+historical reproduction).  The stock baseline gets the same correction
+through :mod:`ccbo.qdcbo.stock_fixes`, so the finest-partition identity
+holds in both modes.
 """
 
 from __future__ import annotations
@@ -130,7 +131,7 @@ def _columns(data: dict, member_nodes: Sequence[str]) -> np.ndarray:
 
 
 def fit_quotient_arcs(spec: QuotientDBNSpec, data: dict,
-                      emissions: bool) -> dict:
+                      emissions: bool, stock_quirks: bool = False) -> dict:
     """Quotient replacement for the stock ``fit_arcs``.
 
     Returns ``{t: {cluster: {"inputs": member-node tuple, "model": obj}}}``
@@ -171,12 +172,14 @@ def fit_quotient_arcs(spec: QuotientDBNSpec, data: dict,
                 if not pars:
                     continue
                 inputs = spec.member_nodes(pars, t - 1)
-                # Stock-quirk mirror: regressors are the parent VARIABLES'
-                # columns at the child's slice t (see module docstring).
-                inputs_at_t = spec.member_nodes(pars, t)
+                # Corrected: regress the child at slice t on the parents at
+                # slice t-1 (the values the transition is evaluated on).
+                # ``stock_quirks`` reproduces the authors' fit on the parent
+                # variables' columns at the child's slice t.
+                reg_nodes = spec.member_nodes(pars, t) if stock_quirks else inputs
                 fncs[t][C] = {"inputs": inputs,
                               "model": fit_joint_gp(
-                                  _columns(data, inputs_at_t),
+                                  _columns(data, reg_nodes),
                                   _columns(data,
                                            spec.member_nodes([C], t)))}
     return fncs
@@ -264,7 +267,8 @@ def sequential_sample_from_qsem_hat(static_sem: OrderedDict,
                                     spec: QuotientDBNSpec,
                                     initial_values: dict = None,
                                     interventions: dict = None,
-                                    seed: int = None) -> OrderedDict:
+                                    seed: int = None,
+                                    stock_quirks: bool = False) -> OrderedDict:
     """Cluster-major mirror of the stock ``sequential_sample_from_SEM_hat``.
 
     The returned sample dict stays keyed by BASE variables (so blankets,
@@ -275,8 +279,17 @@ def sequential_sample_from_qsem_hat(static_sem: OrderedDict,
     truthiness-based clamping and its RNG consumption pattern: one KDE draw
     per source cluster, GP moments elsewhere).
     """
-    if seed:
+    if (seed if stock_quirks else seed is not None):
         np.random.seed(seed)
+
+    def _set(m, t):
+        """Is member ``m`` clamped at ``t``?  Corrected semantics: any
+        non-None value (0.0 included); stock quirk: truthiness."""
+        if not interventions:
+            return False
+        v = interventions[m][t]
+        return bool(v) if stock_quirks else (v is not None)
+
     sample = OrderedDict((v, np.zeros(timesteps)) for v in spec.base_order)
     if initial_values:
         assert set(sample.keys()) == set(initial_values.keys())
@@ -295,12 +308,12 @@ def sequential_sample_from_qsem_hat(static_sem: OrderedDict,
                             f"intervention for {m} at t=0.")
             # Whole-cluster clamp: skip the mechanism entirely (stock skips
             # evaluation for clamped variables; truthiness mirrored).
-            if interventions and all(interventions[m][t] for m in members):
+            if interventions and all(_set(m, t) for m in members):
                 for m in members:
                     sample[m][t] = interventions[m][t]
                 continue
             if static_slice and initial_values and not any(
-                    interventions and interventions[m][t] for m in members):
+                    _set(m, t) for m in members):
                 for m in members:
                     sample[m][t] = initial_values[m]
                 continue
@@ -332,7 +345,7 @@ def sequential_sample_from_qsem_hat(static_sem: OrderedDict,
             # some members carry truthy blanket values): override members.
             if interventions:
                 for m in members:
-                    if interventions[m][t]:
+                    if _set(m, t):
                         sample[m][t] = interventions[m][t]
     return sample
 
@@ -348,6 +361,7 @@ def update_sufficient_statistics_qhat(
     mean_dict_store: dict,
     var_dict_store: dict,
     seed: int = 1,
+    stock_quirks: bool = False,
 ):
     """Quotient mirror of ``dcbo.utils.gp_utils.update_sufficient_statistics_hat``
     (same closures, caches and seeds; only the graph walk is replaced by the
@@ -392,7 +406,8 @@ def update_sufficient_statistics_qhat(
                     intervention_blanket[intervention_variable][
                         temporal_index] = xx
                 sample = sequential_sample_from_qsem_hat(
-                    interventions=intervention_blanket, seed=seed, **kwargs1)
+                    interventions=intervention_blanket, seed=seed,
+                    stock_quirks=stock_quirks, **kwargs1)
                 samples.append(sample[target_variable][temporal_index])
                 store[k] = sample[target_variable][temporal_index]
         return np.vstack(samples)
@@ -409,7 +424,8 @@ def update_sufficient_statistics_qhat(
                     intervention_blanket[intervention_variable][
                         temporal_index] = xx
                 sample = sequential_sample_from_qsem_hat(
-                    interventions=intervention_blanket, seed=seed, **kwargs2)
+                    interventions=intervention_blanket, seed=seed,
+                    stock_quirks=stock_quirks, **kwargs2)
                 out.append(sample[target_variable][temporal_index])
                 store[k] = sample[target_variable][temporal_index]
         return np.vstack(out)
@@ -466,8 +482,10 @@ class QDCBO(DCBO):
         args_sem=None,
         manipulative_variables: list = None,
         change_points: list = None,
+        stock_quirks: bool = False,
     ):
         assert partition is not None, "QDCBO requires a partition"
+        self._stock_quirks = bool(stock_quirks)
         assert estimate_sem, "QDCBO is defined for the estimated-SEM regime"
         if online or use_di or transfer_hp_o or transfer_hp_i or \
                 isinstance(n_obs_t, list):
@@ -517,9 +535,11 @@ class QDCBO(DCBO):
 
         # --- quotient mechanism fits (before temporal-list conversion) ------
         self.sem_emit_fncs = fit_quotient_arcs(
-            spec, self.observational_samples, emissions=True)
+            spec, self.observational_samples, emissions=True,
+            stock_quirks=self._stock_quirks)
         self.sem_trans_fncs = fit_quotient_arcs(
-            spec, self.observational_samples, emissions=False)
+            spec, self.observational_samples, emissions=False,
+            stock_quirks=self._stock_quirks)
 
         # --- stock DCBO.__init__ tail ---------------------------------------
         self.optimal_assigned_blankets = optimal_assigned_blankets
@@ -606,6 +626,7 @@ class QDCBO(DCBO):
                 assigned_blanket=assigned_blanket,
                 mean_dict_store=self.mean_dict_store,
                 var_dict_store=self.var_dict_store,
+                stock_quirks=self._stock_quirks,
             )
 
     # ------------------------------------------------------------------

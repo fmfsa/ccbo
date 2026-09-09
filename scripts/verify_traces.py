@@ -254,7 +254,11 @@ def verify_family(root: Path) -> None:
 
 # ------------------------------------------------------------------ qdcbo ---
 
-QDCBO_PUB = {"stat": (-6.14, -6.43), "ind": (-3.12, -5.57), "nonstat": (8.03, 6.33)}
+# Published finals (2 dp); ``None`` until the engine-v3 (corrected stock
+# semantics) numbers are frozen.  Pre-v3 archive values were
+# {"stat": (-6.14, -6.43), "ind": (-3.12, -5.57), "nonstat": (8.03, 6.33)}.
+QDCBO_PUB: dict | None = None
+QDCBO_SETUPS = ("stat", "ind", "nonstat")
 
 
 def qdcbo_name(method: str, setup: str, seed: int, e2: bool) -> str:
@@ -265,72 +269,118 @@ def qdcbo_name(method: str, setup: str, seed: int, e2: bool) -> str:
 def verify_qdcbo(root: Path) -> None:
     d = root / "qdcbo"
     missing = [qdcbo_name(m, s, n, e2)
-               for m in ("dcbo", "qdcbo") for s in QDCBO_PUB for n in range(20)
+               for m in ("dcbo", "qdcbo") for s in QDCBO_SETUPS for n in range(20)
                for e2 in (False, True)
                if not (d / ("_e2" if e2 else "") / qdcbo_name(m, s, n, e2)).exists()]
     check(not missing, f"qdcbo grid complete (120 E1 + 120 E2); missing: {missing[:5]}")
     if missing:
         return
-    for setup, (pub_d, pub_q) in QDCBO_PUB.items():
-        for method, pub in (("dcbo", pub_d), ("qdcbo", pub_q)):
-            finals = [pd.read_csv(d / qdcbo_name(method, setup, n, False))
-                      .best_so_far_value.iloc[-1] for n in range(20)]
-            m = float(np.mean(finals))
-            check(close(m, pub, 2), f"qdcbo {setup} {method} final {m:.3f} ~ {pub:.2f}")
-    # QDCBO must be trajectory-identical under the intra-slice E2 edit.
-    bad = []
-    for setup in QDCBO_PUB:
+    # Engine v3: every unit carries a decision sidecar, none in stock-quirks mode.
+    side = [(m, s, n, e2) for m in ("dcbo", "qdcbo") for s in QDCBO_SETUPS
+            for n in range(20) for e2 in (False, True)
+            if not (d / ("_e2" if e2 else "") / qdcbo_name(m, s, n, e2)
+                    .replace(".csv", ".decisions.json")).exists()]
+    check(not side, f"qdcbo decision sidecars present; missing: {side[:5]}")
+    if not side:
+        quirks = []
+        for m in ("dcbo", "qdcbo"):
+            for setup in QDCBO_SETUPS:
+                for n in range(20):
+                    for e2 in (False, True):
+                        pl = json.loads((d / ("_e2" if e2 else "") / qdcbo_name(m, setup, n, e2)
+                                         .replace(".csv", ".decisions.json")).read_text())
+                        if pl["unit"].get("stock_quirks"):
+                            quirks.append((m, setup, n, e2))
+        check(not quirks, f"qdcbo units run with corrected stock semantics (stock_quirks=False); quirks: {quirks[:5]}")
+    if QDCBO_PUB is not None:
+        for setup, (pub_d, pub_q) in QDCBO_PUB.items():
+            for method, pub in (("dcbo", pub_d), ("qdcbo", pub_q)):
+                finals = [pd.read_csv(d / qdcbo_name(method, setup, n, False))
+                          .best_so_far_value.iloc[-1] for n in range(20)]
+                m = float(np.mean(finals))
+                check(close(m, pub, 2), f"qdcbo {setup} {method} final {m:.3f} ~ {pub:.2f}")
+    else:
+        note("qdcbo published-final checks skipped (QDCBO_PUB not yet frozen)")
+    # QDCBO must be trajectory-identical under the intra-slice E2 edit --
+    # values (CSV) and, when sidecars exist, decisions (chosen sets + levels).
+    bad, bad_dec = [], []
+    for setup in QDCBO_SETUPS:
         for n in range(20):
             e1 = pd.read_csv(d / qdcbo_name("qdcbo", setup, n, False))
             e2 = pd.read_csv(d / "_e2" / qdcbo_name("qdcbo", setup, n, True))
             if not np.array_equal(e1.best_so_far_value.values,
                                   e2.best_so_far_value.values):
                 bad.append((setup, n))
-    check(not bad, f"QDCBO invariant under E2 on all 60 units; diffs: {bad[:5]}")
+            p1 = d / qdcbo_name("qdcbo", setup, n, False).replace(".csv", ".decisions.json")
+            p2 = d / "_e2" / qdcbo_name("qdcbo", setup, n, True).replace(".csv", ".decisions.json")
+            if p1.exists() and p2.exists():
+                a, b = json.loads(p1.read_text()), json.loads(p2.read_text())
+                if a["per_t"] != b["per_t"]:
+                    bad_dec.append((setup, n))
+    check(not bad, f"QDCBO invariant under E2 on all 60 units (values); diffs: {bad[:5]}")
+    check(not bad_dec, f"QDCBO invariant under E2 on all 60 units (decisions, full precision); diffs: {bad_dec[:5]}")
 
 
 # ------------------------------------------------------------------ qmcbo ---
 
 QMCBO_SEEDS = 20   # extended 5 -> 20 on 2026-08-11 (LSF job 29078186)
-QMCBO_PUB = {  # env -> (MCBO final, QMCBO final), 2 decimals
-    "ToyGraph": (1.39, 2.16),
-    "PSAGraph": (-5.15, -5.15),
-}
-QMCBO_E2_IDENTICAL = {  # (env, method) -> (identical count, mean |Δfinal| 3dp)
-    ("ToyGraph", "MCBO"): (9, 0.277),
-    ("ToyGraph", "QMCBO"): (20, 0.000),
-    ("PSAGraph", "MCBO"): (0, 0.001),
-    ("PSAGraph", "QMCBO"): (20, 0.000),
-}
+QMCBO_ENVS = ("ToyGraph", "PSAGraph")
+# Published finals / E2 counts; ``None`` until the engine-v3 numbers are
+# frozen.  Pre-v3 archive: ToyGraph (1.39, 2.16), PSAGraph (-5.15, -5.15);
+# E2 identical: ToyGraph MCBO 9/20 (0.277), QMCBO 20/20; PSAGraph MCBO 0/20
+# (0.001), QMCBO 20/20.
+QMCBO_PUB: dict | None = None
+QMCBO_E2_IDENTICAL: dict | None = None
 
 
 def verify_qmcbo(root: Path) -> None:
     d = root / "qmcbo"
     missing = [f"{sub}trial_results_{m}_{env}_{s}.csv"
-               for env in QMCBO_PUB for m in ("MCBO", "QMCBO") for s in range(QMCBO_SEEDS)
+               for env in QMCBO_ENVS for m in ("MCBO", "QMCBO") for s in range(QMCBO_SEEDS)
                for sub in ("", "_e2/")
                if not (d / sub / f"trial_results_{m}_{env}_{s}.csv").exists()]
     check(not missing, f"qmcbo grid complete ({QMCBO_SEEDS*4} E1 + {QMCBO_SEEDS*4} E2); missing: {missing[:5]}")
     if missing:
         return
-    for env, (pub_m, pub_q) in QMCBO_PUB.items():
-        for method, pub in (("MCBO", pub_m), ("QMCBO", pub_q)):
-            finals = [pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
-                      .current_optimal.iloc[-1] for s in range(QMCBO_SEEDS)]
-            m = float(np.mean(finals))
-            check(close(m, pub, 2), f"qmcbo {env} {method} final {m:.4f} ~ {pub:.2f}")
-    for (env, method), (pub_n, pub_delta) in QMCBO_E2_IDENTICAL.items():
-        n_id, deltas = 0, []
+    if QMCBO_PUB is not None:
+        for env, (pub_m, pub_q) in QMCBO_PUB.items():
+            for method, pub in (("MCBO", pub_m), ("QMCBO", pub_q)):
+                finals = [pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
+                          .current_optimal.iloc[-1] for s in range(QMCBO_SEEDS)]
+                m = float(np.mean(finals))
+                check(close(m, pub, 2), f"qmcbo {env} {method} final {m:.4f} ~ {pub:.2f}")
+    else:
+        note("qmcbo published-final checks skipped (QMCBO_PUB not yet frozen)")
+    # QMCBO must be E2-invariant on every seed: values (CSV) and, when the
+    # engine-v3 sidecars exist, the chosen interventions X per iteration.
+    for env in QMCBO_ENVS:
+        n_id, n_dec, n_side = 0, 0, 0
         for s in range(QMCBO_SEEDS):
-            e1 = pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
-            e2 = pd.read_csv(d / "_e2" / f"trial_results_{method}_{env}_{s}.csv")
-            same = np.array_equal(e1.current_optimal.values, e2.current_optimal.values)
-            n_id += int(same)
-            deltas.append(abs(e1.current_optimal.iloc[-1] - e2.current_optimal.iloc[-1]))
-        md = float(np.mean(deltas))
-        check(n_id == pub_n and close(md, pub_delta, 3),
-              f"qmcbo E2 {env} {method}: {n_id}/{QMCBO_SEEDS} identical (pub {pub_n}/{QMCBO_SEEDS}), "
-              f"mean|Δfinal| {md:.4f} ~ {pub_delta:.3f}")
+            e1 = pd.read_csv(d / f"trial_results_QMCBO_{env}_{s}.csv")
+            e2 = pd.read_csv(d / "_e2" / f"trial_results_QMCBO_{env}_{s}.csv")
+            n_id += int(np.array_equal(e1.current_optimal.values, e2.current_optimal.values))
+            p1 = d / f"trial_results_QMCBO_{env}_{s}.decisions.json"
+            p2 = d / "_e2" / f"trial_results_QMCBO_{env}_{s}.decisions.json"
+            if p1.exists() and p2.exists():
+                n_side += 1
+                a, b = json.loads(p1.read_text()), json.loads(p2.read_text())
+                n_dec += int([(it["X"], it["score"]) for it in a["iterations"]]
+                             == [(it["X"], it["score"]) for it in b["iterations"]])
+        check(n_id == QMCBO_SEEDS, f"QMCBO E2-invariant values on {env}: {n_id}/{QMCBO_SEEDS}")
+        if n_side:
+            check(n_dec == n_side, f"QMCBO E2-invariant decisions (X, score) on {env}: {n_dec}/{n_side}")
+    if QMCBO_E2_IDENTICAL is not None:
+        for (env, method), (pub_n, pub_delta) in QMCBO_E2_IDENTICAL.items():
+            n_id, deltas = 0, []
+            for s in range(QMCBO_SEEDS):
+                e1 = pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
+                e2 = pd.read_csv(d / "_e2" / f"trial_results_{method}_{env}_{s}.csv")
+                n_id += int(np.array_equal(e1.current_optimal.values, e2.current_optimal.values))
+                deltas.append(abs(e1.current_optimal.iloc[-1] - e2.current_optimal.iloc[-1]))
+            md = float(np.mean(deltas))
+            check(n_id == pub_n and close(md, pub_delta, 3),
+                  f"qmcbo E2 {env} {method}: {n_id}/{QMCBO_SEEDS} identical (pub {pub_n}/{QMCBO_SEEDS}), "
+                  f"mean|Δfinal| {md:.4f} ~ {pub_delta:.3f}")
 
 
 # -------------------------------------------------------------------- ceo ---
