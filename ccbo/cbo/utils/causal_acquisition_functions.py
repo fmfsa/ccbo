@@ -1,40 +1,26 @@
-## Import basic packages
+"""Expected improvement per unit cost for the arm-based CBO loop.
+
+Engine v3 (2026-09): the maximisation branch is a proper EI
+(``u = (mu - best)/sigma``, gradient ``phi(u) dsigma + Phi(u) dmu``) instead
+of the negated minimisation EI, and ``sigma = 0`` is guarded.
+"""
+
 import numpy as np
 import scipy.stats
-import pandas as pd
-from collections import OrderedDict
-import scipy
-import itertools
-from numpy.random import randn
-import copy
-import seaborn as sns
 
 from typing import Tuple, Union
 from emukit.core.interfaces import IModel, IDifferentiable
 from emukit.core.acquisition import Acquisition
 
-import emukit
-from emukit.core import ParameterSpace
-from emukit.core.acquisition import Acquisition
-from emukit.core.optimization.context_manager import ContextManager
-
-
-from emukit.core.optimization.anchor_points_generator import AnchorPointsGenerator
-
-
-
 
 class CausalExpectedImprovement(Acquisition):
-    def __init__(self, current_global_min, task, model: Union[IModel, IDifferentiable], jitter: float = float(0))-> None:
+    def __init__(self, current_global_min, task, model: Union[IModel, IDifferentiable], jitter: float = float(0)) -> None:
         """
-        This acquisition computes for a given input the improvement over the current best observed value in
-        expectation. For more information see:
+        Expected improvement over the current best observed value.
 
-        Efficient Global Optimization of Expensive Black-Box Functions
-        Jones, Donald R. and Schonlau, Matthias and Welch, William J.
-        Journal of Global Optimization
-
-        :param model: model that is used to compute the improvement.
+        :param current_global_min: incumbent value (best observed so far).
+        :param task: 'min' or 'max'.
+        :param model: model used to compute the improvement.
         :param jitter: parameter to encourage extra exploration.
         """
         self.model = model
@@ -42,50 +28,38 @@ class CausalExpectedImprovement(Acquisition):
         self.current_global_min = current_global_min
         self.task = task
 
-    def evaluate(self, x: np.ndarray) -> np.ndarray:
-        #print('##### CausalExpectedImprovement')
-        """
-        Computes the Expected Improvement.
-
-        :param x: points where the acquisition is evaluated.
-        """
-
-        mean, variance = self.model.predict(x)
-        standard_deviation = np.sqrt(variance)
-        mean += self.jitter
-
-        u, pdf, cdf = get_standard_normal_pdf_cdf(self.current_global_min, mean, standard_deviation)
+    def _u_pdf_cdf(self, mean, standard_deviation):
         if self.task == 'min':
-            improvement = standard_deviation * (u * cdf + pdf)
-        else:
-            improvement = - (standard_deviation * (u * cdf + pdf))
+            return get_standard_normal_pdf_cdf(self.current_global_min, mean, standard_deviation)
+        return get_standard_normal_pdf_cdf(mean, self.current_global_min, standard_deviation)
 
-        return improvement
+    def evaluate(self, x: np.ndarray) -> np.ndarray:
+        """Computes the Expected Improvement at ``x``."""
+        mean, variance = self.model.predict(x)
+        standard_deviation = np.sqrt(np.maximum(variance, 0.0))
+        mean = mean + self.jitter
+        u, pdf, cdf = self._u_pdf_cdf(mean, standard_deviation)
+        improvement = standard_deviation * (u * cdf + pdf)
+        return np.where(standard_deviation > 0.0, improvement, 0.0)
 
     def evaluate_with_gradients(self, x: np.ndarray) -> Tuple:
-        """
-        Computes the Expected Improvement and its derivative.
-
-        :param x: locations where the evaluation with gradients is done.
-        """
-
+        """Computes the Expected Improvement and its derivative."""
         mean, variance = self.model.predict(x)
-        standard_deviation = np.sqrt(variance)
-
+        standard_deviation = np.sqrt(np.maximum(variance, 0.0))
         dmean_dx, dvariance_dx = self.model.get_prediction_gradients(x)
-        dstandard_deviation_dx = dvariance_dx / (2 * standard_deviation)
+        safe_sd = np.where(standard_deviation > 0.0, standard_deviation, np.inf)
+        dstandard_deviation_dx = dvariance_dx / (2 * safe_sd)
 
-        mean += self.jitter
-        u, pdf, cdf = get_standard_normal_pdf_cdf(self.current_global_min, mean, standard_deviation)
-
-        
+        mean = mean + self.jitter
+        u, pdf, cdf = self._u_pdf_cdf(mean, standard_deviation)
+        improvement = standard_deviation * (u * cdf + pdf)
         if self.task == 'min':
-            improvement = standard_deviation * (u * cdf + pdf)
             dimprovement_dx = dstandard_deviation_dx * pdf - cdf * dmean_dx
         else:
-            improvement = - (standard_deviation * (u * cdf + pdf))
-            dimprovement_dx = -(dstandard_deviation_dx * pdf - cdf * dmean_dx)
-
+            dimprovement_dx = dstandard_deviation_dx * pdf + cdf * dmean_dx
+        zero = standard_deviation <= 0.0
+        improvement = np.where(zero, 0.0, improvement)
+        dimprovement_dx = np.where(zero, 0.0, dimprovement_dx)
         return improvement, dimprovement_dx
 
     @property
@@ -104,7 +78,9 @@ def get_standard_normal_pdf_cdf(x: np.array, mean: np.array, standard_deviation:
     :param standard_deviation: Standard deviation to normalize x with
     :return: (normalized version of x, pdf of standard normal, cdf of standard normal)
     """
-    u = (x - mean) / standard_deviation
+    with np.errstate(divide='ignore', invalid='ignore'):
+        u = (x - mean) / standard_deviation
+    u = np.where(np.isfinite(u), u, 0.0)
     pdf = scipy.stats.norm.pdf(u)
     cdf = scipy.stats.norm.cdf(u)
     return u, pdf, cdf

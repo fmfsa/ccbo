@@ -20,9 +20,13 @@ from emukit.core.optimization import GradientAcquisitionOptimizer
 from ccbo.cbo.utils import *
 
 
+from ccbo.cbo.utils.BO_functions import CausalGPyModelWrapper, fix_noise, NOISE_VAR
+
+
 def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interventional_data_y, costs, 
 			observational_samples, functions, min_intervention_value, min_y, intervention_variables, Causal_prior=False,
-			target_evaluator=None, task='min', intervention_callback=None):
+			target_evaluator=None, task='min', intervention_callback=None,
+                 return_log=False):
 	"""Standard (non-causal) BO baseline over a single joint arm.
 
 	The arm is ``intervention_variables`` intervened on jointly, so under
@@ -91,18 +95,21 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 
 	if Causal_prior==False:
 		#### Define the model without Causal prior
-		gpy_model = GPy.models.GPRegression(data_x, data_y, GPy.kern.RBF(input_space, lengthscale=1., variance=1.), noise_var=1e-10)
-		emukit_model= GPyModelWrapper(gpy_model)
+		gpy_model = GPy.models.GPRegression(data_x, data_y, GPy.kern.RBF(input_space, lengthscale=1., variance=1.), noise_var=NOISE_VAR)
+		fix_noise(gpy_model)
+		emukit_model = GPyModelWrapper(gpy_model)
 	else:
 		#### Define the model with Causal prior
 		mf = GPy.core.Mapping(input_space, 1)
 		mf.f = lambda x: mean_function_do(x)
 		mf.update_gradients = lambda a, b: None
 		kernel = CausalRBF(input_space, variance_adjustment=var_function_do, lengthscale=1., variance=1., rescale_variance = 1., ARD = False)
-		gpy_model = GPy.models.GPRegression(data_x, data_y, kernel, noise_var=1e-10, mean_function=mf)
-		emukit_model = GPyModelWrapper(gpy_model)
+		gpy_model = GPy.models.GPRegression(data_x, data_y, kernel, noise_var=NOISE_VAR, mean_function=mf)
+		fix_noise(gpy_model)
+		emukit_model = CausalGPyModelWrapper(gpy_model)
 
 
+	trial_log = []
 	## BO loop
 	start_time = time.perf_counter()
 	for j in range(num_trials):
@@ -136,9 +143,18 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 		else:
 			best_x = results[results[:,input_space] == np.min(results[:,input_space]), :input_space]
 		print('Current best Y', np.min(results[:,input_space]))
+		trial_log.append({
+			'trial': int(j), 'type': 'intervene',
+			'arm': '+'.join(intervention_variables),
+			'x': [float(v) for v in np.ravel(x_new)],
+			'y_new': float(np.ravel(y_new)[0]),
+			'cum_cost': float(cumulative_cost),
+			'incumbent': float(current_best_y[j + 1][0])})
 
 	total_time = time.perf_counter() - start_time
 
+	if return_log:
+		return (current_cost, current_best_x, current_best_y, total_time, trial_log)
 	return (current_cost, current_best_x, current_best_y, total_time)
 
 

@@ -1,39 +1,43 @@
-## Import basic packages
+"""Arm-surrogate construction for the CBO loop (engine v3, 2026-09).
+
+* ``update_BO_models`` builds one GPy regression model per arm: a plain RBF
+  GP for ``Causal_prior=False`` and the causal GP (``CausalRBF`` kernel +
+  do-calculus mean function) for ``Causal_prior=True``.
+* The interventional likelihood variance is **fixed** at ``NOISE_VAR`` in
+  both branches: interventional targets in the paper's suites are exact
+  population expectations, so a free noise term would only absorb model
+  misfit.  (Previously it was initialised at 1e-10 and then re-fitted.)
+* ``CausalGPyModelWrapper`` completes the predictive gradients: GPy's
+  ``predictive_gradients`` never differentiates the mean function, so the
+  causal mean's input gradient is added by central differences.
+"""
+
 import numpy as np
-import pandas as pd
-from collections import OrderedDict
-import scipy
-import itertools
-from numpy.random import randn
-import copy
-import seaborn as sns
 
 import GPy
-from GPy.kern import RBF
-from GPy.models.gp_regression import GPRegression
 from emukit.model_wrappers.gpy_model_wrappers import GPyModelWrapper
 
-
 from .causal_kernels import CausalRBF
+
+NOISE_VAR = 1e-10      # fixed interventional likelihood variance
+FD_STEP = 1e-4         # relative central-difference step for black-box means
+
 
 def define_initial_data_BO(interventional_data, num_interventions, intervention_sets, name_index, ):
     data_x = (interventional_data[0][len(intervention_sets)]).copy()
     data_y = (np.asarray(interventional_data[0][len(intervention_sets)+1])).copy()
     all_data = np.concatenate((data_x, data_y), axis =1)
 
-    ## Need to reset the global seed 
+    ## Need to reset the global seed
     state = np.random.get_state()
 
     np.random.seed(name_index)
     np.random.shuffle(all_data)
-    
+
     np.random.set_state(state)
 
     data_x = all_data[:num_interventions, :len(intervention_sets)]
     data_y = all_data[:num_interventions, len(intervention_sets):]
-
-
-    data_list = [all_data]
 
     min_y = np.min(data_y)
     min_intervention_value = np.transpose(all_data[np.where(data_y == min_y)[0][0]][:len(intervention_sets)][:,np.newaxis])
@@ -41,23 +45,64 @@ def define_initial_data_BO(interventional_data, num_interventions, intervention_
     return data_x, data_y, min_intervention_value, min_y
 
 
-def update_BO_models(mean_function, var_function, data_x, data_y, Causal_prior):    
-    ## This function updates the BO model for each intervetion set 
-    if Causal_prior==False:
-        gpy_model = GPy.models.GPRegression(data_x, data_y, 
-                                              GPy.kern.RBF(data_x.shape[1], lengthscale=1., variance=1.), 
-                                                  noise_var=1e-10)
-    else:    
-        mf = GPy.core.Mapping(data_x.shape[1], 1)
-        mf.f = lambda x: mean_function(x)
-        mf.update_gradients = lambda a, b: None
-        causal_kernel = CausalRBF(data_x.shape[1], variance_adjustment=var_function, 
-                                            lengthscale=1., variance=1., ARD = False)
+def fd_gradient(f, X, step=FD_STEP):
+    """Central-difference Jacobian of a scalar-output map ``f: (N,Q)->(N,1)``
+    with respect to each input coordinate; returns ``(N, Q)``."""
+    X = np.asarray(X, dtype=float)
+    N, Q = X.shape
+    grad = np.zeros((N, Q))
+    for q in range(Q):
+        h = step * np.maximum(1.0, np.abs(X[:, q]))
+        Xp = X.copy(); Xp[:, q] += h
+        Xm = X.copy(); Xm[:, q] -= h
+        fp = np.ravel(np.asarray(f(Xp), dtype=float))
+        fm = np.ravel(np.asarray(f(Xm), dtype=float))
+        grad[:, q] = (fp - fm) / (2.0 * h)
+    return grad
 
 
-        gpy_model = GPy.models.GPRegression(data_x, data_y, causal_kernel, 
-                                                      noise_var=1e-10, mean_function=mf)
-    
-    #gpy_model.likelihood.variance.fix(1e-2) 
-    model = GPyModelWrapper(gpy_model)
-    return model
+def fix_noise(gpy_model, value=NOISE_VAR):
+    """Fix the Gaussian likelihood variance of a GPy model."""
+    gpy_model.likelihood.variance.fix(value, warning=False)
+    return gpy_model
+
+
+class CausalGPyModelWrapper(GPyModelWrapper):
+    """emukit wrapper whose predictive mean gradient includes the GPy mean
+    function (GPy's ``predictive_gradients`` omits it)."""
+
+    def __init__(self, gpy_model, n_restarts=1, fd_step=FD_STEP):
+        super().__init__(gpy_model, n_restarts)
+        self.fd_step = float(fd_step)
+
+    def get_prediction_gradients(self, X):
+        d_mean_dx, d_variance_dx = self.model.predictive_gradients(X)
+        d_mean_dx = d_mean_dx[:, :, 0]
+        mf = getattr(self.model, 'mean_function', None)
+        if mf is not None:
+            d_mean_dx = d_mean_dx + fd_gradient(mf.f, X, self.fd_step)
+        return d_mean_dx, d_variance_dx
+
+
+def update_BO_models(mean_function, var_function, data_x, data_y, Causal_prior):
+    """Build the arm surrogate.  ``Causal_prior`` is a bool for *this arm*."""
+    if not Causal_prior:
+        gpy_model = GPy.models.GPRegression(
+            data_x, data_y,
+            GPy.kern.RBF(data_x.shape[1], lengthscale=1., variance=1.),
+            noise_var=NOISE_VAR)
+        fix_noise(gpy_model)
+        return GPyModelWrapper(gpy_model)
+
+    if mean_function is None or var_function is None:
+        raise ValueError("update_BO_models: Causal_prior=True requires the "
+                         "arm's mean and variance functions")
+    mf = GPy.core.Mapping(data_x.shape[1], 1)
+    mf.f = lambda x: mean_function(x)
+    mf.update_gradients = lambda a, b: None
+    causal_kernel = CausalRBF(data_x.shape[1], variance_adjustment=var_function,
+                              lengthscale=1., variance=1., ARD=False)
+    gpy_model = GPy.models.GPRegression(data_x, data_y, causal_kernel,
+                                        noise_var=NOISE_VAR, mean_function=mf)
+    fix_noise(gpy_model)
+    return CausalGPyModelWrapper(gpy_model)
