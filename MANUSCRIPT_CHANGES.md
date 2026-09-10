@@ -3,15 +3,17 @@
 **Source of truth:** the authors' pasted `aistats2026` source ("Coarsening Confers
 Robustness: Causal Bayesian Optimization under Graph Misspecification"), *not*
 `paper/qcbo_aistats.tex`. Section numbers below follow that source.
-**Number provenance:** `results/v3/` (engine v3, branch `fix/engine-v3`); every
-number tagged `«NEW»` is filled from the emitters named next to it once the
-v3 runs are frozen. **Status tags:** `KNOWN-NOW` (text is final) /
+**Number provenance:** `results/v3/` (engine v3, branch `fix/engine-v3`); all
+numbers below are final (runs LSF 29365450/51/82/83, gate 0 failures). **Status tags:** `KNOWN-NOW` (text is final) /
 `PENDING-RESULTS` (structure final, numbers pending).
 
 The reviewer's replacement blocks (their §§1–17) are reused where they were
 right, and corrected where the engine changed: the GP noise is now *fixed*
-(not free), the prior variance is the CBO-faithful `Var[Y|do]` with the GP's
-epistemic term removed, front-door / g-computation are *integrated* (so the
+(not free), the prior variance is the *predictive* `Var[Y|do]` under the
+fitted plug-in model (fitted noise + between-row spread + the outcome GP's
+posterior variance — the epistemic-free variant was run on 2026-09-09 and
+retired, see `RERUN_ENGINE_V3_REPORT.md` §9), front-door / g-computation are
+*integrated* (so the
 "mean-substitution approximation" caveat must NOT be pasted), the refinement
 has two variants, and the cost axis charges the initial design.
 
@@ -141,11 +143,20 @@ members of its own cluster (chain rule), and the functional is evaluated by
 seeded common-random-number draws through the DAG. Intermediate conditionals
 are never replaced by their means.
 
-The prior variance is the CBO convention applied to the same identified
-functional, $\sigma_A(a)^2=\widehat{\mathrm{Var}}[Y\mid\doo(A=a)]
-=\widehat\sigma^2_{\rm noise}+\sum_i w_i(\mu_i-m_A(a))^2$, i.e.\ the mixture
-variance of the conditional mean plus the fitted noise; the GP's own
-epistemic variance is excluded. The rank-one term
+The prior variance is the predictive variance of $Y$ under $\doo(A=a)$
+in the fitted plug-in model, obtained from the same identified functional:
+$\sigma_A(a)^2=\widehat{\mathrm{Var}}[Y\mid\doo(A=a)]
+=\widehat\sigma^2_{\rm noise}+\sum_i w_i(\mu_i-m_A(a))^2+\sum_i w_i\,s_i^2$,
+where $\mu_i$ and $s_i^2$ are the outcome GP's posterior mean and variance at
+the $i$-th conditioning row and $w_i$ the mixture weights (adjustment rows,
+quadrature nodes or propagation draws). The three terms are the fitted noise,
+the between-row spread of the conditional mean, and the regression's own
+posterior uncertainty; the last one is what the reference CBO implementation
+averages (`np.mean(gp.predict(rows)[1])`) and what keeps the prior wide where
+the outcome regression is unsupported (e.g.\ Coral's $D,T$ ranges lie three
+orders of magnitude outside the observational support; without this term the
+prior variance there collapses to the noise floor, the rank-one kernel term
+vanishes and the arm's surrogate can no longer learn from its own pulls). The rank-one term
 $\sigma_A(a)\sigma_A(a')$ is positive semidefinite and its input derivative
 enters the acquisition gradient (central differences of $\sigma_A^2$ and of
 $m_A$, whose estimators are deterministic and continuous in $a$ by
@@ -184,7 +195,7 @@ and Eq. (two-tier) becomes the pair $(m_A^\Pi,\sigma_A^\Pi)$: identified-and-sup
 - **Insert at the end of §5.3 (FrontDoor):** "This example is also lossless at the population level ($\doo(M=1)$ and every completion $\doo(X_1=x,M=1)$ attain $0$), yet it violates the separation premise ($U$ is an exogenous ancestor of both $X_1$ and $Y$) and its Gaussian natural values exceed any bounded box: the sufficient conditions are not necessary. Appendix~\ref{app:lossless-examples} isolates the two conditions analytically." *(Do not use Fig. 2(b) as the full-support exemplar.)*
 - **Insert appendix `app:lossless-examples`** — the reviewer's §8 analytic constructions (bounded-noise MediatedChain price curve $\Delta_h=[(4-h)_+^2-0.04]_+$; sign-noise crossing example $\Delta_\alpha=(2\alpha-1)_+$; contained-latent control). These are analytic, independent of the reruns.
 
-## 3.5 Adaptive refinement — `KNOWN-NOW` text, `«NEW»` numbers
+## 3.5 Adaptive refinement — `KNOWN-NOW`
 
 **Replace the HQCBO paragraph with:**
 
@@ -262,37 +273,40 @@ misspecification conditions of an SCM (Table~\ref{tab:minimal-taxonomy}).
 
 **Invariance measurement language (§5.1 + App. exp. details):** "Protected pairs are compared on the persisted full-precision decision logs — the observe/intervene draws, selected arms, intervention values, outcomes and incumbents — and are identical; in the dynamic and model-based suites the logged decisions (intervention sets and levels; chosen $X$ per iteration) and values agree on every seed."
 
+**Reproducibility statement (App. exp. details):** add: "Every per-seed trace is archived with its full-precision decision log and per-file checksums; the verification gate (`scripts/verify_traces.py`) recomputes every displayed number and re-tests every invariance claim from the archives, and `scripts/reproduce_paper.sh` regenerates all figures and tables from them. Re-executing a suite reproduces its archive bit-for-bit on the CPU model recorded in the archive manifest and to floating-point rounding on other models (BLAS kernels differ across micro-architectures; the acquisition optimizer amplifies such differences into different intervention values without changing the aggregates). Identification order is independent of the interpreter's hash seed, which is nevertheless pinned in every run script."
+
 **Random stream $\omega$ (§4.1 definition of $\xi$):** "…all coupled randomness: optimization, observational sampling, numerical causal-effect estimation and experimental outcomes."
 
-## 5.2–5.5 Numbers — minimal suite `FINAL (v3)`, family / dynamic `PENDING-RESULTS`
+## 5.2–5.5 Numbers — `FINAL (v3)`
 
 | Location | Written | Should read | Emitter |
 |---|---|---|---|
-| §5.2 correct-graph CBO final | `0.0016±0.0002` | **`0.0002±0.0001`** (raw 2.20e-04) | `artifacts/summaries/minimal_exact.json` → `groups.ParallelParent_A0_CBO` |
+| §5.2 correct-graph CBO final | `0.0016±0.0002` | **`0.0004±0.0001`** (raw 3.93e-04) | `artifacts/summaries/minimal_exact.json` → `groups.ParallelParent_A0_CBO` |
 | §5.2 misspecified CBO final | `4.2500±0.0000` | **`4.2500±0.0000`** (unchanged) | `…ParallelParent_A1_CBO` |
-| §5.2 regrets | `4.21±0.37` and `216.23±1.12` | **`3.61±0.36` and `216.10±1.09`** | same groups, `cumulative_regret_*` |
-| §5.2 A3 deviation | `21.45` | **`21.50`** (Table 1 prints 21.5) | `paired.ParallelParent_A0_vs_A3_QCBO` |
-| §5.3 paired ΔR50 | `5.91±1.04` | **`5.91±1.06`** (95 % CI [3.73, 8.08]) | `paired.FrontDoor_B1_minus_B0_CBO_cumulative_regret` |
-| §5.3 finals | `0.0003±0.0003` / `0.0035±0.0022` | **`0.00003±0.00001` / `0.00393±0.00223`** (5 dp; B0 is $3\times10^{-5}$) | `groups.FrontDoor_B0_CBO`, `…B1_CBO` |
+| §5.2 regrets | `4.21±0.37` and `216.23±1.12` | **`3.65±0.35` and `216.15±1.11`** | same groups, `cumulative_regret_*` |
+| §5.2 A3 deviation | `21.45` | **`21.43`** (Table 1 prints 21.4) | `paired.ParallelParent_A0_vs_A3_QCBO` |
+| §5.3 paired ΔR50 | `5.91±1.04` | **`6.31±1.04`** (95 % CI [4.19, 8.44]) | `paired.FrontDoor_B1_minus_B0_CBO_cumulative_regret` |
+| §5.3 finals | `0.0003±0.0003` / `0.0035±0.0022` | **`0.00006±0.00004` / `0.00393±0.00223`** (5 dp; B0 is $6\times10^{-5}$) | `groups.FrontDoor_B0_CBO`, `…B1_CBO` |
 | §5.4 finals | `0.0400, 4.0000, 0.0400` | **`0.0400±0.0000`, `4.0000±0.0000`, `0.0400±0.0000`**; \HQCBOGF{} **`0.0400±0.0000`** | `groups.MediatedChain_C0_*` |
-| §5.4 regrets | `5.46±1.61, 243.23±0.90, 36.97±1.18` | **`5.79±1.78`, `243.15±0.90`, `35.34±1.00`**; \HQCBOGF{} **`37.61±1.37`** | same |
+| §5.4 regrets | `5.46±1.61, 243.23±0.90, 36.97±1.18` | **`5.51±1.64`, `243.15±0.90`, `35.52±1.05`**; \HQCBOGF{} **`37.74±1.41`** | same |
 | §5.4 trigger | `7.4±0.1` | **`7.0±0.0`** (all 30 seeds trigger at trial 7; all splits accepted) | `refinement.HQCBO` |
-| §5.4 new sentence | — | "Graph-free \HQCBOGF{} finishes at the same `0.0400±0.0000` with $R_{60}=37.61±1.37$; paired against \HQCBO{}: $\Delta$final $+3.5e-07$ (indistinguishable), $\Delta R_{60}=+2.27$ $[+0.90,\,+3.64]$ — the causal priors after the split buy about two regret units, not the optimum." | `refinement.HQCBOGF_minus_HQCBO` |
-| §5.2 ablation sentence | — | "On the correct graph the no-prior \CBONP{} reaches `0.0004±0.0001` ($R_{50}=23.03±2.61$ vs `3.61±0.36` with priors), \QCBONP{} `0.0006±0.0002` (`19.09±2.17`), the structure-free \BOS{} `0.0005±0.0002` (`17.49±2.08`) and \BO{} `0.0037±0.0035` (`5.83±1.23`); under A1 \CBONP{} is confined to the same `4.2500±0.0000` floor as \CBO{}, while \BOS{} and \BO{} are unaffected by construction." | `paper/tables/minimal_ablations.tex` |
-| §5.3 ablation sentence | — | "Without priors the B1 corruption cannot act: \CBONP{} is identical under B0 and B1 ($\Delta R_{50}=0$) at `0.0011±0.0003` ($R_{50}=8.17±0.92$), so the 5.9-unit paired increase is entirely the price of a corrupted prior; \QCBONP{} `0.0009±0.0003` (`15.63±1.89`) vs \QCBO{} `0.0015±0.0006` (`11.18±1.37`); \BOS{} `0.0013±0.0004` (`12.58±1.53`); \BO{} `0.40±0.15` (`30.62±6.59`)." | same |
-| §5.4 ablation sentence | — | "\CBONP{} also reaches $y^\star$ ($R_{60}=8.44±1.96$, paired $+2.65$ [1.49, 3.80] over \CBO{}); \QCBONP{} sits on the same floor as \QCBO{} (`245.32±1.11`); \BOS{}, which owns the $\{X_1\}$ arm, reaches $y^\star$ with $R_{60}=12.00±2.76$; \BO{}'s joint arm shares the fixed-partition floor (`4.008±0.008`)." | same |
-| Table 3 CBO rows | `−2.16/−2.13`, `−3.14±0.19/−1.25±0.07`, `36.08/36.42` | `«NEW»` (family v3 pending) | `paper/tables/family_effects.tex` (switch to `\input`) |
-| Table 3 DCBO/MCBO rows | as printed | `«NEW»` (both baselines and quotients rerun with corrected semantics) | same |
-| §5.5 "60 paired dynamic runs / 40 model-based" | counts | unchanged counts; add "at decision level" | `verify_traces.py` |
-| Table 1 | `\input{tables/minimal_taxonomy}` | regenerated: A1 0, A2 0, **A3 21.5**, B1 0; BO column 0 | `emit_minimal_taxonomy.py` |
+| §5.4 new sentence | — | "Graph-free \HQCBOGF{} finishes at the same `0.0400±0.0000` with $R_{60}=37.74±1.41$; paired against \HQCBO{}: $\Delta$final $+1.3\times10^{-7}$ (indistinguishable), $\Delta R_{60}=+2.23$ $[+0.86,\,+3.59]$ — the causal priors after the split buy about two regret units, not the optimum." | `refinement.HQCBOGF_minus_HQCBO` |
+| §5.2 ablation sentence | — | "On the correct graph the no-prior \CBONP{} reaches `0.0004±0.0001` ($R_{50}=23.03±2.61$ vs `3.65±0.35` with priors), \QCBONP{} `0.0006±0.0002` (`19.09±2.17`), the structure-free \BOS{} `0.0005±0.0002` (`17.49±2.08`) and \BO{} `0.0037±0.0035` (`5.83±1.23`); under A1 \CBONP{} is confined to the same `4.2500±0.0000` floor as \CBO{}, while \BOS{} and \BO{} are unaffected by construction." | `paper/tables/minimal_ablations.tex` |
+| §5.3 ablation sentence | — | "Without priors the B1 corruption cannot act: \CBONP{} is identical under B0 and B1 ($\Delta R_{50}=0$) at `0.0011±0.0003` ($R_{50}=8.17±0.92$), so the 6.3-unit paired increase is entirely the price of a corrupted prior; \QCBONP{} `0.0009±0.0003` (`15.63±1.89`) vs \QCBO{} `0.0015±0.0006` (`11.18±1.37`); \BOS{} `0.0013±0.0004` (`12.58±1.53`); \BO{} `0.40±0.15` (`30.62±6.59`)." | same |
+| §5.4 ablation sentence | — | "\CBONP{} also reaches $y^\star$ ($R_{60}=8.44±1.96$, paired $+2.92$ [1.76, 4.08] over \CBO{}); \QCBONP{} sits on the same floor as \QCBO{} (`245.32±1.11`); \BOS{}, which owns the $\{X_1\}$ arm, reaches $y^\star$ with $R_{60}=12.00±2.76$; \BO{}'s joint arm shares the fixed-partition floor (`4.008±0.008`)." | same |
+| Table 3 CBO rows | `−2.16/−2.13`, `−3.14±0.19/−1.25±0.07`, `36.08/36.42` | **Toy `$-2.16{\scriptstyle\,\pm\,}0.00$` / `$-2.17{\scriptstyle\,\pm\,}0.01$`, paired `$-0.005$ $[-0.016,\,+0.007]$`; Synthetic `$-3.57{\scriptstyle\,\pm\,}0.00$` / `$-1.31{\scriptstyle\,\pm\,}0.00$`, paired `$+2.25$ $[+2.25,\,+2.26]$`; Coral `$36.04{\scriptstyle\,\pm\,}0.01$` / `$36.40{\scriptstyle\,\pm\,}0.01$`, paired `$+0.36$ $[+0.32,\,+0.39]$`** (plain \BO{}: Toy $-2.17$, Synthetic $-0.63$, Coral $9278$) | `paper/tables/family_effects.tex` (switch to `\input`) |
+| Table 3 DCBO rows | `−6.14/−6.43`, `−3.12/−5.57`, `8.03/6.33` | **stat `$-6.12{\scriptstyle\,\pm\,}0.05$` / `$-6.40{\scriptstyle\,\pm\,}0.03$`, paired `$-0.27$ $[-0.39,\,-0.15]$`; ind `$-3.13{\scriptstyle\,\pm\,}0.06$` / `$-5.55{\scriptstyle\,\pm\,}0.13$`, paired `$-2.43$ $[-2.69,\,-2.17]$`; nonstat `$7.01{\scriptstyle\,\pm\,}0.83$` / `$5.78{\scriptstyle\,\pm\,}0.02$`, paired `$-1.23$ $[-2.98,\,+0.52]$`** (both baseline and quotient rerun with the corrected stock semantics) | same |
+| Table 3 MCBO rows | `1.39±0.13/2.16±0.00`, `−5.15/−5.15` | **ToyGraph `$1.39{\scriptstyle\,\pm\,}0.13$` / `$2.16{\scriptstyle\,\pm\,}0.00$`, paired `$-0.77$ $[-1.04,\,-0.50]$`; PSAGraph `$-5.15{\scriptstyle\,\pm\,}0.00$` / `$-5.15{\scriptstyle\,\pm\,}0.00$`, paired `$+0.0002$ $[-0.0003,\,+0.0008]$`** (unchanged at displayed precision) | same |
+| §5.5 "60 paired dynamic runs / 40 model-based" | counts | unchanged counts; write "…invariant in all 60 paired dynamic runs and in all 40 paired model-based runs, at the level of the logged decisions (intervention sets and levels; chosen $X$ per iteration) as well as of the values" | `verify_traces.py` |
+| Table 1 | `\input{tables/minimal_taxonomy}` | regenerated: A1 0, A2 0, **A3 21.4**, B1 0; BO column 0 | `emit_minimal_taxonomy.py` |
 | §5.2 new invariance sentence | — | "The no-prior \QCBONP{} is invariant under A1, A2 \emph{and} the quotient-visible A3: on this SCM the A3 edit changes the quotient prior only, so an arm without priors cannot see it." | `verify_traces.py` (QCBONP A3 check) |
-| Cost table (if included) | — | regenerated | `paper/tables/cost_accounting.tex` |
+| Cost table (if included) | — | regenerated: e.g. Coral \CBO{} init 800 vs \QCBO{} 100 (|ES| 31 vs 3); \HQCBO{} / \HQCBOGF{} init 6+6 | `paper/tables/cost_accounting.tex` |
 
 ## Captions — `KNOWN-NOW`
 
 - **Fig. 2:** use "(a)/(b)" throughout (text currently mixes "(a)", "the right panel", "Top/Bottom"); append "Grey dotted: plain \BO{}, identical under every condition."
 - **Fig. 3:** append "Dashed cyan: graph-free \HQCBOGF{}. Grey dotted: \BO{} on the joint arm, which shares fixed \QCBO{}'s floor. Vertical line: mean trigger."
-- **Fig. 4:** "Top: CBO minimization with plain \BO{} (grey dotted) on Toy and Synthetic; on Coral \BO{}'s value ($\approx$`«NEW»`) is annotated because the benchmark's intervention ranges force its joint arm far from the natural regime. Middle: … Bottom: …" — remove the red box once §5.5 numbers are refreshed from the v3 (corrected-semantics) reruns.
+- **Fig. 4:** "Top: CBO minimization with plain \BO{} (grey dotted) on Toy and Synthetic; on Coral \BO{}'s value ($\approx9.28\times10^{3}$) is annotated because the benchmark's intervention ranges force its joint arm far from the natural regime. Middle: … Bottom: …" — remove the red box once §5.5 numbers are refreshed from the v3 (corrected-semantics) reruns.
 - **New Fig. (ablations, `figures/minimal_ablations.pdf`):** "(a) ParallelParent: fine \CBO{} with and without causal priors under A0 and A1, \BOS{} and \BO{}; (b) FrontDoor: prior corruption (B1) against the no-prior references; (c) MediatedChain: graph-informed vs graph-free refinement. Mean ± s.e. over 30 seeds."
 - **New Fig. (cost, `figures/cost_indexed.pdf`, supplementary):** "Best-so-far population objective against initialization-inclusive cumulative cost (initial design at trial 0, split design at the trigger); step interpolation, mean ± s.e. over seeds that reached each budget."
 - **Table 1 caption:** append "The two $\sup|\Delta|$ columns are the paired incumbent deviation of \QCBO{} and of the graph-free \BO{} baseline (zero by construction)."

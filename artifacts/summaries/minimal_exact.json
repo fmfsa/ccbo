@@ -19,11 +19,11 @@
       "n": 30
     },
     "FrontDoor_B0_CBO": {
-      "cumulative_regret_mean": 2.415618073601624,
-      "cumulative_regret_se": 0.2200994714558506,
+      "cumulative_regret_mean": 2.0120441208812765,
+      "cumulative_regret_se": 0.1768014429040323,
       "final_cost_mean": 53.2,
-      "final_mean": 2.6655083232379378e-05,
-      "final_se": 1.2034331420230534e-05,
+      "final_mean": 6.27146807972893e-05,
+      "final_se": 3.537081490729428e-05,
       "init_cost": 6.0,
       "n": 30
     },
@@ -127,11 +127,11 @@
       "n": 30
     },
     "MediatedChain_C0_CBO": {
-      "cumulative_regret_mean": 5.787642539078594,
-      "cumulative_regret_se": 1.782879048431075,
+      "cumulative_regret_mean": 5.513991673100283,
+      "cumulative_regret_se": 1.6383707316749876,
       "final_cost_mean": 63.03333333333333,
-      "final_mean": 0.04000000412071598,
-      "final_se": 1.3248902585881692e-09,
+      "final_mean": 0.0400000863092891,
+      "final_se": 2.6883111897951667e-08,
       "init_cost": 6.0,
       "n": 30
     },
@@ -145,20 +145,20 @@
       "n": 30
     },
     "MediatedChain_C0_HQCBO": {
-      "cumulative_regret_mean": 35.34487602962989,
-      "cumulative_regret_se": 0.9974745933376753,
-      "final_cost_mean": 91.53333333333333,
-      "final_mean": 0.04000005777757183,
-      "final_se": 1.2318792814877865e-08,
+      "cumulative_regret_mean": 35.515310418279256,
+      "cumulative_regret_se": 1.0477282518511855,
+      "final_cost_mean": 91.7,
+      "final_mean": 0.04000028363037495,
+      "final_se": 1.6001391230949447e-07,
       "init_cost": 6.0,
       "n": 30
     },
     "MediatedChain_C0_HQCBOGF": {
-      "cumulative_regret_mean": 37.61284669828089,
-      "cumulative_regret_se": 1.370322179489085,
-      "final_cost_mean": 97.7,
-      "final_mean": 0.04000040979168255,
-      "final_se": 1.1986710389323587e-07,
+      "cumulative_regret_mean": 37.74380980782844,
+      "cumulative_regret_se": 1.4122298068669712,
+      "final_cost_mean": 97.76666666666667,
+      "final_mean": 0.04000041181993604,
+      "final_se": 1.1965164778780476e-07,
       "init_cost": 6.0,
       "n": 30
     },
@@ -199,11 +199,11 @@
       "n": 30
     },
     "ParallelParent_A0_CBO": {
-      "cumulative_regret_mean": 3.6127028067570714,
-      "cumulative_regret_se": 0.3598077313523239,
-      "final_cost_mean": 98.1,
-      "final_mean": 0.0002200915700756668,
-      "final_se": 5.2689286802056615e-05,
+      "cumulative_regret_mean": 3.6531554094304917,
+      "cumulative_regret_se": 0.3499485732929045,
+      "final_cost_mean": 98.03333333333333,
+      "final_mean": 0.00039335491119498985,
+      "final_se": 0.00013922437383465745,
       "init_cost": 12.0,
       "n": 30
     },
@@ -217,11 +217,11 @@
       "n": 30
     },
     "ParallelParent_A0_QCBO": {
-      "cumulative_regret_mean": 6.821010135969362,
-      "cumulative_regret_se": 1.0306745950826894,
+      "cumulative_regret_mean": 6.829559015952624,
+      "cumulative_regret_se": 1.0218312651817667,
       "final_cost_mean": 100.0,
-      "final_mean": 0.00022099281224085947,
-      "final_se": 5.5451394609610086e-05,
+      "final_mean": 0.0003043769862272963,
+      "final_se": 9.915742861934923e-05,
       "init_cost": 6.0,
       "n": 30
     },
@@ -253,11 +253,11 @@
       "n": 30
     },
     "ParallelParent_A1_CBO": {
-      "cumulative_regret_mean": 216.10491196007794,
-      "cumulative_regret_se": 1.092546365977153,
+      "cumulative_regret_mean": 216.14961827699236,
+      "cumulative_regret_se": 1.1126284719133706,
       "final_cost_mean": 50.03333333333333,
-      "final_mean": 4.250000000625693,
-      "final_se": 2.8491430961229995e-10,
+      "final_mean": 4.25000001171945,
+      "final_se": 3.081708698638418e-09,
       "init_cost": 3.0,
       "n": 30
     },
@@ -271,11 +271,11 @@
       "n": 30
     },
     "ParallelParent_A1_QCBO": {
-      "cumulative_regret_mean": 6.821010135969362,
-      "cumulative_regret_se": 1.0306745950826894,
+      "cumulative_regret_mean": 6.829559015952624,
+      "cumulative_regret_se": 1.0218312651817667,
       "final_cost_mean": 100.0,
-      "final_mean": 0.00022099281224085947,
-      "final_se": 5.5451394609610086e-05,
+      "final_mean": 0.0003043769862272963,
+      "final_se": 9.915742861934923e-05,
       "init_cost": 6.0,
       "n": 30
     },
@@ -307,11 +307,11 @@
       "n": 30
     },
     "ParallelParent_A2_CBO": {
-      "cumulative_regret_mean": 3.61270278549373,
-      "cumulative_regret_se": 0.35980771194224126,
-      "final_cost_mean": 97.9,
-      "final_mean": 0.00022008852311052087,
-      "final_se": 5.268972359021608e-05,
+      "cumulative_regret_mean": 3.660383402068064,
+      "cumulative_regret_se": 0.34755319538002843,
+      "final_cost_mean": 98.0,
+      "final_mean": 0.0003389815005678897,
+      "final_se": 0.00013929901258596754,
       "init_cost": 12.0,
       "n": 30
     },
@@ -325,11 +325,11 @@
       "n": 30
     },
     "ParallelParent_A2_QCBO": {
-      "cumulative_regret_mean": 6.821010135969362,
-      "cumulative_regret_se": 1.0306745950826894,
+      "cumulative_regret_mean": 6.829559015952624,
+      "cumulative_regret_se": 1.0218312651817667,
       "final_cost_mean": 100.0,
-      "final_mean": 0.00022099281224085947,
-      "final_se": 5.5451394609610086e-05,
+      "final_mean": 0.0003043769862272963,
+      "final_se": 9.915742861934923e-05,
       "init_cost": 6.0,
       "n": 30
     },
@@ -428,25 +428,25 @@
     },
     "FrontDoor_B1_minus_B0_CBO_cumulative_regret": {
       "ci95": [
-        3.7344919394017326,
-        8.08086174903221
+        4.1874326097980195,
+        8.435068984076615
       ],
-      "mean": 5.9076768442169705,
-      "se": 1.0625627851496946
+      "mean": 6.311250796937317,
+      "se": 1.0384252914135574
     },
     "MediatedChain_C0_BOS_minus_CBO_regret": {
       "ci95": [
-        1.3440818838896043,
-        11.07814375311401
+        1.732458674373171,
+        11.237068694587066
       ],
-      "mean": 6.211112818501807
+      "mean": 6.484763684480119
     },
     "MediatedChain_C0_CBONP_minus_CBO_regret": {
       "ci95": [
-        1.4922509312179892,
-        3.8025285912562206
+        1.7573983043619261,
+        4.084682950068907
       ],
-      "mean": 2.647389761237105
+      "mean": 2.9210406272154166
     },
     "MediatedChain_C0_QCBONP_minus_QCBO_regret": {
       "ci95": [
@@ -508,7 +508,7 @@
     "ParallelParent_A0_vs_A3_QCBO": {
       "bytes_equal": false,
       "decisions_equal": false,
-      "sup_incumbent_deviation": 21.501608168722775
+      "sup_incumbent_deviation": 21.43401435744899
     },
     "ParallelParent_A0_vs_A3_QCBONP": {
       "bytes_equal": true,
@@ -542,16 +542,16 @@
     },
     "HQCBOGF_minus_HQCBO": {
       "final_ci95": [
-        1.1456465193604414e-07,
-        5.894635695108769e-07
+        -3.1008641776465155e-07,
+        5.664655399726832e-07
       ],
-      "final_mean": 3.5201411072346055e-07,
+      "final_mean": 1.2818956110401587e-07,
       "n": 30,
       "regret_ci95": [
-        0.8994183431385201,
-        3.6365229941634967
+        0.864054288939025,
+        3.5929444901593577
       ],
-      "regret_mean": 2.2679706686510084
+      "regret_mean": 2.2284993895491914
     }
   }
 }

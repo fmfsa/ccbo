@@ -73,7 +73,31 @@ PRIOR_VARIANCE_POLICY = "predictive"
 # checks below run regardless.
 # 2026-09-09 freeze (LSF 29365450, SHA f2a98e0, variance policy "total")
 # retired 2026-09-10: re-frozen after the predictive-policy rerun.
-MINIMAL_PUB: dict | None = None
+# Frozen 2026-09-10 from results/v3 (engine v3.1, LSF 29367764, SHA f75a19c, policy predictive).
+MINIMAL_PUB: dict | None = {
+    "fd_b0_cbo_final": [
+        6e-05,
+        5
+    ],
+    "fd_b1_cbo_final": [
+        0.00393,
+        5
+    ],
+    "fd_paired_dr50": [
+        6.3,
+        1
+    ],
+    "mc_finals": {
+        "CBO": 0.04,
+        "QCBO": 4.0,
+        "HQCBO": 0.04,
+        "HQCBOGF": 0.04
+    },
+    "trigger_mean": [
+        7.0,
+        1
+    ]
+}
 
 
 def minimal_units() -> list[tuple[str, str, str]]:
@@ -224,7 +248,8 @@ def verify_minimal(root: Path) -> None:
 # engine-v3 family numbers are frozen.
 # 2026-09-09 freeze (LSF 29365451, SHA f2a98e0, variance policy "total") retired
 # 2026-09-10: its priors were hash-seed dependent and the policy was replaced.
-FAMILY_PUB: dict | None = None
+# Frozen 2026-09-10 from results/v3 (engine v3.1, LSF 29367765, SHA f75a19c, policy predictive).
+FAMILY_PUB: dict | None = {"ToyGraph": [-2.17, -2.16, -2.17], "CompleteGraph": [-0.63, -3.57, -1.31], "SimplifiedCoralGraph": [9278.12, 36.04, 36.4]}
 FAMILY_DATASETS = ("ToyGraph", "CompleteGraph", "SimplifiedCoralGraph")
 N_INIT_FAMILY = 10
 

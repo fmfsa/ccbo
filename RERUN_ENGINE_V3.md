@@ -159,6 +159,12 @@ bash scripts/lsf/submit_family_v3.sh                                    # result
 CCBO_VARIANCE_POLICY=total OUTDIR=$PWD/results/v3_total/family_cbo bash scripts/lsf/submit_family_v3.sh   # comparison
 ```
 
+Bit-exact reproduction of an archive needs the CPU model recorded in
+`artifacts/traces/MANIFEST.md` (OpenBLAS kernels differ between XeonE5/avx2
+and XeonGold/avx512 nodes; traces then agree to floating-point rounding
+only, see the report §9.4). Pin with `#BSUB -R "select[model==<model>]"` if
+byte identity with an archive is the goal.
+
 `results/v3_prelim/minimal` already *is* the minimal suite under the retired
 policy (the canonical-order fix is byte-neutral there — verified on a 16-unit
 probe), so no `v3_total/minimal` run is needed. Freeze `MINIMAL_PUB` /
