@@ -59,6 +59,8 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 	return_state : bool
 		If True, return (results, state_dict) instead of just results.
 		The state_dict can be passed back to resume the loop.
+	Causal_prior : bool or sequence of bool
+		True/False for every arm, or one flag per arm (engine v3 prior mask).
 	intervention_callback : callable, optional
 		Called after each intervention with signature:
 		  callback(intervention_vars, x_new, y_new, sem_fn)
@@ -189,6 +191,18 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 	if force_observe_on_entry is None:
 		force_observe_on_entry = fresh_phase
 
+	############################# PRIOR MASK (engine v3)
+	## ``Causal_prior`` may be a bool (all arms) or a per-arm sequence: arms
+	## with ``False`` run on a plain RBF GP (no do-calculus mean / variance),
+	## which is what the graph-free refinement and the no-prior ablations use.
+	if isinstance(Causal_prior, (list, tuple, np.ndarray)):
+		prior_mask = [bool(b) for b in Causal_prior]
+	else:
+		prior_mask = [bool(Causal_prior)] * len(exploration_set)
+	assert len(prior_mask) == len(exploration_set), (
+		f"prior mask length {len(prior_mask)} != {len(exploration_set)} arms")
+	any_prior = any(prior_mask)
+
 	############################# LOOP
 	start_time = time.perf_counter()
 	for i in range(num_trials):
@@ -265,8 +279,13 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 				_arm_cache.clear()
 
 			## Update the mean functions and var functions given the current set of observational data. This is updating the prior.
-			mean_functions_list, var_functions_list = update_all_do_functions(graph, exploration_set, functions, dict_interventions,
-														observational_samples, x_dict_mean, x_dict_var)
+			if any_prior:
+				mean_functions_list, var_functions_list = update_all_do_functions(
+					graph, exploration_set, functions, dict_interventions,
+					observational_samples, x_dict_mean, x_dict_var, prior_mask=prior_mask)
+			else:
+				mean_functions_list = [None] * len(exploration_set)
+				var_functions_list = [None] * len(exploration_set)
 
 			## Rebuild every arm's causal GP now, so the returned state stays
 			## internally consistent even if the run ends right here. The
@@ -274,7 +293,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## flag holds, so an observation costs exactly one rebuild.
 			for s in range(len(exploration_set)):
 				model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s],
-													data_x_list[s], data_y_list[s], Causal_prior)
+													data_x_list[s], data_y_list[s], prior_mask[s])
 			models_fresh = True
 
 			## Update current optimal solution. If I observe the cost and the optimal y are the same of the previous trial
@@ -314,10 +333,10 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## -- otherwise update_BO_models receives mean_function=None.
 			## Lazy on purpose: for every run that does observe at step 0 this
 			## is a no-op, so existing trajectories are untouched.
-			if Causal_prior and any(f is None for f in mean_functions_list):
+			if any_prior and any(f is None for f, m in zip(mean_functions_list, prior_mask) if m):
 				mean_functions_list, var_functions_list = update_all_do_functions(
 					graph, exploration_set, functions, dict_interventions,
-					observational_samples, x_dict_mean, x_dict_var)
+					observational_samples, x_dict_mean, x_dict_var, prior_mask=prior_mask)
 
 			_force_rebuild = (state or {}).pop('force_rebuild_all', False) if state else False
 			## `models_fresh` guards against rebuilding every arm twice: when the
@@ -325,16 +344,16 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## every arm from the enlarged dataset.
 			if _force_rebuild:
 				for s in range(len(exploration_set)):
-					model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s], data_x_list[s], data_y_list[s], Causal_prior)
+					model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s], data_x_list[s], data_y_list[s], prior_mask[s])
 			elif models_fresh:
 				pass
 			elif len(type_trial) < 2 or type_trial[-2] == 0:
 				for s in range(len(exploration_set)):
-					model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s], data_x_list[s], data_y_list[s], Causal_prior)
+					model_list[s] = update_BO_models(mean_functions_list[s], var_functions_list[s], data_x_list[s], data_y_list[s], prior_mask[s])
 			else:
 				model_list[index] = update_BO_models(mean_functions_list[index],
 																var_functions_list[index],
-																data_x_list[index], data_y_list[index], Causal_prior)
+																data_x_list[index], data_y_list[index], prior_mask[index])
 
 
 			## Compute acquisition function given the updated BO models for the interventional data
@@ -401,6 +420,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 						n_obs_after=int(len(observational_samples)),
 						arm='+'.join(exploration_set[index]),
 						x=[float(v) for v in np.ravel(x_new_list[index])],
+						y_new=float(np.ravel(y_new)[0]),
 						cum_cost=float(current_cost[-1]),
 						incumbent=float(global_opt[-1]))
 			trial_log.append(_log)
@@ -439,6 +459,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			'num_observations_collected': int(num_observations_collected),
 			'models_fresh': bool(models_fresh),
 			'trial_log': trial_log,
+			'prior_mask': list(prior_mask),
 		}
 		return results, state_out
 

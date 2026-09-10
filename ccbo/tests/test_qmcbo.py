@@ -183,3 +183,20 @@ if __name__ == "__main__":
     test_partition_validation()
     test_lift_targets()
     print("PASS: all qmcbo quotient tests")
+
+
+
+# ---------------------------------------------------------------------------
+# Engine v3: zero-range normalisation guard (pure helper, no MCBO stack)
+# ---------------------------------------------------------------------------
+
+def test_normalize_columns_zero_range():
+    torch = pytest.importorskip("torch")
+    from ccbo.qmcbo.quotient import normalize_columns
+    aux = torch.tensor([[1.0, 5.0], [1.0, 7.0], [1.0, 9.0]], dtype=torch.float64)
+    lo = [aux[:, 0].min(), aux[:, 1].min()]
+    hi = [aux[:, 0].max(), aux[:, 1].max()]
+    out = normalize_columns(aux.clone(), lo, hi)
+    assert torch.isfinite(out).all()
+    assert torch.allclose(out[:, 0], torch.zeros(3, dtype=torch.float64))
+    assert torch.allclose(out[:, 1], torch.tensor([0.0, 0.5, 1.0], dtype=torch.float64))

@@ -57,6 +57,9 @@ def _topo_cluster_order(cpar: List[set]) -> List[int]:
     return order
 
 
+
+from ccbo.qmcbo.quotient import normalize_columns  # noqa: E402  (engine v3 guard)
+
 class JointQuotientGPNetwork(Model):
     """One (joint) mechanism GP per cluster, composed along the C-DAG.
 
@@ -116,10 +119,7 @@ class JointQuotientGPNetwork(Model):
                                for j in range(len(idx))]
             self.norm_hi[c] = [torch.max(aux[..., j]).detach()
                                for j in range(len(idx))]
-        for j in range(len(idx)):
-            span = self.norm_hi[c][j] - self.norm_lo[c][j]
-            aux[..., j] = (aux[..., j] - self.norm_lo[c][j]) / span
-        return aux
+        return normalize_columns(aux, self.norm_lo[c], self.norm_hi[c])
 
     def _fit_cluster(self, c: int):
         mask = self._cluster_mask(c)
@@ -186,10 +186,7 @@ class JointMVNetwork(MultivariateNormalNetwork):
         if not idx:
             return create_constant_feature_vector(self.event_shape[:-1])
         aux = nodes_samples[..., idx].clone()
-        for j in range(len(idx)):
-            span = self.net.norm_hi[c][j] - self.net.norm_lo[c][j]
-            aux[..., j] = (aux[..., j] - self.net.norm_lo[c][j]) / span
-        return aux
+        return normalize_columns(aux, self.net.norm_lo[c], self.net.norm_hi[c])
 
     def _sample_cluster(self, c, nodes_samples, sample_shape):
         members = self.net.partition[c]

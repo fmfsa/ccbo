@@ -209,3 +209,22 @@ def perturb_parent_nodes(parent_nodes: Sequence[Sequence[int]],
         else:
             raise ValueError(f"unknown op {kind!r}")
     return pars
+
+
+# ---- engine v3: zero-range normalisation guard (stack-free helper) ----
+ZERO_RANGE_EPS = 1e-12
+
+
+def normalize_columns(aux, lo, hi, eps=ZERO_RANGE_EPS):
+    """Min-max normalise the trailing columns of ``aux`` with per-column
+    ``lo`` / ``hi`` (engine v3): a constant column (``hi - lo <= eps``) maps to
+    0 instead of producing ``nan`` / ``inf`` from a zero span (the stock MCBO
+    normalisation divides unguarded)."""
+    for j in range(aux.shape[-1]):
+        span = hi[j] - lo[j]
+        if float(span) > eps:
+            aux[..., j] = (aux[..., j] - lo[j]) / span
+        else:
+            aux[..., j] = aux[..., j] * 0.0
+    return aux
+

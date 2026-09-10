@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Tuple
 import numpy as np
 
@@ -42,7 +43,9 @@ class CausalGradientAcquisitionOptimizer(AcquisitionOptimizerBase):
             x = np.array(context_manager.context_values)[None, :]
             return x, f(x)
 
-        if acquisition.has_gradients:
+        # CCBO_ACQ_APPROX_GRAD=1 is a test-only escape hatch: L-BFGS then
+        # falls back to finite differences of the acquisition value.
+        if acquisition.has_gradients and not os.environ.get("CCBO_ACQ_APPROX_GRAD"):
             def f_df(x):
                 f_value, df_value = acquisition.evaluate_with_gradients(x)
                 return -f_value, -df_value

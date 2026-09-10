@@ -376,3 +376,19 @@ if __name__ == "__main__":
         fn()
         print(f"PASS: {fn.__name__}")
     print(f"{len(fns)} structural checks passed", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Engine v3: every nonempty subset of manipulables must dispatch (BOS arms,
+# graph-free refinement sub-arms)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("scm", [mb.PP_NAME, mb.FD_NAME, mb.MC_NAME])
+def test_population_do_covers_all_subsets(scm):
+    from itertools import combinations
+    manip = {mb.PP_NAME: mb.PP_MANIPULATIVE, mb.FD_NAME: mb.FD_MANIPULATIVE,
+             mb.MC_NAME: mb.MC_MANIPULATIVE}[scm]
+    for k in range(1, len(manip) + 1):
+        for arm in combinations(manip, k):
+            val = mb.population_do(scm, list(arm), [0.1] * k)
+            assert np.isfinite(val)

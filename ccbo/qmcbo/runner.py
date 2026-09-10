@@ -24,6 +24,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 os.environ.setdefault("WANDB_MODE", "disabled")
 
 import argparse
+import numpy as np
 import contextlib
 import json
 import time
@@ -196,10 +197,35 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
 
         def __init__(self):
             self.best_scores = []
+            self.records = []          # engine v3: per-iteration decisions
+
+        @staticmethod
+        def _tolist(v):
+            try:
+                import torch
+                if isinstance(v, torch.Tensor):
+                    return v.detach().cpu().double().reshape(-1).tolist()
+            except Exception:
+                pass
+            if v is None:
+                return None
+            try:
+                return [float(x) for x in np.ravel(np.asarray(v, dtype=float))]
+            except Exception:
+                return None
 
         def log(self, payload, *a, **k):
             if "best_score" in payload:
                 self.best_scores.append(float(payload["best_score"]))
+                self.records.append({
+                    "iter": len(self.records),
+                    "best_score": float(payload["best_score"]),
+                    "score": (float(payload["score"]) if "score" in payload
+                              and payload["score"] is not None else None),
+                    "average_score": (float(payload["average_score"])
+                                      if "average_score" in payload else None),
+                    "X": self._tolist(payload.get("X")),
+                })
 
         def __getattr__(self, name):          # init/config/etc.: no-ops
             return lambda *a, **k: None
@@ -250,11 +276,22 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
     with contextlib.suppress(OSError):
         os.rmdir(unit_dir)
 
+    # Engine v3: full-precision per-iteration decision log (the chosen
+    # intervention X, its score and the running best) next to the CSV.
+    with open(final_csv.replace(".csv", ".decisions.json"), "w") as f:
+        json.dump({"schema": 1,
+                   "unit": {"suite": "qmcbo", "env": env_name, "algo": label,
+                            "seed": seed, "num_trials": num_trials,
+                            "misspec": misspec,
+                            "engine_sha": os.environ.get("CCBO_GIT_SHA")},
+                   "iterations": recorder.records}, f, indent=1)
     info = {"env": env_name, "algo": label, "seed": seed,
             "num_trials": num_trials, "misspec": misspec,
             "mechanism": mechanism if algo == "QMCBO" else None,
             "n_targets": len(profile["valid_targets"]),
             "parents_model_view": fine_parents,
+            "zero_range_guard": True,
+            "engine_sha": os.environ.get("CCBO_GIT_SHA"),
             "secs": time.time() - t0, "csv": final_csv}
     with open(final_csv.replace(".csv", "_info.json"), "w") as f:
         json.dump(info, f, indent=2)

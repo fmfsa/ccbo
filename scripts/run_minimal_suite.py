@@ -1,9 +1,11 @@
-"""MinimalBench suite runner (Experiments A-C).
+"""MinimalBench suite runner (Experiments A-C), engine v3.
 
-Units:
-    ParallelParent x {A0,A1,A2,A3} x {CBO, QCBO} x seeds          (Experiment A)
-    FrontDoor      x {B0,B1}       x {CBO, QCBO} x seeds          (Experiment B)
-    MediatedChain  x {C0}          x {CBO, QCBO, HQCBO} x seeds   (Experiment C)
+Units (engine v3):
+    ParallelParent x {A0,A1,A2,A3} x {BO,CBO,QCBO,CBONP,QCBONP,BOS} x seeds       (Experiment A)
+    FrontDoor      x {B0,B1}       x {BO,CBO,QCBO,CBONP,QCBONP,BOS} x seeds       (Experiment B)
+    MediatedChain  x {C0}          x {... + HQCBO, HQCBOGF} x seeds               (Experiment C)
+Every unit writes <unit>.csv (row 0 at cum_cost = initial-design cost; x_values
+at repr precision) and <unit>.decisions.json (full-precision decision log).
 
 CBO = identity partition (full-DAG CBO by the singleton-identity result);
 QCBO = the declared coarse partition; HQCBO = QCBO + plateau-triggered
@@ -57,17 +59,29 @@ warnings.filterwarnings("ignore")
 PP_CONDITIONS = ("A0", "A1", "A2", "A3")
 FD_CONDITIONS = ("B0", "B1")
 MC_CONDITIONS = ("C0",)
-PP_ARMS = ("BO", "CBO", "QCBO")
-FD_ARMS = ("BO", "CBO", "QCBO")
-MC_ARMS = ("BO", "CBO", "QCBO", "HQCBO")
+# Engine v3 arms: causal (CBO, QCBO), no-prior ablations (CBONP, QCBONP),
+# structure-free arm menu (BOS), joint BO (BO), and on MediatedChain the two
+# refinement variants (HQCBO graph-informed, HQCBOGF graph-free).
+PLAIN = ("BO", "CBO", "QCBO", "CBONP", "QCBONP", "BOS")
+PP_ARMS = PLAIN
+FD_ARMS = PLAIN
+MC_ARMS = PLAIN + ("HQCBO", "HQCBOGF")
+REFINE_ARMS = ("HQCBO", "HQCBOGF")
 
 
 def _csv_path(outdir, scm, cond, arm, seed):
     return os.path.join(outdir, f"{scm}_{cond}_{arm}_seed{seed}.csv")
 
 
+def _sidecar(csv_path):
+    from ccbo.decision_log import sidecar_path
+    return sidecar_path(csv_path)
+
+
 def _complete(csv_path, trials):
-    if not os.path.exists(csv_path):
+    """A unit is complete when its CSV has trials+1 rows AND its full-precision
+    decision log exists (engine v3 sidecar)."""
+    if not os.path.exists(csv_path) or not os.path.exists(_sidecar(csv_path)):
         return False
     try:
         return len(pd.read_csv(csv_path)) >= trials + 1
@@ -99,12 +113,15 @@ def run_unit(scm, cond, arm, seed, trials, num_interventions,
         from ccbo.minimal_suite import (run_plain_unit, run_refine_unit,
                                         run_bo_unit)
 
+        from ccbo.minimal_suite import REFINE_MODE
+        from ccbo import decision_log as dlog
+
         if arm == "BO":
             rows, info = run_bo_unit(
                 scm, cond, seed, trials, num_interventions,
                 initial_num_obs_samples, type_cost)
             unit.update(uninformative_arms=[], es=info["es"])
-        elif arm == "HQCBO":
+        elif arm in REFINE_ARMS:
             coarse_traj = None
             qcbo_csv = _csv_path(outdir, scm, cond, "QCBO", seed)
             if _complete(qcbo_csv, trials):
@@ -112,8 +129,10 @@ def run_unit(scm, cond, arm, seed, trials, num_interventions,
                     .astype(float).tolist()
             rows, info = run_refine_unit(
                 scm, cond, seed, trials, num_interventions,
-                initial_num_obs_samples, type_cost, coarse_traj=coarse_traj)
-            unit.update(refine_info=info)
+                initial_num_obs_samples, type_cost, coarse_traj=coarse_traj,
+                mode=REFINE_MODE[arm])
+            unit.update(refine_info={k: v for k, v in info.items()
+                                     if k != "decision_log"})
         else:
             rows, info = run_plain_unit(
                 scm, cond, arm, seed, trials, num_interventions,
@@ -122,8 +141,11 @@ def run_unit(scm, cond, arm, seed, trials, num_interventions,
                         es=info["es"])
 
         _write_rows(csv_path, rows)
+        dlog.write(_sidecar(csv_path), info["decision_log"])
         unit.update(ok=True, resumed=False, secs=time.time() - t0,
-                    final_y=rows[-1][1], final_cost=rows[-1][2])
+                    final_y=rows[-1][1], final_cost=rows[-1][2],
+                    init_cost=info.get("init_cost", 0.0),
+                    observed=info.get("observed"))
         return unit
     except Exception as e:
         import traceback
@@ -184,8 +206,8 @@ def main():
 
     units = [u for scm in scms for u in _units(scm)]
     # HQCBO after everything else so the QCBO CSVs exist for trigger reuse.
-    wave1 = [u for u in units if u[2] != "HQCBO"]
-    wave2 = [u for u in units if u[2] == "HQCBO"]
+    wave1 = [u for u in units if u[2] not in REFINE_ARMS]
+    wave2 = [u for u in units if u[2] in REFINE_ARMS]
 
     print(f"minimal suite: {len(units)} units "
           f"({len(wave1)} plain + {len(wave2)} refine) | scms={scms} "
@@ -224,6 +246,7 @@ def main():
                 extra += f" [uninformative: {','.join(uninf)}]"
             print(f"[{done:3d}/{len(units)}] OK   {tag} "
                   f"finalY={r['final_y']:+.3f} cost={r['final_cost']:.0f} "
+                  f"init={r.get('init_cost', 0):.0f} obs={r.get('observed')} "
                   f"({r['secs']:.0f}s){extra}", flush=True)
 
     def _run_wave(wave):
@@ -254,7 +277,7 @@ def main():
             merged = json.load(fh)
     for r in results:
         if r.get("ok") and "refine_info" in r:
-            key = f"{r['scm']}_{r['cond']}_seed{r['seed']}"
+            key = f"{r['scm']}_{r['cond']}_{r['arm']}_seed{r['seed']}"
             merged[key] = r["refine_info"]
     if merged:
         with open(info_path, "w") as fh:

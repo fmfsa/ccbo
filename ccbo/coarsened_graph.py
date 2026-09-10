@@ -154,9 +154,11 @@ class CoarsenedGraph(GraphStructure):
         #     runs on the common uninformative prior (see get_all_do).
         self._exploration_set = []
         self._arm_identifiable = {}
+        self._arm_gate_status = {}
+        self._gate_errors = {}
         for combo in self._mis_sets:
-            ok, _, _ = _ananke_id_check(self._coarsened_admg, set(combo),
-                                        target_node)
+            status, _, reason = _ananke_id_check(
+                self._coarsened_admg, set(combo), target_node)
             fine_vars = []
             for node in combo:
                 fine_vars.extend(self._node_to_manip_vars[node])
@@ -169,7 +171,10 @@ class CoarsenedGraph(GraphStructure):
                 f"ES entry {fine_vars} is not a union of full clusters "
                 f"{[sorted(c) for c in combo]}")
             self._exploration_set.append(fine_vars)
-            self._arm_identifiable[tuple(fine_vars)] = bool(ok)
+            self._arm_identifiable[tuple(fine_vars)] = (status == "identified")
+            self._arm_gate_status[tuple(fine_vars)] = status
+            if status == "error":
+                self._gate_errors[tuple(fine_vars)] = reason
 
         # Full manipulable variable list for standard BO
         all_manip = set()
@@ -332,6 +337,7 @@ class CoarsenedGraph(GraphStructure):
                 'method': info.get('method', 'unknown'),
                 'identifiable': info.get('method', 'none') != 'none',
                 'uninformative': info.get('_uninformative', False),
+                'gate_status': info.get('gate_status'),
             }
         return summary
 

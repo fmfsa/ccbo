@@ -25,14 +25,21 @@ This module exposes two identification pipelines:
          uninformative GP prior — a **principled** fallback, not a mask for
          a completeness gap.
 
-(B) **Fine-grained DAG pipeline** — :func:`make_adjustment_do_function`.
-    Legacy path kept for plain CBO benchmarks that operate directly on the
-    fine-grained DAG.  Uses the same BD → FD → g-computation cascade on
-    ``build_full_dag(graph_name)``.  No C-DAG / ananke involvement.
+(B) The legacy fine-grained DAG pipeline (``make_adjustment_do_function``
+    and its ``_compute_*_slow`` duplicates) was removed in engine v3
+    (2026-09): it had no callers and duplicated the estimators below with
+    mean-substitution semantics.
+
+Estimator semantics (engine v3): see the "Pre-fitted causal effect
+estimation" section.  Intermediate conditionals are *integrated* (Gauss-
+Hermite for front-door mediators, seeded common-random-number draws for
+g-computation), never replaced by their mean; the prior variance is the
+CBO-faithful ``Var[Y | do]`` with the GP's epistemic term excluded.
 
 GPs are fitted ONCE when the do-function is created, not at each evaluation.
 """
 
+import os
 import warnings
 
 import numpy as np
@@ -58,37 +65,23 @@ def _fit_gp(X, Y):
 
 
 # ---------------------------------------------------------------------------
-# 1. Graph construction helpers
-# ---------------------------------------------------------------------------
-
-def build_full_dag(graph_name):
-    """
-    Build the full causal DAG (including latent nodes) for a named graph.
-    """
-    from .coarsening import get_dag_edges_from_sem
-
-    edges, obs_nodes, hidden_nodes, manip_vars = get_dag_edges_from_sem(graph_name)
-    observed = set(obs_nodes)
-    latent = set(hidden_nodes or [])
-
-    dag = nx.DiGraph()
-    dag.add_nodes_from(observed | latent)
-
-    for u, v in edges:
-        dag.add_edge(u, v)
-
-    if graph_name in ('CompleteGraph', 'CompleteGraph_NoCD', 'CompleteGraph_NoBC'):
-        dag.add_edges_from([('U1', 'A'), ('U1', 'Y'),
-                            ('U2', 'B'), ('U2', 'Y')])
-    elif graph_name == 'ToyGraph':
-        dag.add_edges_from([('U', 'X'), ('U', 'Y')])
-
-    return dag, observed, latent, manip_vars
-
-
-# ---------------------------------------------------------------------------
 # 2. Backdoor and frontdoor criterion
 # ---------------------------------------------------------------------------
+
+def _vkey(v):
+    """Canonical sort key for DAG / ADMG vertices (strings or frozenset
+    clusters).  Every candidate enumeration and every returned variable
+    order in this module goes through it, so identification and the GP
+    input layout are independent of Python's per-process hash seed
+    (``sorted()`` on frozensets is a partial order and is NOT canonical)."""
+    if isinstance(v, frozenset):
+        return (1, tuple(sorted(str(x) for x in v)))
+    return (0, (str(v),))
+
+
+def _sorted_v(vs):
+    return sorted(vs, key=_vkey)
+
 
 def find_backdoor_set(dag, S, Y, observed):
     """
@@ -100,7 +93,7 @@ def find_backdoor_set(dag, S, Y, observed):
         desc_S |= nx.descendants(dag, s)
     desc_S -= S_set
 
-    candidates = sorted(observed - S_set - desc_S - {Y})
+    candidates = _sorted_v(observed - S_set - desc_S - {Y})
 
     dag_no_out = dag.copy()
     for s in S_set:
@@ -115,7 +108,7 @@ def find_backdoor_set(dag, S, Y, observed):
                 for s in S_set
             )
             if separated:
-                return sorted(Z_set)
+                return _sorted_v(Z_set)
 
     return None
 
@@ -125,7 +118,7 @@ def find_frontdoor_set(dag, S, Y, observed):
     Find a valid frontdoor adjustment set M for do(S) on Y.
     """
     S_set = set(S)
-    candidates = sorted(observed - S_set - {Y})
+    candidates = _sorted_v(observed - S_set - {Y})
 
     for size in range(1, len(candidates) + 1):
         for M_tuple in combinations(candidates, size):
@@ -170,7 +163,7 @@ def find_frontdoor_set(dag, S, Y, observed):
             if not cond3:
                 continue
 
-            return sorted(M_set)
+            return _sorted_v(M_set)
 
     return None
 
@@ -187,12 +180,12 @@ def find_gcomputation_plan(dag, S, Y, observed):
     S_set = set(S)
 
     obs_dag = nx.DiGraph()
-    for u, v in dag.edges():
-        if u in observed and v in observed:
-            obs_dag.add_edge(u, v)
-    obs_dag.add_nodes_from(observed)
+    obs_dag.add_nodes_from(_sorted_v(observed))
+    for u, v in _sorted_v((u, v) for u, v in dag.edges()
+                          if u in observed and v in observed):
+        obs_dag.add_edge(u, v)
 
-    topo = list(nx.topological_sort(obs_dag))
+    topo = list(nx.lexicographical_topological_sort(obs_dag, key=_vkey))
 
     affected = set()
     for s in S_set:
@@ -206,7 +199,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
     for v in topo:
         if v in S_set or v == Y or v not in affected:
             continue
-        obs_parents = sorted(set(obs_dag.predecessors(v)))
+        obs_parents = _sorted_v(set(obs_dag.predecessors(v)))
         
         # Check against latent confounders between v and its observed parents
         v_latents = set(dag.predecessors(v)) - observed
@@ -227,7 +220,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
             propagation.append((v, obs_parents))
             propagated.add(v)
 
-    obs_parents_Y = sorted(set(obs_dag.predecessors(Y)))
+    obs_parents_Y = _sorted_v(set(obs_dag.predecessors(Y)))
     
     # Check against latent confounders between Y and its observed parents
     Y_latents = set(dag.predecessors(Y)) - observed
@@ -247,7 +240,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
     if not parents_ready:
         return None
 
-    final_conditioning = sorted(
+    final_conditioning = _sorted_v(
         set(obs_parents_Y) | (observed - S_set - {Y} - affected)
     )
 
@@ -255,7 +248,7 @@ def find_gcomputation_plan(dag, S, Y, observed):
         'method': 'gcomputation',
         'propagation_order': propagation,
         'conditioning_vars': final_conditioning,
-        'affected_vars': sorted(affected - {Y}),
+        'affected_vars': _sorted_v(affected - {Y}),
     }
 
 
@@ -288,346 +281,246 @@ def identify_adjustment(dag, S, Y, observed):
 # ---------------------------------------------------------------------------
 # 5. Pre-fitted causal effect estimation
 # ---------------------------------------------------------------------------
+#
+# Estimator policy (engine v3, 2026-09).  Every predictor returns
+# ``(mean, v)``: ``mean`` is the plug-in estimate of ``E[Y | do(A=a)]`` and
+# ``v`` the prior variance handed to the arm surrogate's CausalRBF kernel.
+# ``moments()`` exposes the full decomposition over the mixture of
+# adjustment / mediator / propagation rows (weights ``w_i``):
+#
+#     spread     = sum_i w_i (mu_i - mean)^2        Var_mix(E[Y | pa])
+#     lik_var    = fitted noise of the outcome GP   E_mix[Var(Y | pa)]
+#     epistemic  = sum_i w_i var_f(pa_i)            GP posterior variance
+#
+# VARIANCE_POLICY selects ``v``:
+#
+#   "predictive" (default): v = lik_var + spread + epistemic -- the law of
+#       total variance of Y under do(a) *under the fitted plug-in model*,
+#       integrating the GP posterior over the outcome regression.  This is the
+#       quantity the CBO reference implementation averages
+#       (``np.mean(gp.predict(rows)[1])`` = epistemic + noise) plus the
+#       between-row spread that a mixture over adjustment rows adds.
+#   "total": v = lik_var + spread -- the plug-in Var[Y | do(a)] with the GP
+#       epistemic term removed.  Kept for comparison runs: off the
+#       observational support (or for an interpolating outcome fit) it
+#       collapses to ~0, which makes the CausalRBF kernel identically zero
+#       and the arm surrogate unable to learn from its own pulls (the
+#       2026-09-09 preliminary family run: flat Coral trajectories).
+#   "epistemic": diagnostic only.
+#
+# Override with the environment variable ``CCBO_VARIANCE_POLICY`` *before*
+# import; the value is recorded in every decision-log sidecar.
+# Conditional laws of intermediate variables are the fitted plug-in
+# Gaussians ``N(mu_hat(pa), sigma_hat^2)``; they are integrated by
+# Gauss-Hermite quadrature (front-door) or by seeded common-random-number
+# draws (g-computation) -- never by substituting their mean, which is
+# biased for any nonlinear outcome mechanism.
+
+GH_NODES = 20            # Gauss-Hermite nodes per mediator (product grid <= 2)
+MC_DRAWS = 400           # seeded draws when there are more than two mediators
+GCOMP_REPS = 4           # replications of the observational rows in g-comp draws
+ESTIMATOR_SEED = 0       # fixed: part of the quotient-contract coupling
+VARIANCE_POLICIES = ("predictive", "total", "epistemic")
+VARIANCE_POLICY = os.environ.get("CCBO_VARIANCE_POLICY", "predictive")
+if VARIANCE_POLICY not in VARIANCE_POLICIES:
+    raise ValueError(f"CCBO_VARIANCE_POLICY={VARIANCE_POLICY!r}; "
+                     f"expected one of {VARIANCE_POLICIES}")
+
+ESTIMATOR_INFO = {
+    'gh_nodes': GH_NODES, 'mc_draws': MC_DRAWS, 'gcomp_reps': GCOMP_REPS,
+    'seed': ESTIMATOR_SEED, 'variance_policy': VARIANCE_POLICY,
+    'mediator_law': 'plug-in Gaussian (GP mean, likelihood variance)',
+}
+
+
+def _gp_moments(gp, X):
+    """Latent posterior mean / variance (no likelihood) and the fitted
+    likelihood variance of a GPy regression model."""
+    mu, var_f = gp.predict(np.asarray(X, dtype=float), include_likelihood=False)
+    return mu, var_f, float(gp.likelihood.variance)
+
+
+def _gp_conditional(gp):
+    """Plug-in conditional law ``N(mu_hat(x), sigma_hat^2)`` of a fitted GP,
+    as a callable ``X -> (mu, var_total)`` with constant noise variance."""
+    def cond(X):
+        mu, _ = gp.predict(np.asarray(X, dtype=float), include_likelihood=False)
+        return mu, np.full_like(mu, float(gp.likelihood.variance))
+    return cond
+
+
+def _gp_outcome(gp):
+    """Outcome regression as a callable ``X -> (mu, var_f, lik_var)``."""
+    return lambda X: _gp_moments(gp, X)
+
+
+def _mixture_moments(mu, var_f, lik_var, weights, n_obs):
+    """Moments of ``Y`` under an identified functional evaluated on a
+    weighted mixture of conditioning rows (``weights`` sum to one)."""
+    mu = np.ravel(np.asarray(mu, dtype=float))
+    var_f = np.ravel(np.asarray(var_f, dtype=float))
+    w = np.ravel(np.asarray(weights, dtype=float))
+    mean = float(np.sum(w * mu))
+    spread = float(np.sum(w * (mu - mean) ** 2))
+    epistemic = float(np.sum(w * var_f))
+    aleatoric = float(lik_var) + spread
+    sampling = spread / max(int(n_obs), 1)
+    if VARIANCE_POLICY == "predictive":
+        v = aleatoric + epistemic
+    elif VARIANCE_POLICY == "total":
+        v = aleatoric
+    elif VARIANCE_POLICY == "epistemic":
+        v = epistemic + sampling
+    else:
+        raise ValueError(f"unknown VARIANCE_POLICY {VARIANCE_POLICY!r}")
+    return {'mean': mean, 'v': float(max(v, 0.0)), 'aleatoric': aleatoric,
+            'epistemic': epistemic, 'sampling': float(sampling),
+            'spread': spread, 'lik_var': float(lik_var)}
+
+
+def _attach(predict, moments):
+    """Expose the full moment breakdown on the fast predictor."""
+    predict.moments = moments
+    return predict
+
+
+def _mediator_grid(value, m_conditionals, n_nodes=GH_NODES,
+                   mc_draws=MC_DRAWS, seed=ESTIMATOR_SEED):
+    """Nodes / weights integrating the chain-rule mediator law
+    ``prod_j p(m_j | value, m_<j)``: a Gauss-Hermite product grid for at
+    most two mediators, seeded common-random-number draws beyond.
+    ``n_nodes=1`` degenerates to mean substitution (diagnostic only)."""
+    value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
+    n_med = len(m_conditionals)
+    if n_med == 0:
+        return np.zeros((1, 0)), np.ones(1)
+    if n_med <= 2:
+        xi, w = np.polynomial.hermite.hermgauss(int(n_nodes))
+        w = w / np.sqrt(np.pi)
+        nodes, weights = np.zeros((1, 0)), np.ones(1)
+        for cond in m_conditionals:
+            R = nodes.shape[0]
+            mu_j, var_j = cond(np.hstack([np.tile(value, (R, 1)), nodes]))
+            mu_j = np.ravel(mu_j)
+            sd_j = np.sqrt(np.maximum(np.ravel(var_j), 0.0))
+            m_col = (mu_j[:, None] + np.sqrt(2.0) * sd_j[:, None] * xi[None, :]
+                     ).reshape(-1, 1)
+            nodes = np.hstack([np.repeat(nodes, len(xi), axis=0), m_col])
+            weights = (weights[:, None] * w[None, :]).reshape(-1)
+        return nodes, weights
+    rng = np.random.default_rng(seed)
+    Z = rng.standard_normal((int(mc_draws), n_med))
+    nodes = np.zeros((int(mc_draws), 0))
+    for j, cond in enumerate(m_conditionals):
+        mu_j, var_j = cond(np.hstack([np.tile(value, (int(mc_draws), 1)), nodes]))
+        m_j = np.ravel(mu_j) + np.sqrt(np.maximum(np.ravel(var_j), 0.0)) * Z[:, j]
+        nodes = np.hstack([nodes, m_j[:, None]])
+    return nodes, np.full(int(mc_draws), 1.0 / int(mc_draws))
+
+
+def frontdoor_integrate(value, m_conditionals, y_conditional, S_obs,
+                        n_nodes=GH_NODES, mc_draws=MC_DRAWS,
+                        seed=ESTIMATOR_SEED):
+    """Front-door functional with the mediator law integrated out:
+
+        E[Y | do(S=s)] = int p(m | s) [ (1/n) sum_j E[Y | m, S=s_j] ] dm .
+
+    ``m_conditionals`` : list of ``X -> (mu, var_total)``; the j-th receives
+    ``[value, m_<j]`` rows (chain rule for vector mediators).
+    ``y_conditional``  : ``X -> (mu, var_f, lik_var)`` on ``[M, S]`` rows.
+    ``S_obs``          : ``(n, |S|)`` observational rows for the outer average.
+    Returns the moment dict of :func:`_mixture_moments`.
+    """
+    value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
+    S_obs = np.asarray(S_obs, dtype=float)
+    n = S_obs.shape[0]
+    nodes, weights = _mediator_grid(value, m_conditionals, n_nodes, mc_draws, seed)
+    K = nodes.shape[0]
+    X_pred = np.hstack([np.repeat(nodes, n, axis=0), np.tile(S_obs, (K, 1))])
+    mu, var_f, lik = y_conditional(X_pred)
+    return _mixture_moments(mu, var_f, lik, np.repeat(weights, n) / n, n)
+
+
+def gcomp_propagate(value, S_vars, steps, y_conditional, cond_vars,
+                    base_rows, Z):
+    """G-computation by conditional draws with common random numbers.
+
+    ``steps`` is a topologically ordered list ``(var, parent_vars, cond)``
+    with ``cond : X -> (mu, var_total)`` the plug-in conditional of ``var``
+    given ``parent_vars`` (earlier members of the same cluster appear among
+    the parents of later members: chain rule, so within-cluster dependence
+    is preserved).  ``base_rows`` maps every observational column to its
+    ``(n,)`` array; ``Z`` has shape ``(reps * n, len(steps))`` and is drawn
+    once, so the estimator is deterministic and continuous in ``value``.
+    """
+    value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
+    n = len(next(iter(base_rows.values())))
+    R = int(Z.shape[0])
+    reps = R // n
+    current = {k: np.tile(np.asarray(v, dtype=float), reps)
+               for k, v in base_rows.items()}
+    for i, s in enumerate(S_vars):
+        current[s] = np.full(R, value[i])
+    for k, (var, parents, cond) in enumerate(steps):
+        mu, var_t = cond(np.column_stack([current[p] for p in parents]))
+        current[var] = (np.ravel(mu)
+                        + np.sqrt(np.maximum(np.ravel(var_t), 0.0)) * Z[:, k])
+    X_cond = (np.column_stack([current[v] for v in cond_vars])
+              if cond_vars else np.ones((R, 1)))
+    mu, var_f, lik = y_conditional(X_cond)
+    return _mixture_moments(mu, var_f, lik, np.full(R, 1.0 / R), n)
+
 
 def _build_backdoor_predictor(S_vars, Z_vars, Y_var, observational_samples):
-    """
-    Pre-fit a GP for backdoor adjustment and return a fast predictor.
-
-    Returns a function: value -> (mean_do, var_do)
-    """
+    """Pre-fit one GP ``Y | S, Z`` and return ``value -> (mean, v)``."""
     n = len(observational_samples)
-    input_vars = S_vars + Z_vars
     X_obs = np.column_stack(
-        [observational_samples[v].values for v in input_vars]
-    )
+        [observational_samples[v].values for v in S_vars + Z_vars])
     Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-
     gp = _fit_gp(X_obs, Y_obs)
+    Z_obs = (np.column_stack([observational_samples[v].values for v in Z_vars])
+             if Z_vars else np.empty((n, 0)))
+    y_cond = _gp_outcome(gp)
 
-    Z_obs = np.column_stack(
-        [observational_samples[v].values for v in Z_vars]
-    ) if Z_vars else np.empty((n, 0))
+    def moments(value):
+        value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
+        mu, var_f, lik = y_cond(np.hstack([np.tile(value, (n, 1)), Z_obs]))
+        return _mixture_moments(mu, var_f, lik, np.full(n, 1.0 / n), n)
 
     def predict(value):
-        value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-        S_repeated = np.tile(value, (n, 1))
-        X_pred = np.hstack([S_repeated, Z_obs]) if Z_vars else S_repeated
-        mu, var = gp.predict(X_pred)
-        mean_do = float(np.mean(mu))
-        var_do = float(np.mean(var) + np.var(mu))
-        return mean_do, var_do
+        m = moments(value)
+        return m['mean'], m['v']
 
-    return predict
+    return _attach(predict, moments)
 
 
-def _build_frontdoor_predictor(S_vars, M_vars, Y_var, observational_samples):
-    """
-    Pre-fit GPs for frontdoor adjustment and return a fast predictor.
-    """
-    n = len(observational_samples)
-    S_obs = np.column_stack(
-        [observational_samples[v].values for v in S_vars]
-    )
-
-    # Stage 1 GPs: M_i | S
-    m_gps = []
-    for m_var in M_vars:
-        M_obs = observational_samples[m_var].values[:, np.newaxis]
-        m_gps.append(_fit_gp(S_obs, M_obs))
-
-    # Stage 2 GP: Y | (M, S)
-    input_vars_ym = M_vars + S_vars
+def _build_frontdoor_predictor(S_vars, M_vars, Y_var, observational_samples,
+                               n_nodes=GH_NODES):
+    """Pre-fit the chain-rule mediator GPs ``M_j | S, M_<j`` and the outcome
+    GP ``Y | M, S``; return ``value -> (mean, v)`` integrating over the
+    fitted mediator law by Gauss-Hermite quadrature.  ``n_nodes=1``
+    reproduces the legacy mean-substitution estimator (diagnostics only)."""
+    S_obs = np.column_stack([observational_samples[v].values for v in S_vars])
+    m_conditionals = []
+    for j, m_var in enumerate(M_vars):
+        X_in = np.column_stack(
+            [observational_samples[v].values for v in S_vars + M_vars[:j]])
+        m_conditionals.append(_gp_conditional(
+            _fit_gp(X_in, observational_samples[m_var].values[:, np.newaxis])))
     X_obs_ym = np.column_stack(
-        [observational_samples[v].values for v in input_vars_ym]
-    )
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp_y = _fit_gp(X_obs_ym, Y_obs)
+        [observational_samples[v].values for v in M_vars + S_vars])
+    gp_y = _fit_gp(X_obs_ym, observational_samples[Y_var].values[:, np.newaxis])
+    y_cond = _gp_outcome(gp_y)
+
+    def moments(value):
+        return frontdoor_integrate(value, m_conditionals, y_cond, S_obs,
+                                   n_nodes=n_nodes)
 
     def predict(value):
-        value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
+        m = moments(value)
+        return m['mean'], m['v']
 
-        # Stage 1: predict M
-        m_preds = []
-        for gp_m in m_gps:
-            m_pred, _ = gp_m.predict(value.reshape(1, -1))
-            m_preds.append(float(m_pred[0, 0]))
-        m_hat = np.array(m_preds)
-
-        # Stage 2: E_S'[E[Y | M=m_hat, S=s']]
-        M_repeated = np.tile(m_hat, (n, 1))
-        X_pred = np.hstack([M_repeated, S_obs])
-        mu, var = gp_y.predict(X_pred)
-        mean_do = float(np.mean(mu))
-        var_do = float(np.mean(var) + np.var(mu))
-        return mean_do, var_do
-
-    return predict
-
-
-def _build_gcomputation_predictor(S_vars, plan, Y_var, observational_samples):
-    """
-    Pre-fit all GPs for g-computation and return a fast predictor.
-    """
-    n = len(observational_samples)
-
-    # Pre-fit GPs for each propagation step
-    prop_gps = []
-    for var, parents in plan['propagation_order']:
-        if not parents:
-            prop_gps.append(None)
-            continue
-        X_parent_obs = np.column_stack(
-            [observational_samples[p].values for p in parents]
-        )
-        Y_var_obs = observational_samples[var].values[:, np.newaxis]
-        prop_gps.append(_fit_gp(X_parent_obs, Y_var_obs))
-
-    # Pre-fit GP for Y
-    cond_vars = plan['conditioning_vars']
-    X_cond_obs = np.column_stack(
-        [observational_samples[v].values for v in cond_vars]
-    )
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp_y = _fit_gp(X_cond_obs, Y_obs)
-
-    # Cache observational values
-    obs_values = {col: observational_samples[col].values.copy()
-                  for col in observational_samples.columns}
-    S_set = set(S_vars)
-    affected_set = set(plan.get('affected_vars', []))
-
-    def predict(value):
-        value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-
-        # Start with observational data
-        current_values = {k: v.copy() for k, v in obs_values.items()}
-
-        # Set intervention values
-        for i, s_var in enumerate(S_vars):
-            current_values[s_var] = np.full(n, value[i])
-
-        # Propagate through affected variables
-        for (var, parents), gp_var in zip(plan['propagation_order'], prop_gps):
-            if gp_var is None:
-                continue
-            X_parent_current = np.column_stack(
-                [current_values[p] for p in parents]
-            )
-            pred_mu, _ = gp_var.predict(X_parent_current)
-            current_values[var] = pred_mu.ravel()
-
-        # Predict Y
-        X_cond_current = np.column_stack(
-            [current_values[v] for v in cond_vars]
-        )
-        mu, var = gp_y.predict(X_cond_current)
-        mean_do = float(np.mean(mu))
-        var_do = float(np.mean(var) + np.var(mu))
-        return mean_do, var_do
-
-    return predict
-
-
-# ---------------------------------------------------------------------------
-# 6. Unified interface
-# ---------------------------------------------------------------------------
-
-def make_adjustment_do_function(graph_name, intervention_vars, observational_samples=None):
-    """
-    Create a do-calculus function using the best available identification
-    strategy: backdoor > frontdoor > g-computation.
-
-    If observational_samples is provided, GPs are pre-fitted and the returned
-    function only does prediction (fast). Otherwise, the function fits GPs
-    from scratch at each call (slow, for backward compatibility).
-
-    The returned function has the signature expected by the CBO codebase:
-        compute_do(observational_samples, functions, value) -> (mean, var)
-    """
-    dag, observed, latent, _ = build_full_dag(graph_name)
-    ident = identify_adjustment(dag, intervention_vars, 'Y', observed)
-
-    if ident['method'] == 'backdoor':
-        Z_vars = ident['adjustment_set']
-
-        if observational_samples is not None:
-            predictor = _build_backdoor_predictor(
-                intervention_vars, Z_vars, 'Y', observational_samples)
-
-            def compute_do(observational_samples, functions, value):
-                return predictor(value)
-        else:
-            def compute_do(observational_samples, functions, value):
-                return _compute_backdoor_slow(
-                    intervention_vars, Z_vars, 'Y', value,
-                    observational_samples)
-
-        return compute_do, ident
-
-    elif ident['method'] == 'frontdoor':
-        M_vars = ident['adjustment_set']
-
-        if observational_samples is not None:
-            predictor = _build_frontdoor_predictor(
-                intervention_vars, M_vars, 'Y', observational_samples)
-
-            def compute_do(observational_samples, functions, value):
-                return predictor(value)
-        else:
-            def compute_do(observational_samples, functions, value):
-                return _compute_frontdoor_slow(
-                    intervention_vars, M_vars, 'Y', value,
-                    observational_samples)
-
-        return compute_do, ident
-
-    elif ident['method'] == 'gcomputation':
-        plan = ident
-
-        if observational_samples is not None:
-            predictor = _build_gcomputation_predictor(
-                intervention_vars, plan, 'Y', observational_samples)
-
-            def compute_do(observational_samples, functions, value):
-                return predictor(value)
-        else:
-            def compute_do(observational_samples, functions, value):
-                return _compute_gcomputation_slow(
-                    intervention_vars, plan, 'Y', value,
-                    observational_samples)
-
-        return compute_do, ident
-
-    else:
-        return None, ident
-
-
-# ---------------------------------------------------------------------------
-# 7. C-DAG level identification helpers
-# ---------------------------------------------------------------------------
-
-def cdag_to_string_dag(cdag):
-    """
-    Convert a frozenset-node C-DAG to a string-node DiGraph.
-
-    Frozenset nodes like frozenset({'B','C','D'}) become strings like '{B,C,D}'.
-    String nodes are sortable, making them compatible with identify_adjustment.
-
-    Returns
-    -------
-    string_dag : nx.DiGraph
-        Same topology, string node labels.
-    node_map : dict
-        frozenset node -> string label.
-    """
-    def cluster_to_str(cluster):
-        return '{' + ','.join(sorted(cluster)) + '}'
-
-    node_map = {node: cluster_to_str(node) for node in cdag.nodes}
-    string_dag = nx.DiGraph()
-    for s in node_map.values():
-        string_dag.add_node(s)
-    for u, v in cdag.edges:
-        string_dag.add_edge(node_map[u], node_map[v])
-    return string_dag, node_map
-
-
-def _cluster_str_to_vars(cluster_str):
-    """Parse '{B,C,D}' → ['B', 'C', 'D']."""
-    inner = cluster_str.strip('{}')
-    return sorted(inner.split(',')) if inner else []
-
-
-def _build_cdag_gcomputation_predictor(S_vars, plan, Y_var, observational_samples):
-    """
-    G-computation predictor for C-DAG level identification.
-
-    The plan's propagation_order contains (cluster_str, parent_cluster_strs)
-    tuples from the string C-DAG. Each cluster string is expanded to its
-    fine-grained variables for GP fitting and prediction.
-    """
-    n = len(observational_samples)
-    obs_cols = set(observational_samples.columns)
-
-    # Pre-fit GPs for each propagation step.
-    # For each intermediate cluster: one GP per fine var in that cluster,
-    # conditioned on fine vars of parent clusters.
-    prop_gps = []  # list of (fine_vars, parent_fine_vars, list_of_GPs)
-    for cluster_str, parent_cluster_strs in plan['propagation_order']:
-        fine_vars = [v for v in _cluster_str_to_vars(cluster_str) if v in obs_cols]
-        parent_fine_vars = []
-        for p_str in parent_cluster_strs:
-            parent_fine_vars.extend(
-                [v for v in _cluster_str_to_vars(p_str) if v in obs_cols]
-            )
-
-        if not parent_fine_vars:
-            prop_gps.append((fine_vars, parent_fine_vars, []))
-            continue
-
-        X_parent_obs = np.column_stack(
-            [observational_samples[v].values for v in parent_fine_vars]
-        )
-        cluster_gps = []
-        for var in fine_vars:
-            Y_var_obs = observational_samples[var].values[:, np.newaxis]
-            cluster_gps.append(_fit_gp(X_parent_obs, Y_var_obs))
-        prop_gps.append((fine_vars, parent_fine_vars, cluster_gps))
-
-    # Pre-fit GP for Y: expand conditioning cluster strings to fine vars.
-    cond_cluster_strs = plan['conditioning_vars']
-    cond_fine_vars = []
-    for c_str in cond_cluster_strs:
-        cond_fine_vars.extend(
-            [v for v in _cluster_str_to_vars(c_str)
-             if v in obs_cols and v != Y_var]
-        )
-
-    if cond_fine_vars:
-        X_cond_obs = np.column_stack(
-            [observational_samples[v].values for v in cond_fine_vars]
-        )
-    else:
-        X_cond_obs = np.ones((n, 1))
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp_y = _fit_gp(X_cond_obs, Y_obs)
-
-    obs_values = {col: observational_samples[col].values.copy()
-                  for col in observational_samples.columns}
-
-    def predict(value):
-        value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-        current_values = {k: v.copy() for k, v in obs_values.items()}
-
-        # Set intervention values
-        for i, s_var in enumerate(S_vars):
-            current_values[s_var] = np.full(n, value[i])
-
-        # Propagate through intermediate clusters
-        for (fine_vars, parent_fine_vars, cluster_gps) in prop_gps:
-            if not cluster_gps or not parent_fine_vars:
-                continue
-            X_parent_current = np.column_stack(
-                [current_values[v] for v in parent_fine_vars]
-            )
-            for var, gp_var in zip(fine_vars, cluster_gps):
-                pred_mu, _ = gp_var.predict(X_parent_current)
-                current_values[var] = pred_mu.ravel()
-
-        # Predict Y using updated current_values (intervention vars already set)
-        if cond_fine_vars:
-            X_cond_current = np.column_stack(
-                [current_values[v] for v in cond_fine_vars]
-            )
-        else:
-            X_cond_current = np.ones((n, 1))
-        mu, var = gp_y.predict(X_cond_current)
-        mean_do = float(np.mean(mu))
-        var_do = float(np.mean(var) + np.var(mu))
-        return mean_do, var_do
-
-    return predict
-
+    return _attach(predict, moments)
 
 # ---------------------------------------------------------------------------
 # ADMG utilities: ananke gate + latent-expansion DAG for GP estimator reuse
@@ -659,14 +552,14 @@ def _ananke_id_check(admg_dict, X_vertices, Y_vertex):
 
     Returns
     -------
-    identifiable : bool
+    status : {"identified", "not_identified", "error"}
+        Tri-state verdict.  ``"error"`` means ananke raised at runtime; the
+        caller must treat it as *not usable* (fail-closed) and record it
+        separately from a negative identifiability result.
     functional : str or None
         Symbolic Tian-Pearl factorisation as returned by ananke (diagnostic).
-    deferred : str or None
-        None when the gate ran; otherwise a short reason string recording
-        that ananke crashed at runtime and the decision was deferred to the
-        (sound but incomplete) estimator cascade.  Callers should surface
-        this in their identification info.
+    reason : str or None
+        Diagnostic text for the ``"error"`` state, else ``None``.
     """
     try:
         from ananke.graphs import ADMG
@@ -691,9 +584,9 @@ def _ananke_id_check(admg_dict, X_vertices, Y_vertex):
     except (ValueError, TypeError, KeyError, AssertionError) as e:
         reason = (f"ananke ADMG construction failed for X={X_vertices}, "
                   f"Y={Y_vertex} ({type(e).__name__}: {e})")
-        warnings.warn(reason + "; deferring to estimator cascade.",
+        warnings.warn(reason + "; gate status = error (fail-closed).",
                       RuntimeWarning, stacklevel=2)
-        return True, None, reason
+        return "error", None, reason
 
     X_names = [name_map[x] for x in X_vertices if x in name_map]
     Y_name = name_map[Y_vertex]
@@ -706,16 +599,15 @@ def _ananke_id_check(admg_dict, X_vertices, Y_vertex):
                 functional = str(oid.functional())
             except Exception:
                 # Functional extraction is best-effort; the id() result above
-                # is what callers actually use. Silent fallback is correct.
+                # is what callers actually use.
                 functional = None
-        return identifiable, functional, None
+        return ("identified" if identifiable else "not_identified"), functional, None
     except (ValueError, TypeError, KeyError, AssertionError) as e:
         reason = (f"ananke OneLineID failed for X={X_names}, Y={Y_name} "
                   f"({type(e).__name__}: {e})")
-        warnings.warn(reason + "; deferring to estimator cascade.",
+        warnings.warn(reason + "; gate status = error (fail-closed).",
                       RuntimeWarning, stacklevel=2)
-        return True, None, reason
-
+        return "error", None, reason
 
 def _expand_admg_to_dag(admg_dict):
     """
@@ -731,8 +623,8 @@ def _expand_admg_to_dag(admg_dict):
         name -> frozenset({u, v}) for each introduced latent.
     """
     dag = nx.DiGraph()
-    dag.add_nodes_from(admg_dict['vertices'])
-    for u, v in admg_dict['di']:
+    dag.add_nodes_from(_sorted_v(admg_dict['vertices']))
+    for u, v in _sorted_v(admg_dict['di']):
         dag.add_edge(u, v)
     observed = set(admg_dict['vertices'])
     latent_to_bi = {}
@@ -769,39 +661,23 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
        the C-DAG; let the target cluster be ``Y_cluster`` (typically
        ``frozenset({target_var})``).
     2. Gate: :func:`_ananke_id_check` — run ananke's OneLineID on the
-       cluster-level query.  If not identifiable, return ``(None, info)``
-       so the CoarsenedGraph falls back to an uninformative prior.
+       cluster-level query.  ``not_identified`` and ``error`` both return
+       ``(None, info)`` so the CoarsenedGraph falls back to the constant
+       observational prior; the two states are recorded separately in
+       ``info['gate_status']`` (an ``error`` is a fail-closed diagnostic,
+       never a positive identification).
     3. Estimator: expand each bidirected edge to an explicit latent common
-       cause, run the legacy BD → FD → g-comp cascade on the resulting DAG,
-       and build a GP predictor using fine-grained members of each cluster
-       as the conditioning variables.
-
-    Because Lee-2019 partitions are manipulable-only and a cluster
-    intervention ``do(C_k)`` assigns all members of ``C_k``, the expansion
-    of cluster-level adjustment sets to fine-grained GP inputs is exact,
-    not heuristic (every member of an adjustment cluster has observational
-    data and is not a descendant of any intervention cluster in the C-DAG).
-
-    Parameters
-    ----------
-    cdag_or_admg : dict (ADMG) or nx.DiGraph
-        Accepts either the new ADMG dict (vertices / di / bi) from
-        :func:`coarsening.build_coarsened_admg`, or a legacy nx.DiGraph
-        (treated as an ADMG with no bidirected edges).
-    intervention_fine_vars : list of str
-        Fine-grained manipulable variables to intervene on.
-    partition : list of frozenset
-        Partition used to build the C-DAG (clusters over observable
-        manipulable variables; target ``{Y}`` is always a singleton).
-    target_var : str
-    observational_samples : pandas.DataFrame
+       cause, run the BD → FD → g-comp cascade on the resulting DAG, and
+       build a GP predictor using fine-grained members of each cluster as
+       the conditioning variables (front-door / g-comp conditionals are
+       integrated, see the estimator section).
 
     Returns
     -------
     compute_do : callable or None
     ident : dict
-        Includes keys ``method``, ``identifiable``, ``functional`` (ananke
-        symbolic expression) and strategy-specific fields.
+        Keys ``method``, ``identifiable``, ``gate_status``, ``functional``,
+        ``estimator`` and strategy-specific fields.
     """
     # ---- Normalise input to an ADMG dict --------------------------------
     if _is_admg_dict(cdag_or_admg):
@@ -823,16 +699,21 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
     target_cluster = node_to_cluster.get(target_var, frozenset({target_var}))
     if not intervention_clusters or target_cluster not in admg['vertices']:
         return None, {'method': 'none', 'identifiable': False,
+                      'gate_status': 'not_run',
                       'reason': 'target_or_intervention_not_in_cdag'}
 
-    # ---- Ananke GID-PO identifiability gate -----------------------------
-    identifiable, functional, gate_deferred = _ananke_id_check(
+    # ---- Ananke GID-PO identifiability gate (tri-state, fail-closed) ----
+    status, functional, gate_reason = _ananke_id_check(
         admg, intervention_clusters, target_cluster)
-    if not identifiable:
+    if status == "error":
         return None, {
-            'method': 'none',
-            'identifiable': False,
-            'functional': None,
+            'method': 'none', 'identifiable': False, 'functional': None,
+            'gate_status': 'error', 'reason': gate_reason,
+        }
+    if status != "identified":
+        return None, {
+            'method': 'none', 'identifiable': False, 'functional': None,
+            'gate_status': 'not_identified',
             'reason': 'not_identifiable_on_cdag',
         }
 
@@ -842,6 +723,8 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
         expanded_dag, list(intervention_clusters), target_cluster, observed)
 
     obs_cols = set(observational_samples.columns)
+    base = {'identifiable': True, 'functional': functional,
+            'gate_status': 'identified', 'estimator': dict(ESTIMATOR_INFO)}
 
     if ident['method'] == 'backdoor':
         Z_clusters = ident['adjustment_set']
@@ -855,15 +738,11 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
 
         def compute_do(obs, functions, value):
             return predictor(value)
+        compute_do.moments = predictor.moments
 
-        return compute_do, {
-            'method': 'backdoor_cdag',
-            'identifiable': True,
-            'functional': functional,
-            'gate_deferred': gate_deferred,
-            'adjustment_clusters': [_admg_cluster_name(c) for c in Z_clusters],
-            'adjustment_fine_vars': Z_fine_vars,
-        }
+        return compute_do, dict(base, method='backdoor_cdag',
+                                adjustment_clusters=[_admg_cluster_name(c) for c in Z_clusters],
+                                adjustment_fine_vars=Z_fine_vars)
 
     if ident['method'] == 'frontdoor':
         M_clusters = ident['adjustment_set']
@@ -877,57 +756,49 @@ def make_cdag_do_function(cdag_or_admg, intervention_fine_vars, partition,
 
         def compute_do(obs, functions, value):
             return predictor(value)
+        compute_do.moments = predictor.moments
 
-        return compute_do, {
-            'method': 'frontdoor_cdag',
-            'identifiable': True,
-            'functional': functional,
-            'gate_deferred': gate_deferred,
-            'mediator_clusters': [_admg_cluster_name(c) for c in M_clusters],
-            'mediator_fine_vars': M_fine_vars,
-        }
+        return compute_do, dict(base, method='frontdoor_cdag',
+                                mediator_clusters=[_admg_cluster_name(c) for c in M_clusters],
+                                mediator_fine_vars=M_fine_vars)
 
     if ident['method'] == 'gcomputation':
-        # Cluster-level propagation order -> fine-grained GPs.
         predictor = _build_cdag_gcomputation_predictor_admg(
             intervention_fine_vars, ident, target_var,
             observational_samples, obs_cols)
 
         def compute_do(obs, functions, value):
             return predictor(value)
+        compute_do.moments = predictor.moments
 
-        return compute_do, {
-            'method': 'gcomputation_cdag',
-            'identifiable': True,
-            'functional': functional,
-            'gate_deferred': gate_deferred,
-        }
+        return compute_do, dict(base, method='gcomputation_cdag')
 
     # Ananke said identifiable but our sound (non-complete) cascade missed
     # it — surface this as a diagnostic rather than silently failing.
     return None, {
-        'method': 'none',
-        'identifiable': True,
-        'functional': functional,
-        'gate_deferred': gate_deferred,
+        'method': 'none', 'identifiable': True, 'functional': functional,
+        'gate_status': 'identified',
         'reason': 'ananke_identifiable_but_cascade_missed',
     }
 
 
 def _build_cdag_gcomputation_predictor_admg(
-        S_fine_vars, plan, Y_var, observational_samples, obs_cols):
+        S_fine_vars, plan, Y_var, observational_samples, obs_cols,
+        reps=GCOMP_REPS, seed=ESTIMATOR_SEED):
     """
     G-computation predictor for cluster-level plans on the expanded DAG.
 
     ``plan['propagation_order']`` contains ``(cluster, parent_clusters)``
     pairs where each cluster is a frozenset of fine-grained observable
-    variables (or a latent-expansion node, which we skip — latents have no
-    data).  For each cluster we fit one GP per fine-grained member,
-    conditioned on the fine-grained members of the parent clusters.
+    variables (or a latent-expansion node, which is skipped — latents have
+    no data).  Every propagated variable gets a plug-in conditional GP given
+    the fine-grained members of its parent clusters *and* the earlier
+    members of its own cluster (chain rule).  Prediction integrates those
+    conditionals with seeded common-random-number draws
+    (:func:`gcomp_propagate`) instead of propagating means.
     """
     n = len(observational_samples)
-
-    prop_gps = []
+    steps = []
     for cluster, parent_clusters in plan['propagation_order']:
         if isinstance(cluster, str) and cluster.startswith('__'):
             continue  # expansion-latent node — no observational data
@@ -938,118 +809,38 @@ def _build_cdag_gcomputation_predictor_admg(
                 continue
             parent_fine_vars.extend(_cluster_to_fine_vars(p, obs_cols))
         if not parent_fine_vars or not fine_vars:
-            prop_gps.append((fine_vars, parent_fine_vars, []))
             continue
-        X_parent_obs = np.column_stack(
-            [observational_samples[v].values for v in parent_fine_vars])
-        cluster_gps = []
-        for var in fine_vars:
-            Y_var_obs = observational_samples[var].values[:, np.newaxis]
-            cluster_gps.append(_fit_gp(X_parent_obs, Y_var_obs))
-        prop_gps.append((fine_vars, parent_fine_vars, cluster_gps))
+        for j, var in enumerate(fine_vars):
+            parents = parent_fine_vars + fine_vars[:j]
+            X_in = np.column_stack(
+                [observational_samples[v].values for v in parents])
+            gp = _fit_gp(X_in, observational_samples[var].values[:, np.newaxis])
+            steps.append((var, parents, _gp_conditional(gp)))
 
-    # Conditioning set for Y
     cond_fine_vars = []
     for c in plan['conditioning_vars']:
         if isinstance(c, str) and c.startswith('__'):
             continue
         cond_fine_vars.extend(_cluster_to_fine_vars(
             c, obs_cols, exclude=[Y_var]))
+    X_cond_obs = (np.column_stack(
+        [observational_samples[v].values for v in cond_fine_vars])
+        if cond_fine_vars else np.ones((n, 1)))
+    gp_y = _fit_gp(X_cond_obs, observational_samples[Y_var].values[:, np.newaxis])
+    y_cond = _gp_outcome(gp_y)
 
-    if cond_fine_vars:
-        X_cond_obs = np.column_stack(
-            [observational_samples[v].values for v in cond_fine_vars])
-    else:
-        X_cond_obs = np.ones((n, 1))
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp_y = _fit_gp(X_cond_obs, Y_obs)
+    base_rows = {col: observational_samples[col].values.copy()
+                 for col in observational_samples.columns}
+    Z = np.random.default_rng(seed).standard_normal(
+        (int(reps) * n, max(len(steps), 1)))
 
-    obs_values = {col: observational_samples[col].values.copy()
-                  for col in observational_samples.columns}
+    def moments(value):
+        return gcomp_propagate(value, S_fine_vars, steps, y_cond,
+                               cond_fine_vars, base_rows, Z)
 
     def predict(value):
-        value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-        current_values = {k: v.copy() for k, v in obs_values.items()}
-        for i, s_var in enumerate(S_fine_vars):
-            current_values[s_var] = np.full(n, value[i])
-        for (fine_vars, parent_fine_vars, cluster_gps) in prop_gps:
-            if not cluster_gps or not parent_fine_vars:
-                continue
-            X_parent_current = np.column_stack(
-                [current_values[v] for v in parent_fine_vars])
-            for var, gp_var in zip(fine_vars, cluster_gps):
-                pred_mu, _ = gp_var.predict(X_parent_current)
-                current_values[var] = pred_mu.ravel()
-        if cond_fine_vars:
-            X_cond_current = np.column_stack(
-                [current_values[v] for v in cond_fine_vars])
-        else:
-            X_cond_current = np.ones((n, 1))
-        mu, var = gp_y.predict(X_cond_current)
-        return float(np.mean(mu)), float(np.mean(var) + np.var(mu))
+        m = moments(value)
+        return m['mean'], m['v']
 
-    return predict
-
-
-# ---------------------------------------------------------------------------
-# Slow versions (fit GP at each call, for backward compatibility)
-# ---------------------------------------------------------------------------
-
-def _compute_backdoor_slow(S_vars, Z_vars, Y_var, value, observational_samples):
-    value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-    n = len(observational_samples)
-    input_vars = S_vars + Z_vars
-    X_obs = np.column_stack([observational_samples[v].values for v in input_vars])
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp = _fit_gp(X_obs, Y_obs)
-    Z_obs = np.column_stack([observational_samples[v].values for v in Z_vars]) if Z_vars else np.empty((n, 0))
-    S_repeated = np.tile(value, (n, 1))
-    X_pred = np.hstack([S_repeated, Z_obs]) if Z_vars else S_repeated
-    mu, var = gp.predict(X_pred)
-    return float(np.mean(mu)), float(np.mean(var) + np.var(mu))
-
-
-def _compute_frontdoor_slow(S_vars, M_vars, Y_var, value, observational_samples):
-    value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-    n = len(observational_samples)
-    S_obs = np.column_stack([observational_samples[v].values for v in S_vars])
-    m_preds = []
-    for m_var in M_vars:
-        M_obs = observational_samples[m_var].values[:, np.newaxis]
-        gp_m = _fit_gp(S_obs, M_obs)
-        m_pred, _ = gp_m.predict(value.reshape(1, -1))
-        m_preds.append(float(m_pred[0, 0]))
-    m_hat = np.array(m_preds)
-    input_vars_ym = M_vars + S_vars
-    X_obs_ym = np.column_stack([observational_samples[v].values for v in input_vars_ym])
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp_y = _fit_gp(X_obs_ym, Y_obs)
-    M_repeated = np.tile(m_hat, (n, 1))
-    X_pred = np.hstack([M_repeated, S_obs])
-    mu, var = gp_y.predict(X_pred)
-    return float(np.mean(mu)), float(np.mean(var) + np.var(mu))
-
-
-def _compute_gcomputation_slow(S_vars, plan, Y_var, value, observational_samples):
-    value = np.atleast_1d(np.asarray(value, dtype=float)).ravel()
-    n = len(observational_samples)
-    current_values = {col: observational_samples[col].values.copy()
-                      for col in observational_samples.columns}
-    for i, s_var in enumerate(S_vars):
-        current_values[s_var] = np.full(n, value[i])
-    for var, parents in plan['propagation_order']:
-        if not parents:
-            continue
-        X_parent_obs = np.column_stack([observational_samples[p].values for p in parents])
-        Y_var_obs = observational_samples[var].values[:, np.newaxis]
-        gp_var = _fit_gp(X_parent_obs, Y_var_obs)
-        X_parent_current = np.column_stack([current_values[p] for p in parents])
-        pred_mu, _ = gp_var.predict(X_parent_current)
-        current_values[var] = pred_mu.ravel()
-    cond_vars = plan['conditioning_vars']
-    X_cond_obs = np.column_stack([observational_samples[v].values for v in cond_vars])
-    Y_obs = observational_samples[Y_var].values[:, np.newaxis]
-    gp_y = _fit_gp(X_cond_obs, Y_obs)
-    X_cond_current = np.column_stack([current_values[v] for v in cond_vars])
-    mu, var = gp_y.predict(X_cond_current)
-    return float(np.mean(mu)), float(np.mean(var) + np.var(mu))
+    predict.steps = [(var, list(parents)) for var, parents, _ in steps]
+    return _attach(predict, moments)

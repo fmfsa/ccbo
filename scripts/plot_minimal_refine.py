@@ -32,9 +32,13 @@ import matplotlib.pyplot as plt
 from ccbo import minibench as mb
 
 C_BASE, C_QUOT, C_REF = "#0072B2", "#D55E00", "#009E73"
-LABELS = {"CBO": ("CBO (fine)", C_BASE, "-"),
+C_BO = "#555555"
+C_GF = "#56B4E9"
+LABELS = {"BO": ("BO (joint arm, no graph)", C_BO, ":"),
+          "CBO": ("CBO (fine)", C_BASE, "-"),
           "QCBO": ("QCBO (fixed coarse)", C_QUOT, "-"),
-          "HQCBO": ("HQCBO (refine)", C_REF, "-")}
+          "HQCBO": ("HQCBO (graph-informed refine)", C_REF, "-"),
+          "HQCBOGF": ("HQCBO-GF (graph-free refine)", C_GF, "--")}
 
 
 def _trajs(results_dir, arm):
@@ -63,7 +67,7 @@ def main():
     fig, ax1 = plt.subplots(figsize=(3.45, 2.25))
 
     data = {}
-    for arm in ("CBO", "QCBO", "HQCBO"):
+    for arm in ("BO", "CBO", "QCBO", "HQCBO", "HQCBOGF"):
         ts = _trajs(args.dir, arm)
         if ts:
             n = min(len(t) for t in ts)
@@ -87,12 +91,15 @@ def main():
     if os.path.exists(info_path):
         with open(info_path) as fh:
             info = json.load(fh)
+        # engine v3 keys carry the arm ({scm}_{cond}_{arm}_seed{N}); the
+        # graph-informed and graph-free variants share the QCBO trigger.
         trig = [v["trigger_step"] for k, v in info.items()
-                if k.startswith(mb.MC_NAME) and v["trigger_step"] is not None]
+                if k.startswith(mb.MC_NAME) and "HQCBOGF" not in k
+                and v.get("trigger_step") is not None]
         if trig:
             ax1.axvline(np.mean(trig), color=C_REF, lw=0.8, ls="--",
                         alpha=0.6)
-            ax1.annotate(rf"trigger $\bar t={np.mean(trig):.0f}$",
+            ax1.annotate(rf"trigger $\bar t={np.mean(trig):.1f}$",
                          xy=(np.mean(trig), 0.98),
                          xycoords=("data", "axes fraction"),
                          fontsize=7, color=C_REF, ha="left", va="top",

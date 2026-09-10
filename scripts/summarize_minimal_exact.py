@@ -1,9 +1,13 @@
-"""Summarize the exact-population MinimalBench rerun.
+"""Summarize the MinimalBench rerun (engine v3, all arms).
 
-The script validates the complete 30-seed trace grid and emits the numerical
-aggregates used by the controlled-experiment figures and manuscript. Row zero
-is the shared initial incumbent and is excluded from cumulative incumbent
-regret, consistently with :mod:`ccbo.metrics`.
+Validates the complete 30-seed trace grid and emits the numerical aggregates
+used by the controlled-experiment figures and manuscript: finals and
+cumulative incumbent regret per (SCM, condition, arm); paired invariance
+deviations for QCBO *and* QCBONP; BO / BOS byte-identity across conditions;
+the FrontDoor paired regret increase for CBO and CBONP; the refinement
+records of HQCBO and HQCBO-GF and their paired contrast (95 % paired-t CI).
+Row zero is the shared initial incumbent and is excluded from cumulative
+incumbent regret, consistently with :mod:`ccbo.metrics`.
 """
 
 from __future__ import annotations
@@ -14,25 +18,28 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from ccbo import minibench as mb
 from ccbo.metrics import cumulative_regret
 
-
+PLAIN = ("BO", "BOS", "CBO", "CBONP", "QCBO", "QCBONP")
 GROUPS = [
-    *( (mb.PP_NAME, cond, method)
-       for cond in ("A0", "A1", "A2", "A3")
-       for method in ("CBO", "QCBO") ),
-    *( (mb.FD_NAME, cond, method)
-       for cond in ("B0", "B1")
-       for method in ("CBO", "QCBO") ),
-    *( (mb.MC_NAME, "C0", method)
-       for method in ("CBO", "QCBO", "HQCBO") ),
+    *((mb.PP_NAME, cond, arm) for cond in ("A0", "A1", "A2", "A3") for arm in PLAIN),
+    *((mb.FD_NAME, cond, arm) for cond in ("B0", "B1") for arm in PLAIN),
+    *((mb.MC_NAME, "C0", arm) for arm in PLAIN + ("HQCBO", "HQCBOGF")),
 ]
+SEEDS = 30
 
 
 def _se(values: np.ndarray) -> float:
     return float(values.std(ddof=1) / np.sqrt(len(values)))
+
+
+def _ci(values: np.ndarray, level: float = 0.95) -> list[float]:
+    m, se = float(values.mean()), _se(values)
+    t = stats.t.ppf(0.5 + level / 2, df=len(values) - 1)
+    return [m - t * se, m + t * se]
 
 
 def _load(root: Path, scm: str, cond: str, method: str, seed: int) -> pd.DataFrame:
@@ -42,94 +49,114 @@ def _load(root: Path, scm: str, cond: str, method: str, seed: int) -> pd.DataFra
     return pd.read_csv(path)
 
 
-def _paired_deviation(root: Path, scm: str, base: str, cond: str) -> dict:
-    sup = 0.0
-    decisions_equal = True
-    for seed in range(30):
-        left = _load(root, scm, base, "QCBO", seed)
-        right = _load(root, scm, cond, "QCBO", seed)
+def _paired_deviation(root: Path, scm: str, base: str, cond: str, arm: str) -> dict:
+    sup, decisions_equal, bytes_equal = 0.0, True, True
+    for seed in range(SEEDS):
+        left = _load(root, scm, base, arm, seed)
+        right = _load(root, scm, cond, arm, seed)
         sup = max(sup, float(np.max(np.abs(
             left.best_y.to_numpy(float) - right.best_y.to_numpy(float)))))
         decisions_equal &= left.arm.equals(right.arm)
         decisions_equal &= left.x_values.equals(right.x_values)
+        bytes_equal &= ((root / f"{scm}_{base}_{arm}_seed{seed}.csv").read_bytes()
+                        == (root / f"{scm}_{cond}_{arm}_seed{seed}.csv").read_bytes())
     return {"sup_incumbent_deviation": sup,
-            "decisions_equal": bool(decisions_equal)}
+            "decisions_equal": bool(decisions_equal),
+            "bytes_equal": bool(bytes_equal)}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default="results/minimal_exact")
+    parser.add_argument("--dir", default="results/v3/minimal")
     parser.add_argument("--out", default="artifacts/summaries/minimal_exact.json")
+    parser.add_argument("--seeds", type=int, default=30)
     args = parser.parse_args()
     root = Path(args.dir)
+    global SEEDS
+    SEEDS = args.seeds
 
     y_star = {mb.PP_NAME: 0.0, mb.FD_NAME: 0.0,
               mb.MC_NAME: mb.ORACLE[mb.MC_NAME]["y_star"]}
     summary: dict = {
-        "protocol": {"seeds": 30, "trials": 50,
+        "protocol": {"seeds": SEEDS, "trials": 50,
                      "mediated_chain_trials": 60,
                      "initial_points_per_arm": 3,
-                     "population_targets": "exact"},
+                     "population_targets": "exact",
+                     "cost_axis": "row 0 = initial-design cost; refinement "
+                                  "arms add the split design at the trigger",
+                     "engine": "v3"},
         "groups": {},
         "paired": {},
     }
 
+    per_seed_cache: dict = {}
     for scm, cond, method in GROUPS:
-        frames = [_load(root, scm, cond, method, seed) for seed in range(30)]
-        finals = np.asarray([frame.best_y.iloc[-1] for frame in frames], float)
+        frames = [_load(root, scm, cond, method, seed) for seed in range(SEEDS)]
+        finals = np.asarray([f.best_y.iloc[-1] for f in frames], float)
         regrets = np.asarray([
-            cumulative_regret(frame.best_y.to_numpy(float), y_star[scm])
-            for frame in frames
+            cumulative_regret(f.best_y.to_numpy(float), y_star[scm]) for f in frames
         ], float)
-        key = f"{scm}_{cond}_{method}"
-        summary["groups"][key] = {
-            "n": 30,
-            "final_mean": float(finals.mean()),
-            "final_se": _se(finals),
+        per_seed_cache[(scm, cond, method)] = (finals, regrets)
+        summary["groups"][f"{scm}_{cond}_{method}"] = {
+            "n": SEEDS,
+            "final_mean": float(finals.mean()), "final_se": _se(finals),
             "cumulative_regret_mean": float(regrets.mean()),
             "cumulative_regret_se": _se(regrets),
+            "final_cost_mean": float(np.mean([f.cum_cost.iloc[-1] for f in frames])),
+            "init_cost": float(frames[0].cum_cost.iloc[0]),
         }
 
-    for scm, base, cond in (
-        (mb.PP_NAME, "A0", "A1"),
-        (mb.PP_NAME, "A0", "A2"),
-        (mb.PP_NAME, "A0", "A3"),
-        (mb.FD_NAME, "B0", "B1"),
-    ):
-        summary["paired"][f"{scm}_{base}_vs_{cond}_QCBO"] = \
-            _paired_deviation(root, scm, base, cond)
+    for scm, base, cond in ((mb.PP_NAME, "A0", "A1"), (mb.PP_NAME, "A0", "A2"),
+                            (mb.PP_NAME, "A0", "A3"), (mb.FD_NAME, "B0", "B1")):
+        for arm in ("QCBO", "QCBONP", "BO", "BOS"):
+            summary["paired"][f"{scm}_{base}_vs_{cond}_{arm}"] = \
+                _paired_deviation(root, scm, base, cond, arm)
 
-    fd_delta = []
-    for seed in range(30):
-        correct = _load(root, mb.FD_NAME, "B0", "CBO", seed)
-        wrong = _load(root, mb.FD_NAME, "B1", "CBO", seed)
-        fd_delta.append(
-            cumulative_regret(wrong.best_y.to_numpy(float), 0.0)
-            - cumulative_regret(correct.best_y.to_numpy(float), 0.0))
-    fd_delta_array = np.asarray(fd_delta)
-    summary["paired"]["FrontDoor_B1_minus_B0_CBO_cumulative_regret"] = {
-        "mean": float(fd_delta_array.mean()),
-        "se": _se(fd_delta_array),
-    }
+    for arm in ("CBO", "CBONP"):
+        delta = []
+        for seed in range(SEEDS):
+            correct = _load(root, mb.FD_NAME, "B0", arm, seed)
+            wrong = _load(root, mb.FD_NAME, "B1", arm, seed)
+            delta.append(cumulative_regret(wrong.best_y.to_numpy(float), 0.0)
+                         - cumulative_regret(correct.best_y.to_numpy(float), 0.0))
+        d = np.asarray(delta)
+        summary["paired"][f"FrontDoor_B1_minus_B0_{arm}_cumulative_regret"] = {
+            "mean": float(d.mean()), "se": _se(d), "ci95": _ci(d)}
 
-    info_path = root / "refine_info.json"
-    info = json.loads(info_path.read_text())
-    triggers = np.asarray([
-        record["trigger_step"] for record in info.values()
-        if record.get("trigger_step") is not None
-    ], float)
-    summary["refinement"] = {
-        "n": int(len(triggers)),
-        "trigger_mean": float(triggers.mean()),
-        "trigger_se": _se(triggers),
-        "all_splits_accepted": all(not record.get("refused", False)
-                                     for record in info.values()),
+    info = json.loads((root / "refine_info.json").read_text())
+    summary["refinement"] = {}
+    for arm in ("HQCBO", "HQCBOGF"):
+        recs = {k: v for k, v in info.items()
+                if k.startswith(f"{mb.MC_NAME}_C0_{arm}_seed")}
+        trig = np.asarray([r["trigger_step"] for r in recs.values()
+                           if r.get("trigger_step") is not None], float)
+        summary["refinement"][arm] = {
+            "n": int(len(trig)),
+            "trigger_mean": float(trig.mean()) if len(trig) else None,
+            "trigger_se": _se(trig) if len(trig) > 1 else None,
+            "all_splits_accepted": all(not r.get("refused", False) for r in recs.values()),
+            "split_init_cost": float(np.mean([r.get("split_init_cost", 0.0)
+                                              for r in recs.values()])) if recs else None,
+        }
+    fin_g, reg_g = per_seed_cache[(mb.MC_NAME, "C0", "HQCBO")]
+    fin_f, reg_f = per_seed_cache[(mb.MC_NAME, "C0", "HQCBOGF")]
+    summary["refinement"]["HQCBOGF_minus_HQCBO"] = {
+        "final_mean": float((fin_f - fin_g).mean()), "final_ci95": _ci(fin_f - fin_g),
+        "regret_mean": float((reg_f - reg_g).mean()), "regret_ci95": _ci(reg_f - reg_g),
+        "n": SEEDS,
     }
+    for arm in ("CBONP", "QCBONP", "BOS"):
+        base = "CBO" if arm == "CBONP" else "QCBO" if arm == "QCBONP" else "CBO"
+        summary["paired"][f"MediatedChain_C0_{arm}_minus_{base}_regret"] = {
+            "mean": float((per_seed_cache[(mb.MC_NAME, "C0", arm)][1]
+                           - per_seed_cache[(mb.MC_NAME, "C0", base)][1]).mean()),
+            "ci95": _ci(per_seed_cache[(mb.MC_NAME, "C0", arm)][1]
+                        - per_seed_cache[(mb.MC_NAME, "C0", base)][1])}
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    print(json.dumps(summary, indent=2, sort_keys=True))
+    print(json.dumps({k: summary[k] for k in ("paired", "refinement")}, indent=1, sort_keys=True))
     print(f"wrote {out}")
 
 

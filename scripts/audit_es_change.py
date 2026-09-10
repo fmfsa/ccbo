@@ -55,7 +55,8 @@ def old_rule(admg, mnodes, cap=5):
         key = frozenset(combo)
         if key in seen or not key or len(key) > cap:
             return
-        ok, _, _ = _ananke_id_check(admg, set(combo), TARGET)
+        status, _, _ = _ananke_id_check(admg, set(combo), TARGET)
+        ok = status == "identified"
         if not ok:
             return
         seen.add(key)
@@ -74,7 +75,8 @@ def new_rule(admg, mnodes):
     mis = compute_MIS(admg, mnodes, TARGET)
     arms, tiers = [], {}
     for combo in mis:
-        ok, _, _ = _ananke_id_check(admg, set(combo), TARGET)
+        status, _, _ = _ananke_id_check(admg, set(combo), TARGET)
+        ok = status == "identified"
         key = tuple(sorted(v for c in combo for v in c))
         arms.append(key)
         tiers[key] = bool(ok)

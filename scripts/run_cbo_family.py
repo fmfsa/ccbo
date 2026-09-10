@@ -5,7 +5,8 @@ through the single shared CoarsenedGraph + CBO backend (the identity partition
 IS full-DAG CBO by Prop. 1, so both arms differ only in the partition), and
 persists one CSV per (dataset, arm, seed):
 
-    <outdir>/<dataset>_<arm>_seed<seed>.csv    columns: trial, best_y, cum_cost
+    <outdir>/<dataset>_<arm>_seed<seed>.csv    columns: trial, best_y, cum_cost, arm, x_values
+    <outdir>/<dataset>_<arm>_seed<seed>.decisions.json   full-precision decision log (engine v3)
 
 Row convention: the vendored CBO loop appends to ``global_opt`` and
 ``current_cost`` in lockstep — one initial row (trial 0: the incumbent from the
@@ -131,7 +132,8 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
     csv_path = _csv_path(outdir, dataset, arm, seed)
     unit = dict(dataset=dataset, arm=arm, seed=seed, csv=csv_path)
 
-    if os.path.exists(csv_path):
+    from ccbo.decision_log import sidecar_path
+    if os.path.exists(csv_path) and os.path.exists(sidecar_path(csv_path)):
         try:
             n_rows = len(pd.read_csv(csv_path))
         except Exception:
@@ -145,6 +147,8 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         from ccbo.data_generation import generate_interventional_data
         from ccbo.cbo.cbo import CBO
         from ccbo.cbo.utils import compute_coverage, define_initial_data_CBO
+        from ccbo.minimal_suite import init_design_cost
+        from ccbo import decision_log as dlog
 
         np.random.seed(seed)
         graph, obs, full_obs = _load_graph(dataset, initial_num_obs_samples)
@@ -168,13 +172,16 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
         _, _, coverage = compute_coverage(obs, manip_vars, dict_ranges)
         x_list, y_list, best_x, opt_y, best_var = define_initial_data_CBO(
             int_data, num_interventions, MIS, 0, "min")
+        init_cost = init_design_cost(MIS, x_list, costs)   # engine v3: charged
+        max_N = initial_num_obs_samples + 50
 
         if arm == "BO":
             from ccbo.cbo.bo import NonCausal_BO
-            cost_arr, current_best_x, best_y_arr, total_time = NonCausal_BO(
+            cost_arr, current_best_x, best_y_arr, total_time, trial_log = NonCausal_BO(
                 trials, cg, dict_ranges, x_list[0], y_list[0], costs, obs,
                 functions, best_x, opt_y, list(manip_vars),
-                Causal_prior=False, task="min")
+                Causal_prior=False, task="min", return_log=True)
+            prior_mask = [False]
             global_opt = [float(v) for v in np.asarray(
                 best_y_arr, dtype=float).ravel()]
             current_cost = [float(v) for v in np.asarray(
@@ -185,12 +192,14 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
             observed = 0
         else:
             (current_cost, current_best_x, current_best_y, global_opt,
-             observed, total_time) = CBO(
+             observed, total_time), state = CBO(
                 trials, MIS, manip_vars, x_list, y_list, best_x, opt_y,
                 best_var, dict_ranges, functions, obs, coverage, cg,
                 20, costs, full_obs, "min",
-                initial_num_obs_samples + 50, initial_num_obs_samples,
-                num_interventions, Causal_prior=True)
+                max_N, initial_num_obs_samples,
+                num_interventions, Causal_prior=True, return_state=True)
+            trial_log = state["trial_log"]
+            prior_mask = state["prior_mask"]
 
         # The loop appends to global_opt and current_cost in lockstep:
         # 1 initial row + 1 row per trial.
@@ -198,13 +207,48 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
             f"trajectory length mismatch: |global_opt|={len(global_opt)} "
             f"|current_cost|={len(current_cost)} expected {trials + 1}")
 
+        # Engine v3 rows: (trial, best_y, cum_cost, arm, x_values); row 0 is
+        # the initial design at cum_cost = init_cost; decisions from the
+        # full-precision trial log (observe rows blank).
+        rows = [(0, float(global_opt[0]), float(init_cost), "init", "")]
+        for i, e in enumerate(trial_log):
+            if e.get("type") == "intervene":
+                arm_lbl = e["arm"]
+                xv = ";".join(repr(float(v)) for v in e["x"])
+            else:
+                arm_lbl, xv = "", ""
+            rows.append((i + 1, float(global_opt[i + 1]),
+                         float(current_cost[i + 1]) + float(init_cost),
+                         arm_lbl, xv))
+        assert len(rows) == trials + 1
+        for e in trial_log:
+            e["cum_cost"] = float(e["cum_cost"]) + float(init_cost)
+
         tmp_path = csv_path + ".tmp"
         with open(tmp_path, "w", newline="") as fh:
             writer = csv.writer(fh)
-            writer.writerow(["trial", "best_y", "cum_cost"])
-            for i, (y, c) in enumerate(zip(global_opt, current_cost)):
-                writer.writerow([i, repr(float(y)), repr(float(c))])
+            writer.writerow(["trial", "best_y", "cum_cost", "arm", "x_values"])
+            for (t, y, c, a, xv) in rows:
+                writer.writerow([t, repr(float(y)), repr(float(c)), a, xv])
         os.replace(tmp_path, csv_path)
+
+        gate = {"+".join(k): v for k, v in getattr(cg, "_arm_gate_status", {}).items()}
+        payload = dlog.build_payload(
+            unit=dict(suite="family", dataset=dataset, cond="", arm=arm,
+                      seed=int(seed), trials=int(trials),
+                      n_init=int(num_interventions),
+                      n_obs=int(initial_num_obs_samples),
+                      type_cost=int(type_cost),
+                      max_N=int(initial_num_obs_samples if arm == "BO" else max_N)),
+            init=dict(partition=[sorted(p) for p in partition],
+                      es=[list(e) for e in MIS], prior_mask=list(prior_mask),
+                      x_list=[np.asarray(x, dtype=float).tolist() for x in x_list],
+                      y_list=[np.asarray(y, dtype=float).ravel().tolist() for y in y_list],
+                      init_cost=float(init_cost), incumbent=float(opt_y),
+                      gate_status=gate),
+            phases=[dlog.phase_record("main", MIS, prior_mask, trial_log)],
+            rows=rows)
+        dlog.write(sidecar_path(csv_path), payload)
 
         # Best arm so far (diagnostic only; not persisted).
         best_arm = min(current_best_y, key=lambda k: np.min(current_best_y[k]))
@@ -216,7 +260,8 @@ def run_unit(dataset, arm, seed, trials, num_interventions,
             in cg._arm_identifiable.items() if not ok_id)
         unit.update(
             ok=True, resumed=False, secs=time.time() - t0,
-            final_y=float(global_opt[-1]), final_cost=float(current_cost[-1]),
+            final_y=float(global_opt[-1]), final_cost=float(rows[-1][2]),
+            init_cost=float(init_cost),
             observed=int(observed), best_arm=best_arm, best_x=best_x,
             uninformative_arms=uninformative,
             partition=cg.get_partition_description(),
