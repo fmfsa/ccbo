@@ -152,9 +152,10 @@ def test_joint_cluster_posterior_covariance():
 
 
 @joint_net
-def test_joint_singleton_reduces_to_per_node():
+def test_joint_singleton_uses_single_output_models():
     """All-singleton partition: cluster inputs == fine parents and every
-    mechanism is a stock single-output GP (Q-Identity at the model level)."""
+    mechanism is a single-output GP. This does not assert numerical identity
+    to upstream MCBO, whose mechanism likelihood uses fixed noise."""
     from botorch.models.gp_regression import SingleTaskGP
     net = _toy_joint_net(TOY_PARENTS, [[0], [1], [2]])
     assert net.cluster_inputs == [[], [0], [1]]     # == fine parents

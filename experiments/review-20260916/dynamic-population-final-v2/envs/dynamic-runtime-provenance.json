@@ -1,0 +1,24 @@
+{
+  "runtime": {
+    "python": "3.10.18",
+    "packages": {
+      "numpy": "1.26.4",
+      "scipy": "1.12.0",
+      "GPy": "1.13.2",
+      "emukit": "0.5.1",
+      "paramz": "0.9.6",
+      "networkx": "3.4.2",
+      "pygraphviz": "2.0.1",
+      "graphviz": "0.21",
+      "tqdm": "4.69.0"
+    }
+  },
+  "source_sha256": {
+    "third_party/DCBO/dcbo/methods/dcbo.py": "1aa49e4dace667c785096727844ed12e1bd794c66e6ff9e0b3bb90da75881710",
+    "third_party/DCBO/dcbo/bases/root.py": "b68be103f37bc06e4ae802166a56f643a1b7d6eed5729f47fb6b6f9938fbe381",
+    "third_party/DCBO/dcbo/bases/dcbo_base.py": "96278292a7c6995eded04b02d4ddbda4b3538fcec41ea1887453375936dedbb8",
+    "third_party/DCBO/dcbo/utils/sem_utils/toy_sems.py": "f0a01e2dea138785cbc03e49f9c768649d234734f76b44da4bb987b915740e9b",
+    "ccbo/qdcbo/coherent.py": "267281103571a38ba392ef8ca9726a3ea7bb385e524a56cb40729b5a98cf49c0",
+    "ccbo/qdcbo/population.py": "2a0393044a655485e13060827235d908eb42db7d1867d222deacb097e0310744"
+  }
+}

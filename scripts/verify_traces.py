@@ -35,6 +35,7 @@ import numpy as np
 import pandas as pd
 
 from ccbo.metrics import cumulative_regret
+from ccbo.trace_checks import qmcbo_decisions, validate_qmcbo_metadata
 from ccbo.minibench import FD_NAME, MC_NAME, PERTURBATIONS, PP_NAME
 
 FAILURES: list[str] = []
@@ -385,6 +386,28 @@ def verify_qmcbo(root: Path) -> None:
     check(not missing, f"qmcbo grid complete ({QMCBO_SEEDS*4} E1 + {QMCBO_SEEDS*4} E2); missing: {missing[:5]}")
     if missing:
         return
+    invalid, logs = [], {}
+    for env in QMCBO_ENVS:
+        for method in ("MCBO", "QMCBO"):
+            for seed in range(QMCBO_SEEDS):
+                for perturbed in (False, True):
+                    folder = d / "_e2" if perturbed else d
+                    name = f"trial_results_{method}_{env}_{seed}"
+                    sidecar = folder / f"{name}.decisions.json"
+                    try:
+                        log = json.loads(sidecar.read_text())
+                        validate_qmcbo_metadata(log, env, method, seed, 100,
+                                                perturbed=perturbed)
+                        qmcbo_decisions(log, 100)
+                        trajectory = pd.read_csv(folder / f"{name}.csv").current_optimal.to_numpy(float)
+                        if len(trajectory) != 100 or not np.isfinite(trajectory).all():
+                            raise ValueError("expected 100 finite incumbent values")
+                        logs[(env, method, seed, perturbed)] = log
+                    except (OSError, ValueError, KeyError, TypeError) as exc:
+                        invalid.append(f"{sidecar}: {exc}")
+    check(not invalid, f"qmcbo all {QMCBO_SEEDS*8} sidecars have valid schema, unit, graph view, and iterations; invalid: {invalid[:5]}")
+    if invalid:
+        return
     if QMCBO_PUB is not None:
         for env, (pub_m, pub_q) in QMCBO_PUB.items():
             for method, pub in (("MCBO", pub_m), ("QMCBO", pub_q)):
@@ -394,8 +417,8 @@ def verify_qmcbo(root: Path) -> None:
                 check(close(m, pub, 2), f"qmcbo {env} {method} final {m:.4f} ~ {pub:.2f}")
     else:
         note("qmcbo published-final checks skipped (QMCBO_PUB not yet frozen)")
-    # QMCBO must be E2-invariant on every seed: values (CSV) and, when the
-    # engine-v3 sidecars exist, the chosen interventions X per iteration.
+    # QMCBO must be E2-invariant on every seed: incumbent values and
+    # the required full-precision intervention/score sidecars.
     for env in QMCBO_ENVS:
         n_id, n_dec, n_side = 0, 0, 0
         for s in range(QMCBO_SEEDS):
@@ -406,23 +429,25 @@ def verify_qmcbo(root: Path) -> None:
             p2 = d / "_e2" / f"trial_results_QMCBO_{env}_{s}.decisions.json"
             if p1.exists() and p2.exists():
                 n_side += 1
-                a, b = json.loads(p1.read_text()), json.loads(p2.read_text())
-                n_dec += int([(it["X"], it["score"]) for it in a["iterations"]]
-                             == [(it["X"], it["score"]) for it in b["iterations"]])
+                a, b = logs[(env, "QMCBO", s, False)], logs[(env, "QMCBO", s, True)]
+                try:
+                    n_dec += int(qmcbo_decisions(a, 100) == qmcbo_decisions(b, 100))
+                except ValueError as exc:
+                    check(False, f"invalid QMCBO decision evidence {env} seed {s}: {exc}")
         check(n_id == QMCBO_SEEDS, f"QMCBO E2-invariant values on {env}: {n_id}/{QMCBO_SEEDS}")
-        if n_side:
-            check(n_dec == n_side, f"QMCBO E2-invariant decisions (X, score) on {env}: {n_dec}/{n_side}")
+        check(n_side == QMCBO_SEEDS, f"QMCBO decision evidence complete on {env}: {n_side}/{QMCBO_SEEDS}")
+        check(n_dec == QMCBO_SEEDS, f"QMCBO E2-invariant decisions (X, score) on {env}: {n_dec}/{QMCBO_SEEDS}")
     if QMCBO_E2_IDENTICAL is not None:
         for (env, method), (pub_n, pub_delta) in QMCBO_E2_IDENTICAL.items():
             n_id, deltas = 0, []
             for s in range(QMCBO_SEEDS):
                 e1 = pd.read_csv(d / f"trial_results_{method}_{env}_{s}.csv")
                 e2 = pd.read_csv(d / "_e2" / f"trial_results_{method}_{env}_{s}.csv")
-                n_id += int(np.array_equal(e1.current_optimal.values, e2.current_optimal.values))
+                n_id += int(e1.current_optimal.iloc[-1] == e2.current_optimal.iloc[-1])
                 deltas.append(abs(e1.current_optimal.iloc[-1] - e2.current_optimal.iloc[-1]))
             md = float(np.mean(deltas))
             check(n_id == pub_n and close(md, pub_delta, 3),
-                  f"qmcbo E2 {env} {method}: {n_id}/{QMCBO_SEEDS} identical (pub {pub_n}/{QMCBO_SEEDS}), "
+                  f"qmcbo E2 {env} {method}: {n_id}/{QMCBO_SEEDS} same final (pub {pub_n}/{QMCBO_SEEDS}), "
                   f"mean|Δfinal| {md:.4f} ~ {pub_delta:.3f}")
 
 

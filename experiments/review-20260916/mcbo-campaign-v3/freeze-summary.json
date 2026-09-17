@@ -1,0 +1,14 @@
+{
+  "preflight": {
+    "units": 6,
+    "manifest_id": "7c7558c600d6fc9b2041bc4a28bbcd225a1091aca483ac9cc9d12c0d1886b002"
+  },
+  "main": {
+    "units": 120,
+    "manifest_id": "83ab2e3e1b2ffe47b8dc600ec3bb74ceaf59f33c63ff0e5d51f84159b18f1b39"
+  },
+  "protected": {
+    "units": 80,
+    "manifest_id": "7e2d1009e60237113eba968c51b9866b08ac21cf7a2022621d43e1358ba2a288"
+  }
+}

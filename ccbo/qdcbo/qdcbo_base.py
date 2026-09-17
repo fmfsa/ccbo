@@ -506,7 +506,7 @@ class QDCBO(DCBO):
         root_args = {
             "G": spec.G_quotient,
             "sem": sem,
-            "make_sem_estimator": make_qsem_hat(spec),
+            "make_sem_estimator": self._make_sem_estimator(spec),
             "observation_samples": observation_samples,
             "intervention_domain": intervention_domain,
             "intervention_samples": intervention_samples,
@@ -534,12 +534,7 @@ class QDCBO(DCBO):
         self._rebuild_env_side()
 
         # --- quotient mechanism fits (before temporal-list conversion) ------
-        self.sem_emit_fncs = fit_quotient_arcs(
-            spec, self.observational_samples, emissions=True,
-            stock_quirks=self._stock_quirks)
-        self.sem_trans_fncs = fit_quotient_arcs(
-            spec, self.observational_samples, emissions=False,
-            stock_quirks=self._stock_quirks)
+        self._fit_mechanisms(spec, self.observational_samples)
 
         # --- stock DCBO.__init__ tail ---------------------------------------
         self.optimal_assigned_blankets = optimal_assigned_blankets
@@ -555,6 +550,17 @@ class QDCBO(DCBO):
         self.seed_anchor_points = seed_anchor_points
         self.observational_samples = convert_to_dict_of_temporal_lists(
             self.observational_samples)
+
+    def _make_sem_estimator(self, spec):
+        """Construction hook; legacy behavior remains the default."""
+        return make_qsem_hat(spec)
+
+    def _fit_mechanisms(self, spec, observations):
+        """Fitting hook for explicitly selected alternative SEM estimators."""
+        self.sem_emit_fncs = fit_quotient_arcs(
+            spec, observations, emissions=True, stock_quirks=self._stock_quirks)
+        self.sem_trans_fncs = fit_quotient_arcs(
+            spec, observations, emissions=False, stock_quirks=self._stock_quirks)
 
     # ------------------------------------------------------------------
     def _rebuild_env_side(self) -> None:

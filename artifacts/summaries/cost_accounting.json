@@ -1,9 +1,9 @@
 {
-  "convention": "Per-variable unit costs. Engine-v3 traces charge the initial design on row 0 (n_init points per arm) and the refinement arms' split design at the trigger row; 'logged' = total - init - split. CEO rows (unchanged archive) add init and per-trial costs from .meta.json. Y at C* uses step interpolation at the smallest total budget in the group.",
+  "convention": "Per-variable unit costs. Engine-v3 traces charge the initial design on row 0 (n_init points per arm) and the refinement arms' split design at the trigger row; 'logged' = total - init - split. CEO rows (unchanged archive) add init and per-trial costs from .meta.json. Y at C* uses step interpolation at the smallest final cost across all methods and seeds in the group. No values are extrapolated beyond recorded runs.",
   "generated_by": "scripts/emit_cost_analysis.py",
   "groups": {
     "ParallelParent A0": {
-      "C_star": 72.8,
+      "C_star": 62.0,
       "methods": {
         "BO": {
           "es": [
@@ -15,12 +15,14 @@
           "logged_cost_mean": 100.0,
           "total_cost_mean": 106.0,
           "final_y_mean": 0.0037326558827078587,
-          "final_y_sem": 0.003456157193652954,
+          "final_y_sem": 0.0034561571936529535,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.0037362260321826385,
-            0.0034560277738836824
-          ]
+            0.003749765782780016,
+            0.0034555495222712714
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "BOS": {
           "es": [
@@ -37,9 +39,11 @@
           "final_y_sem": 0.00016650710086018287,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.0009997684823641654,
-            0.0002886955516836629
-          ]
+            0.0010358395656601255,
+            0.00028737012808304044
+          ],
+          "archive_key": "BOS",
+          "publication_name": "BO-S"
         },
         "CBO": {
           "es": [
@@ -58,7 +62,9 @@
           "y_at_c_star": [
             0.00039335491119498985,
             0.00013922437383465745
-          ]
+          ],
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "CBONP": {
           "es": [
@@ -71,13 +77,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 86.36666666666666,
           "total_cost_mean": 98.36666666666666,
-          "final_y_mean": 0.0004314492496388587,
+          "final_y_mean": 0.00043144924963885883,
           "final_y_sem": 0.00010788845754048084,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.0007588385431485602,
-            0.0002643943988299767
-          ]
+            0.0007949141985604169,
+            0.00026408372778841127
+          ],
+          "archive_key": "CBONP",
+          "publication_name": "CBO\u2212np"
         },
         "QCBO": {
           "es": [
@@ -88,13 +96,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 94.0,
           "total_cost_mean": 100.0,
-          "final_y_mean": 0.00030437698622729636,
+          "final_y_mean": 0.0003043769862272963,
           "final_y_sem": 9.915742861934923e-05,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.00045387796328319604,
-            0.00015435704962929719
-          ]
+            0.0004897010316813558,
+            0.00015488181388571557
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         },
         "QCBONP": {
           "es": [
@@ -105,13 +115,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 94.0,
           "total_cost_mean": 100.0,
-          "final_y_mean": 0.0006024244336873157,
+          "final_y_mean": 0.0006024244336873156,
           "final_y_sem": 0.00022984177579827783,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.0008669825781907434,
-            0.00028349661957279107
-          ]
+            0.0014138734082903208,
+            0.00047423723795836267
+          ],
+          "archive_key": "QCBONP",
+          "publication_name": "QCBO\u2212np"
         },
         "CEO": {
           "es": [
@@ -130,12 +142,18 @@
           "y_at_c_star": [
             1.0107317595990233,
             0.3026851575888621
-          ]
+          ],
+          "archive_key": "CEO",
+          "publication_name": "CEO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "CEO"
+      ],
+      "initialization_exceeds_budget": []
     },
     "ParallelParent A1": {
-      "C_star": 50.03333333333333,
+      "C_star": 50.0,
       "methods": {
         "BO": {
           "es": [
@@ -147,12 +165,14 @@
           "logged_cost_mean": 100.0,
           "total_cost_mean": 106.0,
           "final_y_mean": 0.0037326558827078587,
-          "final_y_sem": 0.003456157193652954,
+          "final_y_sem": 0.0034561571936529535,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.01738830574120429,
+            0.017388305741204292,
             0.017064623943788392
-          ]
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "BOS": {
           "es": [
@@ -170,8 +190,10 @@
           "n_seeds": 30,
           "y_at_c_star": [
             0.0027709412003664095,
-            0.0006772218464495341
-          ]
+            0.000677221846449534
+          ],
+          "archive_key": "BOS",
+          "publication_name": "BO-S"
         },
         "CBO": {
           "es": [
@@ -182,13 +204,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 47.03333333333333,
           "total_cost_mean": 50.03333333333333,
-          "final_y_mean": 4.250000011719449,
-          "final_y_sem": 3.0817086986384174e-09,
+          "final_y_mean": 4.25000001171945,
+          "final_y_sem": 3.081708698638418e-09,
           "n_seeds": 30,
           "y_at_c_star": [
-            4.250000011719449,
-            3.0817086986384174e-09
-          ]
+            4.25000001171945,
+            3.081708698638418e-09
+          ],
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "CBONP": {
           "es": [
@@ -205,7 +229,9 @@
           "y_at_c_star": [
             4.250000011327049,
             8.2538650409952e-09
-          ]
+          ],
+          "archive_key": "CBONP",
+          "publication_name": "CBO\u2212np"
         },
         "QCBO": {
           "es": [
@@ -216,13 +242,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 94.0,
           "total_cost_mean": 100.0,
-          "final_y_mean": 0.00030437698622729636,
+          "final_y_mean": 0.0003043769862272963,
           "final_y_sem": 9.915742861934923e-05,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.000585265953871981,
+            0.0005852659538719809,
             0.00016059870624334158
-          ]
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         },
         "QCBONP": {
           "es": [
@@ -233,13 +261,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 94.0,
           "total_cost_mean": 100.0,
-          "final_y_mean": 0.0006024244336873157,
+          "final_y_mean": 0.0006024244336873156,
           "final_y_sem": 0.00022984177579827783,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.0018177791753460058,
-            0.0005173933241836207
-          ]
+            0.0018177791753460056,
+            0.0005173933241836206
+          ],
+          "archive_key": "QCBONP",
+          "publication_name": "QCBO\u2212np"
         },
         "CEO": {
           "es": [
@@ -258,12 +288,19 @@
           "y_at_c_star": [
             0.7924978842828043,
             0.2562798451691352
-          ]
+          ],
+          "archive_key": "CEO",
+          "publication_name": "CEO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "CBO",
+        "CBONP"
+      ],
+      "initialization_exceeds_budget": []
     },
     "FrontDoor B0": {
-      "C_star": 53.2,
+      "C_star": 53.0,
       "methods": {
         "BO": {
           "es": [
@@ -274,13 +311,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 100.0,
           "total_cost_mean": 106.0,
-          "final_y_mean": 0.40222193182857363,
+          "final_y_mean": 0.4022219318285735,
           "final_y_sem": 0.1483510828665135,
           "n_seeds": 30,
           "y_at_c_star": [
             0.46675119271605536,
             0.14431272095470063
-          ]
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "BOS": {
           "es": [
@@ -293,13 +332,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 89.43333333333334,
           "total_cost_mean": 101.43333333333334,
-          "final_y_mean": 0.0012501330365489863,
-          "final_y_sem": 0.00042492229588557455,
+          "final_y_mean": 0.0012501330365489861,
+          "final_y_sem": 0.0004249222958855746,
           "n_seeds": 30,
           "y_at_c_star": [
             0.09833294850066081,
             0.03399642926030716
-          ]
+          ],
+          "archive_key": "BOS",
+          "publication_name": "BO-S"
         },
         "CBO": {
           "es": [
@@ -312,12 +353,14 @@
           "logged_cost_mean": 47.2,
           "total_cost_mean": 53.2,
           "final_y_mean": 6.27146807972893e-05,
-          "final_y_sem": 3.5370814907294275e-05,
+          "final_y_sem": 3.537081490729428e-05,
           "n_seeds": 30,
           "y_at_c_star": [
             6.27146807972893e-05,
-            3.5370814907294275e-05
-          ]
+            3.537081490729428e-05
+          ],
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "CBONP": {
           "es": [
@@ -330,12 +373,14 @@
           "logged_cost_mean": 47.2,
           "total_cost_mean": 53.2,
           "final_y_mean": 0.0011314038791473704,
-          "final_y_sem": 0.000337169061293841,
+          "final_y_sem": 0.00033716906129384094,
           "n_seeds": 30,
           "y_at_c_star": [
             0.0011314038791473704,
-            0.000337169061293841
-          ]
+            0.00033716906129384094
+          ],
+          "archive_key": "CBONP",
+          "publication_name": "CBO\u2212np"
         },
         "QCBO": {
           "es": [
@@ -350,9 +395,11 @@
           "final_y_sem": 0.0006425206918292554,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.01287809602461613,
-            0.005111651885621048
-          ]
+            0.012878096024616136,
+            0.005111651885621047
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         },
         "QCBONP": {
           "es": [
@@ -363,13 +410,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 94.4,
           "total_cost_mean": 100.4,
-          "final_y_mean": 0.0008851021850011213,
+          "final_y_mean": 0.0008851021850011212,
           "final_y_sem": 0.0003151063808178855,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.08222580809266743,
+            0.08222580809266745,
             0.04682846955981792
-          ]
+          ],
+          "archive_key": "QCBONP",
+          "publication_name": "QCBO\u2212np"
         },
         "CEO": {
           "es": [
@@ -388,12 +437,19 @@
           "y_at_c_star": [
             0.09654600811548598,
             0.03021496514870819
-          ]
+          ],
+          "archive_key": "CEO",
+          "publication_name": "CEO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "CBO",
+        "CBONP"
+      ],
+      "initialization_exceeds_budget": []
     },
     "MediatedChain C0": {
-      "C_star": 63.03333333333333,
+      "C_star": 63.0,
       "methods": {
         "BO": {
           "es": [
@@ -410,7 +466,9 @@
           "y_at_c_star": [
             4.0174644009900895,
             0.017464400990089626
-          ]
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "BOS": {
           "es": [
@@ -423,13 +481,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 84.76666666666667,
           "total_cost_mean": 96.76666666666667,
-          "final_y_mean": 0.040000252223125754,
+          "final_y_mean": 0.04000025222312576,
           "final_y_sem": 9.385930979441296e-08,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.04000411237872662,
-            2.4270635411047964e-06
-          ]
+            0.040004112378726614,
+            2.427063541104796e-06
+          ],
+          "archive_key": "BOS",
+          "publication_name": "BO-S"
         },
         "CBO": {
           "es": [
@@ -441,13 +501,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 57.03333333333333,
           "total_cost_mean": 63.03333333333333,
-          "final_y_mean": 0.040000086309289105,
+          "final_y_mean": 0.0400000863092891,
           "final_y_sem": 2.6883111897951667e-08,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.040000086309289105,
+            0.0400000863092891,
             2.6883111897951667e-08
-          ]
+          ],
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "CBONP": {
           "es": [
@@ -459,13 +521,15 @@
           "split_init_cost": 0.0,
           "logged_cost_mean": 57.03333333333333,
           "total_cost_mean": 63.03333333333333,
-          "final_y_mean": 0.04000003501891501,
+          "final_y_mean": 0.04000003501891502,
           "final_y_sem": 1.365557017572194e-08,
           "n_seeds": 30,
           "y_at_c_star": [
-            0.04000003501891501,
+            0.04000003501891502,
             1.365557017572194e-08
-          ]
+          ],
+          "archive_key": "CBONP",
+          "publication_name": "CBO\u2212np"
         },
         "QCBO": {
           "es": [
@@ -482,7 +546,9 @@
           "y_at_c_star": [
             4.0,
             0.0
-          ]
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         },
         "QCBONP": {
           "es": [
@@ -499,26 +565,9 @@
           "y_at_c_star": [
             4.0,
             0.0
-          ]
-        },
-        "HQCBO": {
-          "es": [
-            "X1+X2",
-            "X1",
-            "X2"
           ],
-          "n_arms": 3,
-          "init_cost": 6.0,
-          "split_init_cost": 6.0,
-          "logged_cost_mean": 79.7,
-          "total_cost_mean": 91.7,
-          "final_y_mean": 0.04000028363037494,
-          "final_y_sem": 1.6001391230949445e-07,
-          "n_seeds": 30,
-          "y_at_c_star": [
-            0.04000049122136942,
-            1.8842049309093571e-07
-          ]
+          "archive_key": "QCBONP",
+          "publication_name": "QCBO\u2212np"
         },
         "HQCBOGF": {
           "es": [
@@ -532,12 +581,14 @@
           "logged_cost_mean": 85.76666666666667,
           "total_cost_mean": 97.76666666666667,
           "final_y_mean": 0.04000041181993604,
-          "final_y_sem": 1.1965164778780479e-07,
+          "final_y_sem": 1.1965164778780476e-07,
           "n_seeds": 30,
           "y_at_c_star": [
             0.040002821764102664,
-            1.2950445719692872e-06
-          ]
+            1.295044571969287e-06
+          ],
+          "archive_key": "HQCBOGF",
+          "publication_name": "HQCBO"
         },
         "CEO": {
           "es": [
@@ -556,9 +607,16 @@
           "y_at_c_star": [
             0.21171465889936705,
             0.05975003402185896
-          ]
+          ],
+          "archive_key": "CEO",
+          "publication_name": "CEO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "CBO",
+        "CBONP"
+      ],
+      "initialization_exceeds_budget": []
     },
     "family Toy": {
       "C_star": 57.0,
@@ -578,7 +636,9 @@
           "y_at_c_star": [
             -2.1637059616749847,
             0.00840822572733548
-          ]
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "CBO": {
           "es": [
@@ -596,7 +656,9 @@
           "y_at_c_star": [
             -2.16424435484699,
             0.00046595939733990675
-          ]
+          ],
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "QCBO": {
           "es": [
@@ -613,12 +675,18 @@
           "y_at_c_star": [
             -2.071547693630477,
             0.049491301825552475
-          ]
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "CBO"
+      ],
+      "initialization_exceeds_budget": []
     },
     "family Synthetic": {
-      "C_star": 99.5,
+      "C_star": 95.0,
       "methods": {
         "BO": {
           "es": [
@@ -633,9 +701,11 @@
           "final_y_sem": 0.0013726014074456703,
           "n_seeds": 10,
           "y_at_c_star": [
-            -0.5789393267794685,
-            0.02141578827203079
-          ]
+            -0.5704746375133383,
+            0.02047914188121626
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "CBO": {
           "es": [
@@ -655,9 +725,11 @@
           "final_y_sem": 0.0017173623031413068,
           "n_seeds": 10,
           "y_at_c_star": [
-            -2.1096469109969007,
-            0.2511053257165779
-          ]
+            -1.248131381392625,
+            0.28763966585625833
+          ],
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "QCBO": {
           "es": [
@@ -675,9 +747,15 @@
           "y_at_c_star": [
             -1.313839307684063,
             0.002556557812434201
-          ]
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "QCBO"
+      ],
+      "initialization_exceeds_budget": []
     },
     "family Coral": {
       "C_star": 217.0,
@@ -697,7 +775,9 @@
           "y_at_c_star": [
             9283.83984175025,
             7.496671686563416
-          ]
+          ],
+          "archive_key": "BO",
+          "publication_name": "BO"
         },
         "CBO": {
           "es": [
@@ -741,7 +821,9 @@
           "final_y_mean": 36.04224161596086,
           "final_y_sem": 0.009107237176571102,
           "n_seeds": 10,
-          "y_at_c_star": null
+          "y_at_c_star": null,
+          "archive_key": "CBO",
+          "publication_name": "CBO"
         },
         "QCBO": {
           "es": [
@@ -760,9 +842,17 @@
           "y_at_c_star": [
             36.40075955626121,
             0.009345616885724939
-          ]
+          ],
+          "archive_key": "QCBO",
+          "publication_name": "QCBO"
         }
-      }
+      },
+      "budget_determining_methods": [
+        "QCBO"
+      ],
+      "initialization_exceeds_budget": [
+        "CBO"
+      ]
     }
   }
 }

@@ -1,11 +1,9 @@
-"""Release gate for the five ToyGraph MCBO trajectories reported in the paper.
+"""Historical reproduction check for five old ToyGraph MCBO trajectories.
 
-This validates the checked raw records. It does not prove that the first CSV
-row is the pre-BO initial design because the current runner logs during BO.
-The main text therefore reports only final aggregate values. Any future
-interpretation of the flat recorded curve requires this gate, while the
-stronger "never improved on the initial design" claim also requires the
-instrumented rerun listed in RUN_TODO.md.
+This is NOT a scientific correctness/release gate. Those historical trajectories
+used the upstream intervention-coordinate bug. Flatness and exact historical
+means only identify the archived result; they are never acceptance requirements
+for corrected experiments. Explicit --historical-reproduction is required.
 """
 
 from __future__ import annotations
@@ -72,7 +70,7 @@ def verify(results_dir: Path, trials: int, tolerance: float) -> None:
         mean = sem = float("nan")
 
     if errors:
-        raise SystemExit("QMCBO release gate failed:\n- " + "\n- ".join(errors))
+        raise SystemExit("Historical MCBO reproduction mismatch:\n- " + "\n- ".join(errors))
     print(
         f"PASS: 5 ToyGraph MCBO trajectories, {trials} rows each, "
         f"flat recorded best-so-far, final={mean:.6f} +/- {sem:.6f}"
@@ -84,7 +82,13 @@ def main() -> None:
     parser.add_argument("--dir", type=Path, default=Path("results/qmcbo"))
     parser.add_argument("--trials", type=int, default=100)
     parser.add_argument("--tolerance", type=float, default=1e-9)
+    parser.add_argument("--historical-reproduction", action="store_true",
+                        help="Confirm that this is only an old-archive identity check")
     args = parser.parse_args()
+    if not args.historical_reproduction:
+        parser.error("This flat-trajectory check only identifies historical outputs. "
+                     "Use --historical-reproduction for archives; corrected experiments "
+                     "must pass protocol/coordinate/scorer validity tests instead.")
     verify(args.dir, args.trials, args.tolerance)
 
 

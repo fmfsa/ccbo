@@ -1,0 +1,38 @@
+#!/bin/bash
+#BSUB -J ccbo_dynamic_pilot[1-9]%2
+#BSUB -q hpc
+#BSUB -n 1
+#BSUB -W 02:00
+#BSUB -R "rusage[mem=8GB]"
+#BSUB -o /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/dynamic_pilot_%J_%I.out
+#BSUB -e /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/dynamic_pilot_%J_%I.err
+set -euo pipefail
+BASE=/zhome/15/b/215295/Repositories/ccbo-experiments-20260916
+PYTHON=/zhome/15/b/215295/venvs/ccbo/bin/python
+RELEASE="$BASE/releases/dynamic-population-final-v2"
+STOP="$BASE/results/dynamic-final-campaign/STOP.json"
+handle_failure() {
+    code=$1; command=$2; signal=$3
+    trap - ERR TERM INT EXIT
+    if ! "$PYTHON" "$BASE/server-launch/record_dynamic_campaign_stop.py" --path "$STOP" --manifest-id dynamic-population-final-v2 --index "${LSB_JOBINDEX:-unknown}" --job-id "${LSB_JOBID:-unknown}" --exit-code "$code" --signal "$signal" --command "$command"; then
+        echo 'Could not persist STOP; operator intervention required' >&2
+    fi
+    exit "$code"
+}
+trap 'handle_failure "$?" "$BASH_COMMAND" ERR' ERR
+trap 'handle_failure 143 "$BASH_COMMAND" TERM' TERM
+trap 'handle_failure 130 "$BASH_COMMAND" INT' INT
+trap 'code=$?; if (( code != 0 )); then handle_failure "$code" "$BASH_COMMAND" EXIT; fi' EXIT
+[[ ! -e "$STOP" ]] || { echo 'Persistent STOP; queued unit refused' >&2; exit 99; }
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 PYTHONHASHSEED=0
+[[ ${LSB_JOBINDEX:-} =~ ^[0-9]+$ ]] || { echo 'Missing array index' >&2; exit 2; }
+(( LSB_JOBINDEX >= 1 && LSB_JOBINDEX <= 9 )) || { echo 'Invalid array index' >&2; exit 2; }
+scheduler_states=$(bjobs -a -noheader -o stat "$LSB_JOBID")
+[[ -n "$scheduler_states" ]] || { echo 'Cannot verify scheduler states' >&2; exit 2; }
+if [[ "$scheduler_states" == *EXIT* || "$scheduler_states" == *UNKWN* || "$scheduler_states" == *ZOMBI* ]]; then
+    echo 'Failed or unknown array peer; campaign stopped' >&2; exit 98
+fi
+cd "$RELEASE"
+export PYTHONPATH=.
+[[ ! -e "$STOP" ]] || { echo 'STOP appeared during gate verification' >&2; exit 99; }
+"$PYTHON" scripts/run_frozen_unit.py --manifest pilot-manifest.json --index "$((LSB_JOBINDEX-1))" --results "$BASE/results/dynamic-final-preflight"

@@ -57,6 +57,7 @@ PARTITIONS = {
     "stat":    [["X", "Z"]],
     "ind":     [["X", "Z"]],
     "nonstat": [["X", "Z"]],
+    "nonstat_regularized": [["X", "Z"]],
 }
 
 # The intra-slice, intra-cluster edit each setup's E2 applies to the ASSUMED
@@ -66,6 +67,7 @@ E2_OPS = {
     "stat":    [("del", "X", "Z")],
     "ind":     [("add", "X", "Z")],
     "nonstat": [("del", "X", "Z")],
+    "nonstat_regularized": [("del", "X", "Z")],
 }
 
 FINEST = [["X"], ["Z"]]
@@ -94,12 +96,16 @@ def get_setup(name: str, T: int):
         G = make_temporal_graph(0, T - 1, topology="independent",
                                 nodes=["X", "Z", "Y"], target_node="Y")
         sem_class = StationaryIndependentSEM
-    elif name == "nonstat":
+    elif name in ("nonstat", "nonstat_regularized"):
         assert T >= 2, "nonstat needs a change point"
         G = make_temporal_graph(0, T - 1, topology="dependent",
                                 nodes=["X", "Z", "Y"])
         sem_class = NonStationaryDependentSEM
         change_points = [False, True] + [False] * (T - 2)
+        if name == 'nonstat_regularized':
+            from ccbo.qdcbo.population import RegularizedNonStationarySEM, regularized_graph
+            sem_class = RegularizedNonStationarySEM
+            G = regularized_graph(G, change_point=1)
     else:
         raise ValueError(f"unknown setup {name!r}")
     return sem_class, G, exploration_sets, intervention_domain, "Y", \
@@ -122,7 +128,10 @@ def sample_observations(sem_class, change_points, T: int, n_obs: int,
 def run_unit(setup: str, algo: str, T: int, trials: int, seed: int,
              misspec: str = "", n_obs: int = 100,
              num_anchor_points: int = 100, partition=None,
-             stock_quirks: bool = False):
+             stock_quirks: bool = False, mechanism_protocol: str = "legacy",
+             predictive_samples: int = 256, action_menu: str = "native",
+             objective_protocol: str = 'zero-disturbance', feedback_samples: int = 2048,
+             score_samples: int = 100000):
     """One (setup, algo, seed) run; returns (model, wall_seconds).
 
     Both algorithms receive byte-identical observational data and RNG states;
@@ -133,6 +142,13 @@ def run_unit(setup: str, algo: str, T: int, trials: int, seed: int,
     historical-reproduction mode.
     """
     assert algo in ("DCBO", "QDCBO"), algo
+    if objective_protocol == 'population-mc':
+        if mechanism_protocol != 'coherent':
+            raise ValueError('Population response requires coherent mechanism protocol')
+        if setup == 'nonstat':
+            raise ValueError('Original nonstat has singular/nonintegrable regimes; use separately named nonstat_regularized')
+    elif objective_protocol != 'zero-disturbance':
+        raise ValueError('Unknown objective protocol')
     from ccbo.qdcbo import stock_fixes
     stock_fixes.apply(stock_quirks)
     from dcbo.methods.dcbo import DCBO
@@ -148,6 +164,13 @@ def run_unit(setup: str, algo: str, T: int, trials: int, seed: int,
     if misspec:
         assert misspec == "e2", misspec
         G_model = perturb_temporal_edges(G, E2_OPS[setup])
+
+    if action_menu == 'coarse':
+        from ccbo.qdcbo.quotient_dbn import build_quotient_dbn
+        menu_spec = build_quotient_dbn(G_model, PARTITIONS[setup], base_target)
+        exploration_sets = menu_spec.lift_exploration_sets(exploration_sets)
+    elif action_menu != 'native':
+        raise ValueError(f'Unknown action menu {action_menu}')
 
     common = {
         "G": G_model,
@@ -185,12 +208,34 @@ def run_unit(setup: str, algo: str, T: int, trials: int, seed: int,
     np.random.seed(seed)
     random.seed(seed)   # Root.__init__ draws the initial ES via random.choice
     t0 = time.time()
-    if algo == "DCBO":
+    if mechanism_protocol == "coherent":
+        from ccbo.qdcbo.coherent import CoherentDCBO, CoherentQDCBO
+        if stock_quirks:
+            raise ValueError('Coherent protocol does not support --stock-quirks')
+        coherent_args = dict(predictive_samples=predictive_samples,
+                             predictive_seed=seed, objective_protocol=objective_protocol,
+                             feedback_samples=feedback_samples, population_seed=seed)
+        if algo == "DCBO":
+            model = CoherentDCBO(**common, **coherent_args)
+        else:
+            model = CoherentQDCBO(partition=partition or PARTITIONS[setup],
+                                  **common, **coherent_args)
+    elif mechanism_protocol != "legacy":
+        raise ValueError(f'Unknown mechanism protocol {mechanism_protocol}')
+    elif algo == "DCBO":
         model = DCBO(**common)
     else:
         model = QDCBO(partition=partition or PARTITIONS[setup],
                       stock_quirks=stock_quirks, **common)
+    model.action_menu = action_menu
+    # This runner passes intervention_samples=None. Mark the lack of an
+    # initial executed recommendation explicitly rather than scoring blank_val.
+    model.runner_has_initial_interventions = False
     model.run()
+    model.training_wall_seconds = time.time() - t0
+    if objective_protocol == 'population-mc':
+        from ccbo.qdcbo.population import score_events
+        score_events(model, samples=score_samples)
     wall = time.time() - t0
     return model, wall
 
@@ -238,6 +283,11 @@ def decisions_payload(model, algo: str, setup: str, T: int, trials: int,
             "outcome_values": _plain(list(model.outcome_values[t])),
             "best_so_far": _plain(list(model.optimal_outcome_values_during_trials[t])),
             "per_trial_cost": _plain(list(model.per_trial_cost[t])),
+            "trial_types": list(model.trial_type[t]),
+            "eligible_recommendation": _eligible_recommendations(model, t),
+            "recommended_values": [value if eligible else None for value, eligible in zip(
+                _plain(list(model.optimal_outcome_values_during_trials[t])),
+                _eligible_recommendations(model, t))],
             "optimal_intervention_set": _plain(
                 list(model.optimal_intervention_sets[t]) if model.optimal_intervention_sets[t] else None),
         })
@@ -246,12 +296,29 @@ def decisions_payload(model, algo: str, setup: str, T: int, trials: int,
         "unit": {"suite": "qdcbo", "setup": setup, "algo": algo, "T": T,
                  "trials": trials, "seed": seed, "misspec": misspec,
                  "stock_quirks": bool(stock_quirks),
+                 "mechanism_protocol": getattr(model, 'mechanism_protocol', 'legacy'),
+                 "predictive_samples": getattr(model, 'predictive_samples', None),
+                 "action_menu": getattr(model, 'action_menu', 'native'),
+                 "objective_protocol": getattr(model, 'objective_protocol', 'zero-disturbance'),
+                 "feedback_samples": getattr(model, 'feedback_samples', None),
                  "partition": _plain(getattr(getattr(model, "_spec", None), "clusters", None)),
                  "engine_sha": os.environ.get("CCBO_GIT_SHA")},
         "exploration_sets": [list(es) for es in model.exploration_sets],
         "assigned_blanket": _plain(model.assigned_blanket),
         "per_t": per_t,
+        "population_events": _plain(getattr(model, 'population_events', None)),
+        "policy_commits": _plain(getattr(model, 'policy_commits', None)),
     }
+
+
+def _eligible_recommendations(model, t):
+    """Explicit event eligibility; observations alone cannot create an arm."""
+    eligible = bool(getattr(model, 'runner_has_initial_interventions', False))
+    flags = []
+    for trial_type in model.trial_type[t]:
+        eligible = eligible or trial_type == 'i'
+        flags.append(eligible)
+    return flags
 
 
 def write_csv(model, algo: str, setup: str, T: int, trials: int, seed: int,
@@ -265,13 +332,34 @@ def write_csv(model, algo: str, setup: str, T: int, trials: int, seed: int,
         outdir,
         f"{algo.lower()}_{setup}{tag}_best_so_far_seed{seed}_T{T}"
         f"_trials{trials}_reps1.csv")
+    if getattr(model, 'objective_protocol', '') == 'population-mc':
+        events = {(e['t'], e['trial']): e for e in model.population_events}
+        with open(path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['method', 'seed', 'time_index', 'trial_index',
+                'eligible_recommendation', 'population_recommendation_mean',
+                'population_mc_se', 'training_incumbent', 'cost', 'recommendation_event'])
+            for t in range(model.T):
+                for trial in range(trials):
+                    event = events.get((t, trial))
+                    if event is None:
+                        writer.writerow([method, seed, t, trial, False, '', '', '', 0, ''])
+                    else:
+                        recommended = model.population_events[event['recommendation_event']]
+                        writer.writerow([method, seed, t, trial, True,
+                            event['recommendation_population_mean'], event['recommendation_population_mc_se'],
+                            recommended['training_mean'], event['cost'], event['recommendation_event']])
+        return path
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["method", "replicate", "time_index", "trial_index",
                          "best_so_far_value", "y"])
         for t_idx in range(model.T):
             bsf_list = model.optimal_outcome_values_during_trials[t_idx]
+            eligible = _eligible_recommendations(model, t_idx)
             for trial_idx, val in enumerate(bsf_list):
+                if getattr(model, 'mechanism_protocol', '').startswith('coherent') and not eligible[trial_idx]:
+                    val = ''  # no executed recommendation, never a 1e7 score
                 if trial_idx == 0:
                     y_val = ""
                 else:
@@ -304,13 +392,34 @@ def main():
     ap.add_argument("--stock-quirks", action="store_true",
                     help="historical mode: reproduce the stock backend's "
                          "transition-slice and truthiness-clamp semantics")
+    ap.add_argument('--mechanism-protocol', choices=['legacy', 'coherent'], default='legacy',
+                    help='opt-in union-parent conditional model with ancestral integration')
+    ap.add_argument('--predictive-samples', type=int, default=256,
+                    help='fixed integration particles for coherent protocol')
+    ap.add_argument('--action-menu', choices=['native', 'coarse'], default='native',
+                    help='coarse restricts fine DCBO to the quotient action menu')
+    ap.add_argument('--objective-protocol', choices=['zero-disturbance', 'population-mc'],
+                    default='zero-disturbance')
+    ap.add_argument('--feedback-samples', type=int, default=2048)
+    ap.add_argument('--score-samples', type=int, default=100000)
     args = ap.parse_args()
 
     model, wall = run_unit(args.setup, args.algo, args.T, args.trials,
                            args.seed, args.misspec, args.n_obs,
                            args.num_anchor_points,
-                           stock_quirks=args.stock_quirks)
-    path = write_csv(model, args.algo, args.setup, args.T, args.trials,
+                           stock_quirks=args.stock_quirks,
+                           mechanism_protocol=args.mechanism_protocol,
+                           predictive_samples=args.predictive_samples,
+                           action_menu=args.action_menu,
+                           objective_protocol=args.objective_protocol,
+                           feedback_samples=args.feedback_samples,
+                           score_samples=args.score_samples)
+    output_algo = args.algo + ('-coarse-menu' if args.action_menu == 'coarse' else '')
+    if args.mechanism_protocol != 'legacy':
+        output_algo += '-coherent'
+    if args.objective_protocol == 'population-mc':
+        output_algo += '-population'
+    path = write_csv(model, output_algo, args.setup, args.T, args.trials,
                      args.seed, args.misspec, args.outdir)
     payload = decisions_payload(model, args.algo, args.setup, args.T,
                                 args.trials, args.seed, args.misspec,
@@ -318,10 +427,21 @@ def main():
     with open(path.replace(".csv", ".decisions.json"), "w") as f:
         json.dump(payload, f, indent=1, sort_keys=True)
     finals = [tr[-1] for tr in trajectory(model)]
+    if args.mechanism_protocol == 'coherent':
+        finals = [value if _eligible_recommendations(model, t)[-1] else None
+                  for t, value in enumerate(finals)]
+    if args.objective_protocol == 'population-mc':
+        finals = [commit['population_mean'] for commit in model.policy_commits]
     info = {"setup": args.setup, "algo": args.algo, "T": args.T,
             "trials": args.trials, "seed": args.seed,
             "misspec": args.misspec, "n_obs": args.n_obs,
             "stock_quirks": bool(args.stock_quirks),
+            "mechanism_protocol": args.mechanism_protocol,
+            "predictive_samples": args.predictive_samples if args.mechanism_protocol == 'coherent' else None,
+            "action_menu": args.action_menu,
+            "objective_protocol": args.objective_protocol,
+            "feedback_samples": args.feedback_samples if args.objective_protocol == 'population-mc' else None,
+            "score_samples": args.score_samples if args.objective_protocol == 'population-mc' else None,
             "engine_sha": os.environ.get("CCBO_GIT_SHA"),
             "final_best_so_far_per_t": finals, "secs": wall, "csv": path}
     with open(path.replace(".csv", "_info.json"), "w") as f:

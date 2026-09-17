@@ -1,0 +1,29 @@
+{
+  "source_directory": "/Users/fmfsa/Documents/Codex/2026-09-16/review-the-attached-pdf-act-as/work/revision-run/reproduced-traces/minimal",
+  "methods": [
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "BO",
+      "publication_name": "BO"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "CBO",
+      "publication_name": "CBO"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "QCBO",
+      "publication_name": "QCBO"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "HQCBOGF",
+      "publication_name": "HQCBO"
+    }
+  ]
+}

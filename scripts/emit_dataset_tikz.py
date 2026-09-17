@@ -286,12 +286,21 @@ def temporal_struct(topology, T=3):
 
 
 MCBO_GRAPHS = {
-    # env -> (node names in topological order, parent lists, cluster)
-    "ToyGraph-M": (["X0", "X1", "Y"], [[], [0], [1]], [["X0", "X1"]]),
+    # env -> (node names in topological order, parent lists, clusters, manipulable)
+    # Union of valid_targets in pinned MCBO functions.py; Toy also permits null.
+    "ToyGraph-M": (["X0", "X1", "Y"], [[], [0], [1]], [["X0", "X1"]], ["X0", "X1"]),
     "PSAGraph": (["age", "bmi", "A", "S", "ca", "Y"],
                  [[], [0], [0, 1], [0, 1], [0, 1, 2, 3], [0, 1, 2, 3, 4]],
-                 [["A", "S"]]),
+                 [["A", "S"]], ["A", "S"]),
 }
+
+
+PSA_CAPTION_EXTRA = (
+    " Only Aspirin (A) and Statin (S) are manipulable; Age, bmi and Cancer "
+    "(ca) remain nonintervened variables. The simulator defines PSA, while "
+    "the optimizer maximizes reward $-\\mathrm{PSA}$. Dashed boxes mark "
+    "manipulable clusters."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -299,16 +308,17 @@ MCBO_GRAPHS = {
 # ---------------------------------------------------------------------------
 
 def fig_block(fobj, key, pretty, fine_pic, cdag_pic, caption_extra="",
-              extra_labels=()):
+              extra_labels=(), fine_bi=()):
+    graph_kind = "ADMG" if fine_bi else "DAG"
     fobj.write(r"\begin{figure}[t]\centering" + "\n")
     fobj.write(r"\adjustbox{max width=0.58\linewidth,valign=c}{" + fine_pic
                + r"}\hfill" + "\n")
     fobj.write(r"\adjustbox{max width=0.38\linewidth,valign=c}{" + cdag_pic
                + "}\n")
     fobj.write(
-        r"\caption{\textbf{%s.} Fine DAG with coarse partition (left) and "
+        r"\caption{\textbf{%s.} Fine %s with coarse partition (left) and "
         r"quotient C-DAG (right); drawing conventions as stated at the start "
-        r"of this appendix.%s}" % (pretty, caption_extra) + "\n")
+        r"of this appendix.%s}" % (pretty, graph_kind, caption_extra) + "\n")
     fobj.write(r"\label{fig:dag-%s}" % key + "\n")
     for label in extra_labels:
         fobj.write(r"\label{fig:dag-%s}" % label + "\n")
@@ -329,7 +339,8 @@ def emit_registry(fobj, name, clusters, pretty, key, caption_extra="",
                       clusters, fpos)
     cdag = tikz_graph(st["cverts"], st["cdi"], st["cbi"], cmanip, "Y", [],
                       cpos)
-    fig_block(fobj, key, pretty, fine, cdag, caption_extra, extra_labels)
+    fig_block(fobj, key, pretty, fine, cdag, caption_extra, extra_labels,
+              fine_bi=st["bi"])
     print(f"[{pretty}] C-DAG di={st['cdi']} bi={st['cbi']}")
     return st
 
@@ -427,15 +438,15 @@ def main():
         n, di, m, cl, tg = temporal_struct("independent")
         emit_literal(f, "dcbo-ind", "DCBO ind (QDCBO family)",
                      n, di, m, cl, tg)
-        for env, (names, parents, cls) in MCBO_GRAPHS.items():
+        for env, (names, parents, cls, manip) in MCBO_GRAPHS.items():
             if env == "ToyGraph-M":
                 continue  # graph-isomorphic to MediatedChain above
             di = [(names[p], names[i]) for i, ps in enumerate(parents)
                   for p in ps]
-            manip = [nm for nm in names if nm != "Y"]
             emit_literal(f, f"mcbo-{env.lower()}",
                          f"{env} (QMCBO family)",
-                         names, di, manip, cls, ["Y"])
+                         names, di, manip, cls, ["Y"],
+                         caption_extra=PSA_CAPTION_EXTRA)
     print(f"wrote {OUT_GALLERY}")
     emit_toy_bow()
 

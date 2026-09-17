@@ -1,0 +1,14 @@
+#!/bin/bash
+#BSUB -J ccbo_dynamic_final_analysis
+#BSUB -q hpc
+#BSUB -n 1
+#BSUB -W 00:30
+#BSUB -R "rusage[mem=2GB]"
+#BSUB -o /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/dynamic_final_analysis_%J.out
+#BSUB -e /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/dynamic_final_analysis_%J.err
+set -euo pipefail
+BASE=/zhome/15/b/215295/Repositories/ccbo-experiments-20260916
+PYTHON=/zhome/15/b/215295/venvs/ccbo/bin/python
+RELEASE="$BASE/releases/dynamic-population-final-v2"
+STOP="$BASE/results/dynamic-final-campaign/STOP.json"
+"$PYTHON" "$BASE/server-launch/run_dynamic_final_analysis.py" --release "$RELEASE" --results "$BASE/results/dynamic-final-campaign"

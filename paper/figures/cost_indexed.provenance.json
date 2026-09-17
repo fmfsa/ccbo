@@ -1,0 +1,119 @@
+{
+  "source_directory": "/Users/fmfsa/Documents/Codex/2026-09-16/review-the-attached-pdf-act-as/work/revision-run/reproduced-traces/minimal",
+  "methods": [
+    {
+      "scm": "ParallelParent",
+      "condition": "A0",
+      "archive_key": "BO",
+      "publication_name": "BO"
+    },
+    {
+      "scm": "ParallelParent",
+      "condition": "A0",
+      "archive_key": "BOS",
+      "publication_name": "BO-S"
+    },
+    {
+      "scm": "ParallelParent",
+      "condition": "A0",
+      "archive_key": "CBO",
+      "publication_name": "CBO"
+    },
+    {
+      "scm": "ParallelParent",
+      "condition": "A0",
+      "archive_key": "CBONP",
+      "publication_name": "CBO\u2212np"
+    },
+    {
+      "scm": "ParallelParent",
+      "condition": "A0",
+      "archive_key": "QCBO",
+      "publication_name": "QCBO"
+    },
+    {
+      "scm": "ParallelParent",
+      "condition": "A0",
+      "archive_key": "QCBONP",
+      "publication_name": "QCBO\u2212np"
+    },
+    {
+      "scm": "FrontDoor",
+      "condition": "B0",
+      "archive_key": "BO",
+      "publication_name": "BO"
+    },
+    {
+      "scm": "FrontDoor",
+      "condition": "B0",
+      "archive_key": "BOS",
+      "publication_name": "BO-S"
+    },
+    {
+      "scm": "FrontDoor",
+      "condition": "B0",
+      "archive_key": "CBO",
+      "publication_name": "CBO"
+    },
+    {
+      "scm": "FrontDoor",
+      "condition": "B0",
+      "archive_key": "CBONP",
+      "publication_name": "CBO\u2212np"
+    },
+    {
+      "scm": "FrontDoor",
+      "condition": "B0",
+      "archive_key": "QCBO",
+      "publication_name": "QCBO"
+    },
+    {
+      "scm": "FrontDoor",
+      "condition": "B0",
+      "archive_key": "QCBONP",
+      "publication_name": "QCBO\u2212np"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "BO",
+      "publication_name": "BO"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "BOS",
+      "publication_name": "BO-S"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "CBO",
+      "publication_name": "CBO"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "CBONP",
+      "publication_name": "CBO\u2212np"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "QCBO",
+      "publication_name": "QCBO"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "QCBONP",
+      "publication_name": "QCBO\u2212np"
+    },
+    {
+      "scm": "MediatedChain",
+      "condition": "C0",
+      "archive_key": "HQCBOGF",
+      "publication_name": "HQCBO"
+    }
+  ]
+}

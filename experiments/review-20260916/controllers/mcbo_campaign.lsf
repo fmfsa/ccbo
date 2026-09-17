@@ -1,0 +1,56 @@
+#!/bin/bash
+#BSUB -J ccbo_mcbo_campaign[1-200]%2
+#BSUB -q hpc
+#BSUB -n 1
+#BSUB -W 24:00
+#BSUB -R "rusage[mem=8GB]"
+#BSUB -o /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/mcbo_campaign_%J_%I.out
+#BSUB -e /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/mcbo_campaign_%J_%I.err
+set -euo pipefail
+BASE=/zhome/15/b/215295/Repositories/ccbo-experiments-20260916
+PYTHON=/zhome/15/b/215295/venvs/mcbo/bin/python
+RELEASE="$BASE/releases/mcbo-campaign-v3"
+CAMPAIGN=mcbo-campaign-v3
+STOP="$BASE/results/mcbo-campaign-v3/STOP.json"
+handle_failure() {
+    code=$1; command=$2; signal=$3
+    trap - ERR TERM INT EXIT
+    if ! "$PYTHON" "$BASE/server-launch/record_mcbo_campaign_stop.py" --path "$STOP" --manifest-id "$CAMPAIGN" --index "${LSB_JOBINDEX:-unknown}" --job-id "${LSB_JOBID:-unknown}" --exit-code "$code" --signal "$signal" --command "$command"; then
+        echo "Could not persist STOP marker; operator intervention required" >&2
+    fi
+    exit "$code"
+}
+trap 'handle_failure "$?" "$BASH_COMMAND" ERR' ERR
+trap 'handle_failure 143 "$BASH_COMMAND" TERM' TERM
+trap 'handle_failure 130 "$BASH_COMMAND" INT' INT
+trap 'code=$?; if (( code != 0 )); then handle_failure "$code" "$BASH_COMMAND" EXIT; fi' EXIT
+if [[ -e "$STOP" ]]; then
+    echo "Campaign STOP marker exists; this queued task will not execute" >&2
+    exit 99
+fi
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 PYTHONHASHSEED=0
+[[ ${LSB_JOBINDEX:-} =~ ^[0-9]+$ ]] || { echo 'Missing numeric LSF array index' >&2; exit 2; }
+(( LSB_JOBINDEX >= 1 && LSB_JOBINDEX <= 200 )) || { echo 'Invalid array index' >&2; exit 2; }
+"$PYTHON" "$BASE/server-launch/check_mcbo_launch_gate.py" --release "$RELEASE" --preflight-results "$BASE/results/mcbo-preflight"
+scheduler_states=$(bjobs -a -noheader -o stat "$LSB_JOBID")
+[[ -n "$scheduler_states" ]] || { echo 'Cannot verify scheduler states' >&2; exit 2; }
+if [[ "$scheduler_states" == *EXIT* || "$scheduler_states" == *UNKWN* || "$scheduler_states" == *ZOMBI* ]]; then
+    echo 'Scheduler reports failed/unknown peer; stopping campaign' >&2
+    exit 98
+fi
+cd "$RELEASE"
+export PYTHONPATH=.
+# Recheck immediately before the scientific subprocess in case a peer failed
+# while this task was validating source/preflight data.
+if [[ -e "$STOP" ]]; then
+    echo "Campaign stopped during gate verification; refusing execution" >&2
+    exit 99
+fi
+if (( LSB_JOBINDEX <= 120 )); then
+    MANIFEST=main-manifest.json
+    INDEX=$((LSB_JOBINDEX-1))
+else
+    MANIFEST=protected-manifest.json
+    INDEX=$((LSB_JOBINDEX-121))
+fi
+"$PYTHON" scripts/run_frozen_unit.py --manifest "$MANIFEST" --index "$INDEX" --results "$BASE/results/mcbo-campaign-v3"

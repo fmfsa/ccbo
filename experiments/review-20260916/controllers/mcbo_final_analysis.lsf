@@ -1,0 +1,12 @@
+#!/bin/bash
+#BSUB -J ccbo_mcbo_final_analysis
+#BSUB -q hpc
+#BSUB -n 1
+#BSUB -W 00:30
+#BSUB -R "rusage[mem=2GB]"
+#BSUB -o /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/mcbo_analysis_%J.out
+#BSUB -e /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/mcbo_analysis_%J.err
+set -euo pipefail
+BASE=/zhome/15/b/215295/Repositories/ccbo-experiments-20260916
+PYTHON=/zhome/15/b/215295/venvs/mcbo/bin/python
+"$PYTHON" "$BASE/server-launch/run_mcbo_final_analysis.py" --release "$BASE/releases/mcbo-campaign-v3" --results "$BASE/results/mcbo-campaign-v3"

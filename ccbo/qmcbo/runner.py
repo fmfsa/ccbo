@@ -71,14 +71,25 @@ def _parse_misspec(spec):
     return ops
 
 
-def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
+def _run_unit(env_name: str, algo: str, seed: int, num_trials: int,
              outdir: str, noise_scale: float = 0.0, beta: float = 10.0,
              misspec: str = "", initial_obs_samples: int = 5,
-             initial_int_samples: int = 2, mechanism: str = "joint") -> dict:
+             initial_int_samples: int = 2, mechanism: str = "joint",
+             protocol: str = "historical", menu=None,
+             score_samples: int = 100000) -> dict:
     """One (env, algo, seed) run. algo in {MCBO, QMCBO}; for QMCBO,
     mechanism in {joint, ind}. joint (JointQuotientGPNetwork, the paper's
     QMCBO) keeps the QMCBO label; the per-coordinate ind ablation is
     labeled QMCBO-ind and is a dev/debug tool only."""
+    if protocol == "corrected":
+        if mechanism != "joint":
+            raise ValueError("Corrected protocol supports joint QMCBO only")
+        from ccbo.qmcbo.corrected import run_corrected
+        return run_corrected(env_name, algo, seed, num_trials, outdir,
+                             noise_scale, beta, misspec, initial_obs_samples,
+                             initial_int_samples, menu, score_samples)
+    if protocol != "historical" or menu is not None:
+        raise ValueError("Historical protocol retains its native menu")
     ensure_mcbo_on_path()
     import torch
     import numpy as np
@@ -127,6 +138,7 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
         raise ValueError(f"unknown algo {algo}")
 
     # --- determinism: neutralize mcbo_trial's torch.seed() de-seeding ------
+    stock_torch_seed = torch.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
     trial_mod.torch.seed = lambda: None   # runtime patch, vendored file untouched
@@ -251,6 +263,7 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
                 env, "theoretical_optimum", None)
         trial_mod.mcbo_trial(**trial_kwargs)
     finally:
+        torch.seed = stock_torch_seed
         os.chdir(cwd)
         if stock_wandb is not None:
             trial_mod.wandb = stock_wandb
@@ -298,6 +311,33 @@ def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
     return info
 
 
+def run_unit(env_name: str, algo: str, seed: int, num_trials: int,
+             outdir: str, noise_scale: float = 0.0, beta: float = 10.0,
+             misspec: str = "", initial_obs_samples: int = 5,
+             initial_int_samples: int = 2, mechanism: str = "joint",
+             protocol: str = "historical", menu=None,
+             score_samples: int = 100000) -> dict:
+    """Run with exception-safe restoration of historical runtime patches."""
+    ensure_mcbo_on_path()
+    import torch
+    import random
+    from mcbo import mcbo_trial as trial_mod
+    saved = (torch.seed, torch.get_default_dtype(), trial_mod.get_model,
+             trial_mod.wandb, np.random.get_state(), random.getstate())
+    with torch.random.fork_rng(devices=[]):
+        try:
+            return _run_unit(env_name, algo, seed, num_trials, outdir,
+                             noise_scale, beta, misspec, initial_obs_samples,
+                             initial_int_samples, mechanism, protocol, menu,
+                             score_samples)
+        finally:
+            torch.seed = saved[0]
+            torch.set_default_dtype(saved[1])
+            trial_mod.get_model, trial_mod.wandb = saved[2:4]
+            np.random.set_state(saved[4])
+            random.setstate(saved[5])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", required=True, choices=sorted(PARTITIONS) + ["EcologyH"])
@@ -313,6 +353,9 @@ def main():
                     help="QMCBO cluster mechanism: joint multi-output GP "
                          "(the paper's QMCBO; default) or per-coordinate "
                          "(ind; dev/debug ablation only)")
+    ap.add_argument("--protocol", choices=["historical", "corrected"], default="historical")
+    ap.add_argument("--menu", choices=["native", "full", "coarse"], default=None)
+    ap.add_argument("--score-samples", type=int, default=100000)
     ap.add_argument("--outdir", default="results/qmcbo")
     args = ap.parse_args()
     misspec = args.misspec
@@ -320,9 +363,10 @@ def main():
         misspec = ",".join(f"{k}:{u}:{v}" for k, u, v in E2_OPS[args.env])
     info = run_unit(args.env, args.algo, args.seed, args.num_trials,
                     args.outdir, args.noise_scale, args.beta, misspec,
-                    mechanism=args.mechanism)
+                    mechanism=args.mechanism, protocol=args.protocol,
+                    menu=args.menu, score_samples=args.score_samples)
     print(f"DONE {info['algo']:6s} {info['env']:12s} seed{info['seed']} "
-          f"targets={info['n_targets']} ({info['secs']:.0f}s) -> {info['csv']}",
+          f"targets={info.get('n_targets', len(info.get('targets', [])))} ({info['secs']:.0f}s) -> {info['csv']}",
           flush=True)
 
 

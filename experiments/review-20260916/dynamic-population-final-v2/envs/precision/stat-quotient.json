@@ -1,0 +1,456 @@
+{
+  "schema": 1,
+  "setup": "stat",
+  "resolution": "quotient",
+  "observation_seed": 1001,
+  "n_obs": 100,
+  "low": 1024,
+  "high": 4096,
+  "integration_seeds": [
+    31337,
+    27183,
+    16180,
+    14142
+  ],
+  "thresholds": {
+    "mean_normalized_rms": 0.05,
+    "mean_normalized_max": 0.15,
+    "variance_relative_rms": 0.1,
+    "variance_relative_max": 0.3
+  },
+  "metrics": {
+    "mean_normalized_rms": 0.016286395229431753,
+    "mean_normalized_max": 0.03036118394743332,
+    "variance_relative_rms": 0.025491514179206008,
+    "variance_relative_max": 0.05453005897213074
+  },
+  "passed": true,
+  "interpretation": "Finite fixed-grid sensitivity only; neither high-particle truth nor global convergence is certified.",
+  "rows": [
+    {
+      "history": "natural",
+      "candidate": null,
+      "seed": 31337,
+      "low_mean": -2.129985952578221,
+      "high_mean": -2.1159729675893884,
+      "low_variance": 4.320963833157736,
+      "high_variance": 4.570175788412895,
+      "mean_error": -0.006554871829956537,
+      "variance_error": -0.05453005897213074
+    },
+    {
+      "history": "natural",
+      "candidate": null,
+      "seed": 27183,
+      "low_mean": -2.177381245270725,
+      "high_mean": -2.114945682211388,
+      "low_variance": 4.440029997140186,
+      "high_variance": 4.574231585346924,
+      "mean_error": -0.029192612225536582,
+      "variance_error": -0.029338608179926527
+    },
+    {
+      "history": "natural",
+      "candidate": null,
+      "seed": 16180,
+      "low_mean": -2.1019174304579153,
+      "high_mean": -2.166890559148774,
+      "low_variance": 4.534128279969652,
+      "high_variance": 4.579627495199064,
+      "mean_error": 0.03036118394743332,
+      "variance_error": -0.009935134522864668
+    },
+    {
+      "history": "natural",
+      "candidate": null,
+      "seed": 14142,
+      "low_mean": -2.1313677940727733,
+      "high_mean": -2.1233314786496225,
+      "low_variance": 4.817185967368012,
+      "high_variance": 4.664457643535652,
+      "mean_error": -0.0037209719612277207,
+      "variance_error": 0.03274299725800317
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 31337,
+      "low_mean": -2.0794943219427866,
+      "high_mean": -2.083216896202367,
+      "low_variance": 3.82510987857076,
+      "high_variance": 3.9800703979722716,
+      "mean_error": 0.0018659413679579274,
+      "variance_error": -0.038934115205715804
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 27183,
+      "low_mean": -2.1125341940592666,
+      "high_mean": -2.086046046314001,
+      "low_variance": 3.8928990036502635,
+      "high_variance": 3.978048206381881,
+      "mean_error": -0.013280565536829,
+      "variance_error": -0.02140476895051572
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 16180,
+      "low_mean": -2.102866414525524,
+      "high_mean": -2.140946122266474,
+      "low_variance": 3.9458816433428128,
+      "high_variance": 4.007728399572613,
+      "mean_error": 0.019021487031305528,
+      "variance_error": -0.015431873137010981
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 14142,
+      "low_mean": -2.0985885830478614,
+      "high_mean": -2.1080539696663148,
+      "low_variance": 4.120406955154412,
+      "high_variance": 4.055455019085947,
+      "mean_error": 0.00470022408120043,
+      "variance_error": 0.016015942912147918
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 31337,
+      "low_mean": -2.3062301239769627,
+      "high_mean": -2.3099967798473253,
+      "low_variance": 3.553868313694508,
+      "high_variance": 3.7134601616485536,
+      "mean_error": 0.0019546389981830426,
+      "variance_error": -0.04297658814338707
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 27183,
+      "low_mean": -2.3397878006695727,
+      "high_mean": -2.312870933496165,
+      "low_variance": 3.623388699328081,
+      "high_variance": 3.711339350052324,
+      "mean_error": -0.01397201934419115,
+      "variance_error": -0.02369781968954231
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 16180,
+      "low_mean": -2.32996157609018,
+      "high_mean": -2.3686396544902104,
+      "low_variance": 3.6781011725608583,
+      "high_variance": 3.741531299200364,
+      "mean_error": 0.019995865095850236,
+      "variance_error": -0.016952985707499514
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 14142,
+      "low_mean": -2.3255989546887803,
+      "high_mean": -2.335220928225297,
+      "low_variance": 3.857918237139369,
+      "high_variance": 3.790965068953926,
+      "mean_error": 0.004941846673136792,
+      "variance_error": 0.017661246402335788
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 31337,
+      "low_mean": -2.486446613279167,
+      "high_mean": -2.4903089618931387,
+      "low_variance": 3.597206097166487,
+      "high_variance": 3.7652419594939044,
+      "mean_error": 0.0019904672005632788,
+      "variance_error": -0.04462817108040603
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 27183,
+      "low_mean": -2.5209163324249735,
+      "high_mean": -2.493261537488116,
+      "low_variance": 3.670143316899047,
+      "high_variance": 3.762974514492979,
+      "mean_error": -0.014256233631768511,
+      "variance_error": -0.02466963229126207
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 16180,
+      "low_mean": -2.510819798265487,
+      "high_mean": -2.550549819104623,
+      "low_variance": 3.7278620379475993,
+      "high_variance": 3.794377262568677,
+      "mean_error": 0.020396166015007287,
+      "variance_error": -0.01752994497338118
+    },
+    {
+      "history": "natural",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 14142,
+      "low_mean": -2.5063302965023837,
+      "high_mean": -2.5162176371439715,
+      "low_variance": 3.9172627554083674,
+      "high_variance": 3.8466939856881455,
+      "mean_error": 0.005041220314215671,
+      "variance_error": 0.018345303781059082
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": null,
+      "seed": 31337,
+      "low_mean": -1.2026117732006805,
+      "high_mean": -1.2109929353057263,
+      "low_variance": 3.3667063278823135,
+      "high_variance": 3.4863582034353593,
+      "mean_error": 0.004488675783632193,
+      "variance_error": -0.03432001778679661
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": null,
+      "seed": 27183,
+      "low_mean": -1.2591593239718064,
+      "high_mean": -1.2098518762870376,
+      "low_variance": 3.5972240320672086,
+      "high_variance": 3.4951169288282022,
+      "mean_error": -0.026374344086189886,
+      "variance_error": 0.02921421666806425
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": null,
+      "seed": 16180,
+      "low_mean": -1.226507036289111,
+      "high_mean": -1.2596839389441343,
+      "low_variance": 3.4453886972630787,
+      "high_variance": 3.4830557984112582,
+      "mean_error": 0.017776883347185794,
+      "variance_error": -0.010814383497778234
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": null,
+      "seed": 14142,
+      "low_mean": -1.2143566544159652,
+      "high_mean": -1.233269198856669,
+      "low_variance": 3.5224386975672335,
+      "high_variance": 3.503124626488937,
+      "mean_error": 0.010104670761565283,
+      "variance_error": 0.005513383946506772
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 31337,
+      "low_mean": -1.126797867631399,
+      "high_mean": -1.1365658691627682,
+      "low_variance": 3.2408998297722174,
+      "high_variance": 3.340774335744545,
+      "mean_error": 0.005344193182487633,
+      "variance_error": -0.029895615786951737
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 27183,
+      "low_mean": -1.1875844818705898,
+      "high_mean": -1.1413067079621042,
+      "low_variance": 3.3671476576241033,
+      "high_variance": 3.3264366948852064,
+      "mean_error": -0.025373643198554854,
+      "variance_error": 0.012238610402986119
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 16180,
+      "low_mean": -1.1621133372505454,
+      "high_mean": -1.1868750064716473,
+      "low_variance": 3.2857362789159925,
+      "high_variance": 3.34046215581643,
+      "mean_error": 0.013548045289900466,
+      "variance_error": -0.016382726206057605
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        -2.0,
+        -1.0
+      ],
+      "seed": 14142,
+      "low_mean": -1.1333081861218508,
+      "high_mean": -1.1627676249679704,
+      "low_variance": 3.338811556242206,
+      "high_variance": 3.357329340062318,
+      "mean_error": 0.01607783239779176,
+      "variance_error": -0.005515629223246928
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 31337,
+      "low_mean": -1.3383717983879884,
+      "high_mean": -1.3482870964108837,
+      "low_variance": 2.956303409599367,
+      "high_variance": 3.0591732053317653,
+      "mean_error": 0.005668964520101617,
+      "variance_error": -0.03362666603940856
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 27183,
+      "low_mean": -1.4001223460554613,
+      "high_mean": -1.3531054392073976,
+      "low_variance": 3.086124009873049,
+      "high_variance": 3.044378991841805,
+      "mean_error": -0.026946644703315568,
+      "variance_error": 0.013712162034723746
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 16180,
+      "low_mean": -1.374250200956772,
+      "high_mean": -1.3994041667432984,
+      "low_variance": 3.0024032332510253,
+      "high_variance": 3.0587096574674932,
+      "mean_error": 0.01438259789446613,
+      "variance_error": -0.018408554757396525
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        0.0,
+        0.0
+      ],
+      "seed": 14142,
+      "low_mean": -1.344977317814588,
+      "high_mean": -1.3749081139563324,
+      "low_variance": 3.057190264790702,
+      "high_variance": 3.076173239337421,
+      "mean_error": 0.017065258611935957,
+      "variance_error": -0.0061709705760288934
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 31337,
+      "low_mean": -1.4921753776792268,
+      "high_mean": -1.5023574409548845,
+      "low_variance": 2.97232363660435,
+      "high_variance": 3.0806357875574317,
+      "mean_error": 0.005801170281179299,
+      "variance_error": -0.035159025091687356
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 27183,
+      "low_mean": -1.5556094842044925,
+      "high_mean": -1.5073082397563358,
+      "low_variance": 3.1088534784125352,
+      "high_variance": 3.0650382701915655,
+      "mean_error": -0.027589280167429002,
+      "variance_error": 0.01429515861093352
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 16180,
+      "low_mean": -1.5290333237997915,
+      "high_mean": -1.5548729090751012,
+      "low_variance": 3.0207847273095387,
+      "high_variance": 3.080014450550794,
+      "mean_error": 0.014723435628056008,
+      "variance_error": -0.019230339400084027
+    },
+    {
+      "history": "joint-fixed",
+      "candidate": [
+        1.0,
+        2.0
+      ],
+      "seed": 14142,
+      "low_mean": -1.4989572173950103,
+      "high_mean": -1.5297060084887086,
+      "low_variance": 3.078567776272269,
+      "high_variance": 3.0984782583007373,
+      "mean_error": 0.017468427806269626,
+      "variance_error": -0.006425890507744727
+    }
+  ],
+  "wall_seconds": 171.84917266946286
+}

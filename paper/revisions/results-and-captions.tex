@@ -1,0 +1,78 @@
+% Apply each independent fragment using results-and-captions.md.
+% M13: append to §3.3.
+All results labeled HQCBO use this graph-free refinement rule. In the archived
+traces its identifier is \texttt{HQCBOGF}; the older identifier \texttt{HQCBO}
+denotes a separate graph-informed comparator that is not used for the HQCBO
+results reported here.
+
+% M13: Figure 3 caption, replace the trial-7 sentence.
+The dashed vertical line marks the observed split at trial 7 in all 30 seeds.
+This common split time is an outcome of the plateau rule, not a prescribed
+intervention time. HQCBO denotes graph-free refinement using only the initial
+quotient and the supplied hierarchy.
+
+% M14: Figure 5 caption, replace final sentence about curve endpoints.
+At each cost, we report the mean and standard error only when every seed of
+that method has a recorded incumbent at or below that cost and has reached
+at least that cost. We use the latest recorded incumbent within the budget
+and do not extrapolate beyond a run's terminal cost. Initialization and split
+initialization are included.
+
+% M14: replace Table 4 caption.
+Initialization-inclusive cost accounting for the controlled and arm-based
+family suites. Init, Logged and Total are mean costs across seeds, displayed
+rounded to the nearest integer; split initialization is displayed separately
+where applicable. $C^\ast=\min_{m,s}C_{\mathrm{final}}(m,s)$ is the smallest
+terminal cost over the methods and seeds included in the block. $Y$ at
+$C^\ast$ uses each run's latest incumbent with cost at most $C^\ast$, with no
+extrapolation. ``n/a'' denotes a method whose complete initial design exceeds
+$C^\ast$. The CEO rows use the supplementary protocol described in Appendix~C.
+
+% M14: append to discussion following Table 4.
+On Coral, CBO's complete initial design costs 800, above $C^\ast=217$;
+therefore the table does not provide a like-for-like three-method comparison
+at that budget. Equal-round results include substantially different
+initialization expenditures.
+
+% M16/M17: replace Table 3 caption; body comes from generated file, not below.
+Controlled suite: final population objective and cumulative incumbent regret
+$R_T$ for every evaluated condition and each applicable primary method,
+mean$\pm$standard error over 30 paired seeds. $T$ denotes decision rounds:
+50, or 60 for MediatedChain. HQCBO is evaluated on MediatedChain only.
+CEO uses a distinct supplementary protocol and is reported separately.
+
+% M16: Appendix C, append to paragraph introducing the complete controlled table.
+The complete controlled results include ParallelParent conditions A0--A3,
+FrontDoor B0--B1 and MediatedChain C0. BO, BO-S, CBO, CBO$-$np, QCBO and
+QCBO$-$np are evaluated in each condition; HQCBO is evaluated on MediatedChain
+C0 only. Each applicable method--condition cell contains 30 paired seeds.
+
+% Table 1 source caveat: use ONLY if choosing the optional fourth-column table
+% described in the guide. Do not use this caption for a three-column table.
+Final objective values, mean$\pm$standard error over paired seeds, and paired
+finite-budget differences with 95\% confidence intervals. The paired difference
+is quotient minus base for minimization tasks and base minus quotient for
+maximization tasks; negative values favor the quotient method. These empirical
+finite-budget differences are not the theoretical price $\Delta(\Pi)$.
+
+% M22: Appendix C, verified provenance portion of a code-availability paragraph.
+% The public availability sentence is intentionally absent: guide records the
+% unresolved release URL and immutable release identifier. No placeholder claim.
+Archived-trace verification is separate from rerunning the optimizers.
+The static trace engine revision is
+\texttt{f75a19c3bd2cff4d59916e2d40f8ba43a791bf58}; the dynamic and model-based
+trace engine revision is
+\texttt{9f25b415ff90502533cf3b013c0a10fd14571781}.
+These historical engine revisions are distinct from the reporting revision
+used to regenerate figures and tables. The present revision verifies archived
+benchmark traces and regenerates reporting assets; it does not constitute a
+fresh rerun of the full benchmark suites.
+
+% M22: append to §7 limitations; protocol details are in the methods patch.
+The controlled suite uses exact population responses, so it isolates graph
+and action-space effects without intervention measurement noise. The family
+experiments use their stated simulator and scoring protocols, including
+stochastic PSA responses. These results do not establish robustness to
+arbitrary observation noise, alternative cost models, or clinical deployment.
+The PSA study is a simulator benchmark; the Coral benchmark uses the cited
+fitted SCM.

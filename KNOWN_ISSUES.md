@@ -1,3 +1,5 @@
+> **Corrected experimental track:** See [EXPERIMENT_REDESIGN.md](EXPERIMENT_REDESIGN.md). New audits demonstrated MCBO coordinate mapping, scalar fitted-model reuse, CEO feedback bookkeeping and temporal-mechanism defects. Earlier reporting-only validation and historical flatness checks do not certify those optimizer comparisons. Historical outputs are preserved; corrected protocols and reruns are separate.
+
 # Known issues
 
 ## ClusterBench10: out of the paper (2026-07-23); code and results retained
@@ -34,17 +36,6 @@ table, and figure has been removed from the tex. Consequences:
 RCCBO is excluded from the current paper (the submission covers QCBO only;
 online partition discovery is deferred to follow-up work). The issues below
 must be resolved before RCCBO results are reported anywhere.
-
-## Baselines
-
-- **GACBO is not run as a head-to-head baseline.** Mukherjee 2024's RJ-MCMC
-  sampler over DAGs has no faithful public implementation, and an idealized
-  enumeration handed the true graph would be an optimistic stand-in (the former
-  `ccbo/baselines/gacbo.py` stub has been removed; see
-  `ccbo/baselines/__init__.py`). We instead compare on the CausalBO benchmark
-  via its own scorer. The benchmark ships a
-  baseline literally named "CCBO" (unrelated to our method) — we renamed ours
-  to **QCBO** to avoid the clash.
 
 ## RePaRe (vendored partition discovery, `ccbo/repare_lib/`)
 
@@ -89,3 +80,26 @@ must be resolved before RCCBO results are reported anywhere.
   kept so the follow-up work can resume from here.
 - `ccbo/rccbo/mcbo_baseline.py` was dead code (never imported) and has been
   removed.
+
+## Current result interpretation
+
+- Nonempty MIS reduction need not preserve the best nonempty-action value when
+  reduction yields the null action. The implementation deliberately excludes
+  that action. `paper/revisions/theory-edits.tex` qualifies the corresponding
+  population-optimum statement and gives a counterexample.
+- QMCBO singleton clusters learn GP noise, whereas pinned upstream MCBO uses
+  supplied fixed noise. Singleton reduction is structural, not numerical
+  implementation identity. Server validation confirmed this distinction.
+- Current main Overleaf source is required to merge the prepared manuscript
+  corrections and certify final layout/citation consistency.
+
+- Stock MCBO ToyGraph has a flat-best-score diagnostic still requiring an
+  instrumented run before claims about improvement over its initial design.
+- CEO receives stochastic SCM samples while the controlled CBO-family suite uses
+  exact population expectations. Treat that comparison with this interface
+  difference explicit.
+- Cross-machine optimizer trajectories can vary with BLAS kernels. Protected-pair
+  identity is checked within coupled runs; archived result regeneration is the
+  reproducible reporting path. See `artifacts/traces/ENGINE_V3.md`.
+- `uv.lock` is retained for the local uv-managed environment; it is not the source
+  of the historical server environments recorded in `envs/`.

@@ -17,7 +17,7 @@
   \node[mannode] (nX1X2) at (0.00,0.00) {$X_1$,$X_2$};
   \draw[diredge] (nX1X2) -- (nY);
 \end{tikzpicture}}
-\caption{\textbf{ParallelParent (MinimalBench, Exp.\ A).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The intra-cluster $X_1\leftrightarrow X_2$ disappears in the quotient; deleting $X_1\to Y$ leaves $C_1\to Y$ alive through $X_2\to Y$ (quotient-redundant).}
+\caption{\textbf{ParallelParent (MinimalBench, Exp.\ A).} Fine ADMG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. The intra-cluster $X_1\leftrightarrow X_2$ disappears in the quotient; deleting $X_1\to Y$ leaves $C_1\to Y$ alive through $X_2\to Y$ (quotient-redundant).}
 \label{fig:dag-parallelparent}
 \end{figure}
 
@@ -98,7 +98,7 @@
   \draw[bicross] (nB) to[bend left=22] (nY);
   \draw[bicross] (nA) to[bend right=22] (nY);
 \end{tikzpicture}}
-\caption{\textbf{CompleteGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{CompleteGraph (historical CBO family).} Fine ADMG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-complete}
 \end{figure}
 
@@ -178,7 +178,7 @@
   \draw[diredge] (nTE) -- (nY);
   \draw[diredge] (nTE) -- (nS);
 \end{tikzpicture}}
-\caption{\textbf{SimplifiedCoralGraph (CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{SimplifiedCoralGraph (historical CBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
 \label{fig:dag-coral}
 \end{figure}
 
@@ -230,7 +230,7 @@
   \draw[diredge] (nX1Z1) -- (nX2Z2);
   \draw[diredge] (nY1) -- (nY2);
 \end{tikzpicture}}
-\caption{\textbf{DCBO stat / nonstat (QDCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. Slices $t=0,1,2$; the nonstat setup shares this topology with a change point in the SEM.}
+\caption{\textbf{DCBO stat (QDCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters. Slices $t=0,1,2$. The regularized nonstationary companion has the additional lagged parents shown in Figure~\ref{fig:dag-dynamic-regularized}.}
 \label{fig:dag-dcbo-stat}
 \end{figure}
 
@@ -289,11 +289,11 @@
 
 \begin{figure}[t]\centering
 \adjustbox{max width=0.58\linewidth,valign=c}{\begin{tikzpicture}
-  \node[mannode] (nage) at (0.00,0.00) {Age};
-  \node[mannode] (nbmi) at (1.4,2.20) {bmi};
+  \node[obsnode] (nage) at (0.00,0.00) {Age};
+  \node[obsnode] (nbmi) at (1.4,2.20) {bmi};
   \node[mannode] (nA) at (2.90,0.9) {Aspirin};
   \node[mannode] (nS) at (2.90,-0.9) {Statin};
-  \node[mannode] (nca) at (1.4,-2.20) {Cancer};
+  \node[obsnode] (nca) at (1.4,-2.20) {Cancer};
   \node[tgtnode] (nY) at (5.30,0.00) {psa};
   \draw[diredge] (nage) -- (nbmi);
   \draw[diredge] (nage) -- (nA);
@@ -314,11 +314,11 @@
   \end{scope}
 \end{tikzpicture}}\hspace{0.2\textwidth}
 \adjustbox{max width=0.38\linewidth,valign=c}{\begin{tikzpicture}
-  \node[mannode] (nage) at (0.00,0.00) {Age};
-  \node[mannode] (nbmi) at (1.4,2.20) {bmi};
+  \node[obsnode] (nage) at (0.00,0.00) {Age};
+  \node[obsnode] (nbmi) at (1.4,2.20) {bmi};
   \node[mannode,align=center] (nAS) at (2.9,0.00)
     {Aspirin,\\Statin};
-  \node[mannode] (nca) at (1.4,-2.20) {Cancer};
+  \node[obsnode] (nca) at (1.4,-2.20) {Cancer};
   \node[tgtnode] (nY) at (5.30,0.00) {psa};
   \draw[diredge] (nage) -- (nbmi);
   \draw[diredge] (nage) -- (nAS);
@@ -331,6 +331,26 @@
   \draw[diredge] (nAS) -- (nY);
   \draw[diredge] (nca) -- (nY);
 \end{tikzpicture}}
-\caption{\textbf{PSAGraph (QMCBO family).} Fine DAG with coarse partition (left) and quotient C-DAG (right), in the convention of Fig.~\ref{fig:motivating}: manipulable variables orange, target blue, dash-dotted latent confounding; dashed boxes are the manipulable clusters.}
+\caption{\textbf{PSAGraph (QMCBO family).} Fine DAG with the \{Aspirin, Statin\} partition (left) and quotient C-DAG (right). Only Aspirin and Statin are manipulable; Age, bmi and Cancer remain nonintervened variables. The simulator defines PSA, while the optimizer maximizes reward $-\mathrm{PSA}$. Dashed boxes mark manipulable clusters.}
 \label{fig:dag-mcbo-psagraph}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/dynamic-regularized-graph.pdf}
+\caption{New bounded-denominator nonstationary companion
+(\texttt{nonstat\_regularized}), $T=3$, with a single change point at $t=1$.
+(a) The fine graph contains all 14 equation-parent edges:
+$X_t\to Z_t\to Y_t$ in each slice, self-lags for $X,Z,Y$,
+$X_0\to Z_1$ at the change point and $Z_1\to Y_2$ in the subsequent regime.
+(b) The quotient under $C_t=\{X_t,Z_t\}$, with $Y_t$ remaining a singleton,
+contains eight distinct edges. Within-cluster $X_t\to Z_t$ edges vanish;
+$X_0\to Z_1$ coalesces with the existing $C_0\to C_1$ edge, whereas
+$Z_1\to Y_2$ induces $C_1\to Y_2$. Solid black denotes within-slice links
+and self-lags; dashed red denotes the additional cross-variable lags.
+Independent exogenous disturbances are omitted. The change-point mechanism
+is $Z_1=-X_1/\sqrt{1+X_0^2}+Z_0+\varepsilon_{Z,1}$, with denominator
+bounded below by one. This is a separately defined companion SCM,
+not the original nonstationary benchmark.}
+\label{fig:dag-dynamic-regularized}
 \end{figure}

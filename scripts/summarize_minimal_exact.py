@@ -23,12 +23,9 @@ from scipy import stats
 from ccbo import minibench as mb
 from ccbo.metrics import cumulative_regret
 
-PLAIN = ("BO", "BOS", "CBO", "CBONP", "QCBO", "QCBONP")
-GROUPS = [
-    *((mb.PP_NAME, cond, arm) for cond in ("A0", "A1", "A2", "A3") for arm in PLAIN),
-    *((mb.FD_NAME, cond, arm) for cond in ("B0", "B1") for arm in PLAIN),
-    *((mb.MC_NAME, "C0", arm) for arm in PLAIN + ("HQCBO", "HQCBOGF")),
-]
+from scripts.publication_methods import (PLAIN, PRIMARY_GROUPS, HISTORICAL_GROUPS,
+                                         publication_name, required_files)
+GROUPS = HISTORICAL_GROUPS
 SEEDS = 30
 
 
@@ -70,6 +67,8 @@ def main() -> None:
     parser.add_argument("--dir", default="results/v3/minimal")
     parser.add_argument("--out", default="artifacts/summaries/minimal_exact.json")
     parser.add_argument("--seeds", type=int, default=30)
+    parser.add_argument("--inventory", choices=("historical", "primary"), default="historical",
+                        help="Historical validates both refinement variants; primary requires only HQCBOGF.")
     args = parser.parse_args()
     root = Path(args.dir)
     global SEEDS
@@ -78,7 +77,7 @@ def main() -> None:
     y_star = {mb.PP_NAME: 0.0, mb.FD_NAME: 0.0,
               mb.MC_NAME: mb.ORACLE[mb.MC_NAME]["y_star"]}
     summary: dict = {
-        "protocol": {"seeds": SEEDS, "trials": 50,
+        "protocol": {"inventory": args.inventory, "seeds": SEEDS, "trials": 50,
                      "mediated_chain_trials": 60,
                      "initial_points_per_arm": 3,
                      "population_targets": "exact",
@@ -90,14 +89,21 @@ def main() -> None:
     }
 
     per_seed_cache: dict = {}
-    for scm, cond, method in GROUPS:
+    groups = PRIMARY_GROUPS if args.inventory == "primary" else HISTORICAL_GROUPS
+    for scm, cond, method in groups:
+        required_files(root, f"{scm}_{cond}_{method}", SEEDS)
         frames = [_load(root, scm, cond, method, seed) for seed in range(SEEDS)]
+        expected_rows = 61 if scm == mb.MC_NAME else 51
+        for seed, frame in enumerate(frames):
+            if len(frame) != expected_rows or not np.isfinite(frame.best_y.to_numpy(float)).all():
+                raise ValueError(f"{scm}_{cond}_{method}_seed{seed}: invalid trajectory length or incumbent")
         finals = np.asarray([f.best_y.iloc[-1] for f in frames], float)
         regrets = np.asarray([
             cumulative_regret(f.best_y.to_numpy(float), y_star[scm]) for f in frames
         ], float)
         per_seed_cache[(scm, cond, method)] = (finals, regrets)
         summary["groups"][f"{scm}_{cond}_{method}"] = {
+            "archive_key": method, "publication_name": publication_name(method),
             "n": SEEDS,
             "final_mean": float(finals.mean()), "final_se": _se(finals),
             "cumulative_regret_mean": float(regrets.mean()),
@@ -125,26 +131,32 @@ def main() -> None:
 
     info = json.loads((root / "refine_info.json").read_text())
     summary["refinement"] = {}
-    for arm in ("HQCBO", "HQCBOGF"):
+    for arm in (("HQCBOGF",) if args.inventory == "primary" else ("HQCBO", "HQCBOGF")):
         recs = {k: v for k, v in info.items()
                 if k.startswith(f"{mb.MC_NAME}_C0_{arm}_seed")}
+        expected = {f"{mb.MC_NAME}_C0_{arm}_seed{i}" for i in range(SEEDS)}
+        if set(recs) != expected:
+            raise ValueError(f"Incomplete refinement metadata for {arm}: expected {SEEDS} seeds")
         trig = np.asarray([r["trigger_step"] for r in recs.values()
                            if r.get("trigger_step") is not None], float)
         summary["refinement"][arm] = {
-            "n": int(len(trig)),
+            "n": int(len(trig)), "n_seeds": len(recs), "split_count": int(len(trig)),
+            "trigger_min": float(trig.min()) if len(trig) else None,
+            "trigger_max": float(trig.max()) if len(trig) else None,
             "trigger_mean": float(trig.mean()) if len(trig) else None,
             "trigger_se": _se(trig) if len(trig) > 1 else None,
             "all_splits_accepted": all(not r.get("refused", False) for r in recs.values()),
             "split_init_cost": float(np.mean([r.get("split_init_cost", 0.0)
                                               for r in recs.values()])) if recs else None,
         }
-    fin_g, reg_g = per_seed_cache[(mb.MC_NAME, "C0", "HQCBO")]
-    fin_f, reg_f = per_seed_cache[(mb.MC_NAME, "C0", "HQCBOGF")]
-    summary["refinement"]["HQCBOGF_minus_HQCBO"] = {
-        "final_mean": float((fin_f - fin_g).mean()), "final_ci95": _ci(fin_f - fin_g),
-        "regret_mean": float((reg_f - reg_g).mean()), "regret_ci95": _ci(reg_f - reg_g),
-        "n": SEEDS,
-    }
+    if args.inventory == "historical":
+        fin_g, reg_g = per_seed_cache[(mb.MC_NAME, "C0", "HQCBO")]
+        fin_f, reg_f = per_seed_cache[(mb.MC_NAME, "C0", "HQCBOGF")]
+        summary["refinement"]["HQCBOGF_minus_HQCBO"] = {
+            "final_mean": float((fin_f - fin_g).mean()), "final_ci95": _ci(fin_f - fin_g),
+            "regret_mean": float((reg_f - reg_g).mean()), "regret_ci95": _ci(reg_f - reg_g),
+            "n": SEEDS,
+        }
     for arm in ("CBONP", "QCBONP", "BOS"):
         base = "CBO" if arm == "CBONP" else "QCBO" if arm == "QCBONP" else "CBO"
         summary["paired"][f"MediatedChain_C0_{arm}_minus_{base}_regret"] = {

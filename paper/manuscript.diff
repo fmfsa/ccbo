@@ -1,0 +1,472 @@
+--- original/qcbo_aistats.tex
++++ revised/qcbo_aistats.tex
+@@ -8,6 +8,7 @@
+ \definecolor{linkblue}{RGB}{0,90,160}
+ 
+ \usepackage{hyperref}
++\usepackage{xurl}
+ \hypersetup{
+   colorlinks=true,
+   citecolor=linkblue,
+@@ -39,6 +40,8 @@
+ \newcommand{\CBONP}{\textsc{CBO}$_{\mathrm{-np}}$}
+ \newcommand{\QCBONP}{\textsc{QCBO}$_{\mathrm{-np}}$}
+ \newcommand{\CEO}{\textsc{CEO}}
++% Working-draft placeholders preserve float positions while campaigns finish.
++\newcommand{\pendingresults}[1]{\fbox{\parbox{0.9\linewidth}{\centering\textbf{Results pending.}\par\smallskip #1}}}
+ \newcommand{\R}{\mathbb{R}}
+ \newcommand{\E}{\mathbb{E}}
+ \newcommand{\doo}{\mathrm{do}}
+@@ -78,7 +81,7 @@
+ ]
+ 
+ \begin{abstract}
+-Choosing effective interventions in complex systems often requires costly experiments. Causal Bayesian optimization guides these experiments using a causal graph, but errors in that graph can lead to poor predictions or exclude the best interventions. In practice, relationships between groups of variables may be more reliable than the detailed links between individual variables. Here we introduce causal Bayesian optimizers that use this coarse knowledge and intervene jointly on variables within selected groups. Their decisions are insensitive to graph errors that leave the relationships between groups unchanged. However, requiring joint interventions can also limit the outcomes they can achieve. We characterize this loss and identify conditions under which grouping variables preserves the best achievable outcome. Controlled experiments and benchmarks across three optimizer families examine these benefits and limitations. Our results show how coarse causal knowledge can support intervention optimization while making explicit the tradeoff between robustness to graph errors and flexibility in choosing interventions.
++Choosing effective interventions in complex systems often requires costly experiments. Causal Bayesian optimization guides these experiments using a causal graph, but errors in that graph can lead to poor predictions or exclude the best interventions. In practice, relationships between groups of variables may be more reliable than the detailed links between individual variables. Here we introduce causal Bayesian optimizers that use this coarse knowledge and intervene jointly on variables within selected groups. Their decisions are insensitive to graph errors that leave the relationships between groups unchanged. However, requiring joint interventions can also limit the outcomes they can achieve. We characterize this loss and identify conditions under which grouping variables preserves the best achievable outcome. Controlled experiments across three optimizer families examine these benefits and limitations, separating action restrictions from finite-budget differences due to modeling and optimization.
+ \end{abstract}
+ 
+ \section{Introduction}
+@@ -125,7 +128,7 @@
+ 
+ where \(\operatorname{Pa}(V)\) are its parents and \(\mathbf U_V\subseteq\mathbf U\) are its exogenous inputs. We write \(\operatorname{An}(V)\) for the ancestors of \(V\).
+ 
+-Let \(Y\in\mathbf V\) be the target and $\mathbf X\subseteq\mathbf V\setminus\{Y\}$ the manipulable variables. An intervention consists of a nonempty set \(X\subseteq\mathbf X\) and assigned values \(x\in D(X)\), where \(D(X)\) is the intervention domain. The operator \(\doo(X=x)\) replaces the structural mechanisms of the variables in \(X\) by the constants \(x\). The resulting interventional response is
++Let \(Y\in\mathbf V\) be the target and $\mathbf X\subseteq\mathbf V\setminus\{Y\}$ the manipulable variables. An intervention consists of a nonempty set \(X\subseteq\mathbf X\) and assigned values \(x\in D(X)\), where \(D(X)\) is the intervention domain. We use fixed nonempty per-variable domains \(D_v\) and set \(D(X)=\prod_{v\in X}D_v\), so restrictions of admissible assignments remain admissible. This does not require the domains to contain all natural response values; that stronger condition is stated separately in Definition~\ref{def:full-support}. The operator \(\doo(X=x)\) replaces the structural mechanisms of the variables in \(X\) by the constants \(x\). The resulting interventional response is
+ \begin{equation}
+ f_X(x):=\E_{\mathcal M}[Y\mid\doo(X=x)].
+ \label{eq:arm-value}
+@@ -135,7 +138,7 @@
+ 
+ \subsection{Causal Bayesian optimization}
+ 
+-Causal Bayesian optimization (\CBO{}) \citep{agliettiCausalBayesianOptimization2020b} searches for an intervention that minimizes Equation~\eqref{eq:arm-value}. It maintains a Gaussian process (GP) for each retained intervention set $X$, also called an \emph{arm}. Its exploration set consists of the graph's minimal intervention sets (MIS) \citep{leeStructuralCausalBandits,agliettiCausalBayesianOptimization2020b}. Writing \(\widehat{\Gg}_{\bar X}\) for the graph obtained by deleting edges with an arrowhead into any variable in \(X\), this set is
++Causal Bayesian optimization (\CBO{}) \citep{agliettiCausalBayesianOptimization2020b} searches for an intervention that minimizes Equation~\eqref{eq:arm-value}. It maintains a Gaussian process (GP) for each retained intervention set $X$, also called an \emph{arm}. Its exploration set consists of the graph's minimal intervention sets (MIS) \citep{lee2018structural,agliettiCausalBayesianOptimization2020b}. Writing \(\widehat{\Gg}_{\bar X}\) for the graph obtained by deleting edges with an arrowhead into any variable in \(X\), this set is
+ 
+ \begin{equation}
+ \ES(\widehat{\Gg})=\operatorname{MIS}(\widehat{\Gg})
+@@ -212,11 +215,11 @@
+ 
+ A C-DAG preserves which causal and confounding relations exist between clusters while leaving within-cluster structure unspecified. C-DAG identification is sound and complete over the fine graphs represented by the quotient \citep{CausalEffectIdentification}.
+ 
+-The idea of considering coarsened graphical models was originally proposed by \citet{parviainen2017learning} under the name of variable groups and then formalized as C-DAGs by \citet{Anand2023}; since then, C-DAGs have been object of interest both for causal inference \citep{ferreira2025identifying} and causal discovery \citep{ninad2025causal,wahl2024foundations,anand2026causal}.
++The idea of considering coarsened graphical models was originally proposed by \citet{parviainen2017learning} under the name of variable groups and then formalized as C-DAGs by \citet{CausalEffectIdentification}; since then, C-DAGs have been object of interest both for causal inference \citep{ferreira2025identifying} and causal discovery \citep{ninad2025causal,wahl2024foundations,anand2026causal}.
+ 
+ \section{Quotient causal optimizers}
+ \label{sec:methods}
+-In this section, we introduce quotient counterparts of three CBO methods. The goal is to make their decisions robust to fine-graph errors that leave a chosen quotient unchanged, at the cost of restricting interventions to unions of clusters. We first present the arm-based QCBO construction, then extend the same principle to dynamic and model-based CBO, and finally introduce an adaptive refinement scheme that can recover finer-grained actions. In each case, only the graph-dependent components of the base optimizer are replaced; its acquisition and update rules are otherwise retained.
++In this section, we introduce quotient counterparts of three CBO methods. The goal is to make their decisions robust to fine-graph errors that leave a chosen quotient unchanged, at the cost of restricting interventions to unions of clusters. We first present the arm-based QCBO construction, then extend the same principle to dynamic and model-based CBO, and finally introduce an adaptive refinement scheme that can recover finer-grained actions. Within each declared comparison, the fine and quotient methods share the specified acquisition and update policy; common numerical corrections and the coherent dynamic conditional model are described in Appendix~\ref{app:additional-results}.
+ 
+ \subsection{Arm-based QCBO}
+ 
+@@ -246,22 +249,21 @@
+ observational mean and variance of $Y$ as its fallback prior
+ (Appendix~\ref{app:estimators}).
+ 
+-The singleton partition recovers the fine graph, the CBO exploration set, and the CBO prior construction arm by arm. A formal statement and proof appear in Appendix~\ref{app:proofs}.
++The singleton partition recovers the fine graph and the nonempty-MIS exploration set. Its prior construction agrees arm by arm with matched CBO when the identification, estimation and numerical routines coincide. A formal statement distinguishing construction identity from numerical equivalence appears in Appendix~\ref{app:proofs}.
+ 
+ \subsection{Dynamic and model-based quotient variants}
+ 
+-Quotient Dynamic CBO (QDCBO) replaces every time-slice and its temporal transitions by their quotients. It selects cluster-union interventions within each slice and otherwise retains DCBO's \citep{agliettiDynamicCausalBayesian2021a} acquisition and update logic.
+-
+-Quotient model-based CBO (\QMCBO{}) replaces MCBO's \citep{sussexMODELBASEDCAUSALBAYESIAN2023} node mechanisms by joint cluster mechanisms
+-
+-\[
+-P(\mathbf V_C\mid\mathbf V_{\operatorname{pa}(C)}),
+-\]
+-
+-
+-and composes them along the C-DAG. Here $\mathbf V_C$ is the vector of variables in cluster $C$, $\operatorname{pa}(C)$ is its set of parent clusters, and $\mathbf V_{\operatorname{pa}(C)}$ collects their variables. Instead of marginal mechanisms we use joint mechanisms to preserve dependence among variables within a cluster. Multi-variable clusters are modeled with multi-output GPs with correlated task noise; singleton clusters use single-output GPs.
+-
+-Under causal sufficiency and a valid partition, the joint cluster factorization is sound for whole-cluster interventions. It does not determine effects of interventions on strict subsets of a cluster; two fine models can agree on every quotient-level input and disagree on such a sub-cluster effect. Appendix~\ref{app:proofs} states and proves both facts.
++Quotient Dynamic CBO (QDCBO) replaces every time-slice and its temporal transitions by their quotients and selects cluster-union interventions. Our coherent adaptation of DCBO \citep{agliettiDynamicCausalBayesian2021a} fits each mechanism conditional on the union of contemporaneous and lagged external parents. Population responses integrate the complete intervention history: earlier selected manipulator actions remain fixed, while free past variables, including outcomes, are re-simulated.
++
++Quotient model-based CBO (\QMCBO{}) replaces MCBO's \citep{sussexMODELBASEDCAUSALBAYESIAN2023} node mechanisms by structural cluster kernels
++\[
++K_C(\mathrm d\mathbf v_C\mid\mathbf v_{\operatorname{pa}(C)}),
++\]
++and composes them along the C-DAG. Here $\mathbf v_C$ collects the variables in cluster $C$, and $\operatorname{pa}(C)$ is its set of parent clusters. Each kernel is induced by composing the member-level SCM mechanisms at the specified parent values. Under causal sufficiency and a valid partition it agrees with the observational conditional almost surely in the observational parent distribution; observational data need not determine its extension to every parent value. Joint mechanisms preserve within-cluster dependence, while their fitted GP approximations need not recover the structural kernels.
++
++In the corrected comparison, fine nodes and singleton clusters share the same fixed-noise GP, supplied additive-noise variance, scalar output standardization and marginal-likelihood fit. Multi-variable clusters use a Kronecker multi-task GP with full-rank task-noise likelihood; this joint residual noise is included once. Both methods share the corrected intervention map and input normalization. Appendix~\ref{app:additional-results} distinguishes full-menu fine MCBO from its matched-menu control.
++
++Under causal sufficiency, mutually independent node disturbances and a valid partition, the structural cluster factorization is sound for whole-cluster interventions. It does not determine effects of interventions on strict subsets of a cluster; two fine models can agree on every quotient-level input and disagree on such a sub-cluster effect. Appendix~\ref{app:proofs} states and proves both facts.
+ 
+ \subsection{Adaptive refinement}
+ Hierarchical QCBO (\HQCBO{}) starts from a coarse partition and a
+@@ -274,11 +276,7 @@
+ derived from the initial quotient. The initial quotient remains the
+ only graph used throughout the run.
+ 
+-In our experiments, refinement is triggered when the incumbent
+-objective improves by less than \(10^{-3}\) over five trials.
+-The hierarchy and trigger are heuristic;
+-Section~\ref{sec:refinement} states the conditional recovery and
+-invariance guarantees.
++Refinement is triggered when the incumbent objective improves by less than \(10^{-3}\) over five trials. In the corrected noisy protocol, this incumbent uses measured responses. Each new arm requires three paid initial measurements before sequential selection; the MediatedChain split adds two singleton arms and costs six units. A split is refused if its complete design is unaffordable. The hierarchy and trigger are heuristic; Section~\ref{sec:refinement} states conditional recovery and invariance guarantees, not finite-budget success.
+ 
+ \section{Robustness and the price of coarsening}
+ \label{sec:theory}
+@@ -319,9 +317,7 @@
+ 
+ Equal inputs give equal decisions and, under shared environment
+ randomness, equal observations; induction gives identical runs.
+-QCBO and QMCBO satisfy this contract, as does QDCBO within each
+-time slice. At the singleton partition, they recover their base
+-methods (Proposition~\ref{prop:identity}).
++QCBO and QMCBO satisfy this contract under the declared implementations; for QDCBO it must cover both within-slice and cross-slice inputs. At the singleton partition, the graph and action construction recover their fine counterparts; numerical equivalence additionally requires the matching implementation conditions in Proposition~\ref{prop:identity}.
+ 
+ \subsection{Price of restricting interventions}
+ \label{sec:price}
+@@ -370,13 +366,13 @@
+ \]
+ \end{proposition}
+ 
+-Thus coarsening is lossless exactly when at least one fine-optimal intervention is a union of clusters. The MIS-reduction result in Appendix~\ref{app:proofs} connects this action-family value to the quotient exploration set. Even when \(\Delta(\Pi)=0\), a partition can change arm count, intervention dimension, cost, and finite-budget behavior.
++Thus coarsening is lossless exactly when at least one fine-optimal intervention is a union of clusters. The MIS-reduction result in Appendix~\ref{app:proofs} preserves the optimum when the null intervention is included and the graph is compatible with the evaluated SCM. For the nonempty families used here, equality with the retained quotient-MIS value needs an additional condition, such as a retained action with population value at most \(\E_{\mathcal M}[Y]\). Proposition~\ref{prop:price} concerns \(\mathcal U(\Pi)\) directly and does not require this equality. Even when \(\Delta(\Pi)=0\), a partition can change arm count, intervention dimension, cost, and finite-budget behavior.
+ 
+ \subsection{Protected-class regret separation}
+ \label{sec:separation}
+ 
+ 
+-Let \(\hat z_t=(\hat X_t,\hat x_t)\) be the incumbent intervention after trial \(t\), and define its population value by
++Let \(\hat z_t=(\hat X_t,\hat x_t)\) be an incumbent selected among executed interventions using the learner's available information after trial \(t\), and define its population value by
+ \[
+  \mu(\hat z_t):=\E_{\mathcal M}
+  [Y\mid\doo(\hat X_t=\hat x_t)].
+@@ -388,7 +384,7 @@
+  R_T:=\sum_{t=1}^{T}r_t.
+  \label{eq:regret}
+ \end{equation}
+-This metric sums the gaps of the incumbent recommendations.
++This metric sums the gaps of the incumbent recommendations, starting after an eligible intervention has been executed; observation-only initialization creates no incumbent. It does not require their population values to decrease. Under noisy feedback, a minimum-measured-response recommendation can worsen in population value; independent population scoring evaluates that recommendation and does not select it. Equation~\eqref{eq:regret-decomposition} remains an algebraic decomposition for each eligible cluster-union recommendation.
+ 
+ Fix a true SCM \(\mathcal M\) with graph \(\Gg\), while the optimizer receives a hypothesis graph \(\widehat{\Gg}\). Let \(R_T(\mathcal A,\widehat{\Gg})\) denote regret at fixed \(\xi\), and define worst-case regret over the protected class by
+ \[
+@@ -552,7 +548,7 @@
+ \end{corollary}
+ 
+ Recovery is conditional on refinement exposing a fine-optimal
+-intervention and on subsequent incumbent consistency.
++intervention and on subsequent incumbent consistency. We do not establish that consistency for the minimum-measured-response rule under noisy feedback; exposing an optimal arm alone does not imply that the implemented recommendation attains its optimum.
+ 
+ \section{Experiments}
+ \label{sec:experiments}
+@@ -560,11 +556,11 @@
+ \subsection{Evaluation design}
+ \label{sec:exp-design}
+ 
+-We use \textsc{ParallelParent}, \textsc{FrontDoor}, and \textsc{MediatedChain} to isolate arm loss, prior corruption, and the price of coarsening, respectively. Their closed-form interventional objectives let us score every incumbent exactly. We then compare base and quotient optimizers on eight benchmark tasks. Graphs and partitions are in Appendix~\ref{app:dags}; protocols are in Appendix~\ref{app:additional-results}.
+-
+-Every misspecification comparison is paired: the true SCM, observational data, initial design, hyperparameters and random stream are shared, and only the graph supplied to the optimizer changes. We report the best-so-far population objective, the cumulative incumbent regret of Equation~\eqref{eq:regret}, and, for invariance claims, the paired trajectory deviation, which compares the selected arms, intervention values and incumbents of coupled correct- and wrong-graph runs.
+-
+-Controls isolate what each comparison measures. \BO{} optimizes the joint intervention set with no graph. \BOS{} treats every nonempty subset as an arm with plain GP priors. \CBONP{} and \QCBONP{} keep their graph-derived arms and observation schedule but drop the causal prior. 
++We use \textsc{ParallelParent}, \textsc{FrontDoor}, and \textsc{MediatedChain} to isolate arm loss, prior corruption, and the price of coarsening, respectively. Their closed-form interventional objectives let us score recommendations exactly, separately from the noisy measurements available to the learner. We also compare fine and quotient optimizers on dynamic and model-based benchmarks. Graphs and partitions are in Appendix~\ref{app:dags}; protocols are in Appendix~\ref{app:additional-results}.
++
++Every misspecification comparison is paired: the true SCM, observational data, initial measurements on common arms, and separately keyed random streams are shared; only the graph supplied to the optimizer changes. The corrected controlled suite reports the population gap of the measured-data recommendation at a fixed total intervention budget and its sum at integer cost checkpoints. Initialization and refinement purchases count toward this budget. These cost-indexed summaries are distinct from the trial-indexed regret in Equation~\eqref{eq:regret}. Protected-pair audits compare complete action, measurement, recommendation and cost traces, rather than only final values.
++
++Controls isolate what each comparison measures. \BO{} optimizes the joint intervention set with no graph. \BOS{} treats every nonempty subset as an arm with plain GP priors. \CBONP{} keeps the graph-derived CBO arms but drops the causal prior. The FrontDoor CBO-FALLBACK control keeps the correct graph and arms while replacing both prior mean and variance by the same observational fallback used under misspecification. Dynamic and model-based comparisons include fine/full-menu, fine/coarse-menu and quotient/coarse-menu methods, separating menu restrictions from model construction.
+ 
+ \subsection{Exploration-set corruption}
+ \label{sec:exp-a}
+@@ -579,11 +575,12 @@
+  \end{aligned}
+  \label{eq:parallel-parent-scm}
+ \end{equation}
++The disturbances are independent standard Gaussians, and $D(X_1)=D(X_2)=[-3,3]$.
+ Under the correct graph, the fine MIS are
+ $\{X_1\}$, $\{X_2\}$, and $\{X_1,X_2\}$, and the joint arm attains
+ $y^\star=0$ at $(2,-2)$. Deleting $X_1\to Y$ from the hypothesis graph removes every arm containing $X_1$ and leaves only $\{X_2\}$. Its exact population optimum is $4.25$, so no amount of optimization under the wrong fine graph can close this gap.
+ 
+-Figure~\ref{fig:minimal-misspec}(a,b) shows the consequence. Under the correct graph, CBO, QCBO and the graph-free controls obtain values close to $y^\star$. Under the deletion, CBO stops at $4.25$ and its cumulative regret grows linearly, as Theorem~\ref{thm:separation}(i) predicts. For $\Pi=\{\{X_1,X_2\},\{Y\}\}$ the same deletion is invisible because $X_2\to Y$ preserves the quotient edge: the paired QCBO runs select the same arms and values at every trial and are not drawn separately. The quotient-visible edit $X_1\leftrightarrow Y$ does change the QCBO trajectory (Table~\ref{tab:minimal-taxonomy}), illustrating that the invariance guarantee does not cover errors that change the quotient. Final values and regrets for every method appear in Table~\ref{tab:minimal-ablations}.
++For $\Pi=\{\{X_1,X_2\},\{Y\}\}$ the deletion is invisible because $X_2\to Y$ preserves the quotient edge. Proposition~\ref{prop:contract} predicts identical coupled QCBO trajectories, while every recommendation from the wrong fine exploration set has population value at least $4.25$. This is a feasible-action floor, not a claim of finite-budget attainment. Figure~\ref{fig:minimal-misspec}(a) and Table~\ref{tab:minimal-ablations} are reserved for the complete corrected noisy comparison. Quotient-visible edits lie outside the guarantee; A2/A3 are separate engineering diagnostics.
+ 
+ 
+ \subsection{Prior corruption without arm loss}
+@@ -599,14 +596,15 @@
+  \end{aligned}
+  \label{eq:frontdoor-scm}
+ \end{equation}
++The disturbances are independent standard Gaussians, and $D(X_1)=D(M)=[-3,3]$.
+ Its population objective is minimized by $\doo(M=1)$. Under the correct graph, $\doo(M)$ is identified by adjustment for $X_1$ and $\doo(X_1)$ by the frontdoor criterion. Adding a spurious $X_1\leftrightarrow M$ leaves the fine MIS unchanged but makes both prior means non-identifiable. This design therefore changes the prior while holding the available arms fixed.
+ 
+-Figure~\ref{fig:minimal-misspec}(c,d) shows a different failure. CBO still finds the optimal arm, but without the identified prior it takes longer to do so, and its regret rises to the level of the no-prior control (Table~\ref{tab:minimal-ablations}). The loss is therefore attributable to the corrupted prior alone. The perturbation is internal to $\{X_1,M\}$, so QCBO is again exactly invariant. Its regret is comparable to that of corrupted CBO for a different reason: the quotient $\{X_1,M\}\to Y$ with $\{X_1,M\}\leftrightarrow Y$ is a bow, so the cluster effect is not identified and QCBO starts from the observational-mean prior. Thus QCBO is invariant to the tested error but already lacks the informative prior available to correctly specified CBO.
++The perturbation is internal to $\{X_1,M\}$, so QCBO is predicted invariant under the shared-input quotient contract. The quotient $\{X_1,M\}\to Y$ with $\{X_1,M\}\leftrightarrow Y$ is a bow: its cluster effect is not identified, and QCBO uses observational mean and variance fallback. Fine CBO's arms remain unchanged. The additional CBO-FALLBACK control tests whether an observed difference is attributable to prior replacement alone; nonidentification does not by itself imply worse finite-budget performance. Figure~\ref{fig:minimal-misspec}(b) will report the corrected comparison after its complete audit.
+ 
+ \begin{figure}[t]
+   \centering
+-  \includegraphics[width=\linewidth]{figures/minimal_misspec}
+-    \caption{Best-so-far population objective, mean $\pm$ standard error over $30$ paired seeds. (a) \textsc{ParallelParent}: deleting $X_1\to Y$ removes fine arms containing $X_1$. (b) \textsc{FrontDoor}: adding $X_1\leftrightarrow M$ removes identified causal priors without changing the fine arms. Correct- and misspecified-graph QCBO trajectories coincide in both experiments and are shown by a single curve.}
++  \pendingresults{Matched noisy ParallelParent and FrontDoor comparisons; the full 720-run matrix and audit are required.}
++    \caption{Corrected noisy controlled comparison (pending complete audit). (a) \textsc{ParallelParent} A0/A1; (b) \textsc{FrontDoor} B0/B1. The ordinate is population value of the measured-data recommendation, indexed by total paid intervention cost, with $30$ paired seeds. Initialization is charged. Protected trajectories are collapsed only after complete-trace equality is verified.}
+   \label{fig:minimal-misspec}
+ \end{figure}
+ 
+@@ -615,8 +613,10 @@
+ The \textsc{MediatedChain} graph (Appendix~\ref{app:dags}) has
+ \(X_1\to X_2\to Y\), with
+ \[
+-X_2=2X_1+0.2\varepsilon_2,\qquad
+-Y=(X_2-4)^2+0.1\varepsilon_Y,
++\begin{aligned}
++X_1&=0.5\varepsilon_1,\qquad X_2=2X_1+0.2\varepsilon_2,\\
++Y&=(X_2-4)^2+0.1\varepsilon_Y,
++\end{aligned}
+ \]
+ where the disturbances are independent standard Gaussians.
+ The intervention domains are \(x_1\in[-3,3]\) and \(x_2\in[-2,2]\).
+@@ -629,13 +629,13 @@
+ Its best admissible choice is \(x_2=2\), giving
+ \(V(\Pi)=(2-4)^2=4\) and \(\Delta(\Pi)=3.96\).
+ 
+-Equation~\eqref{eq:regret-decomposition} gives fixed QCBO the permanent floor \(R_T\ge3.96T\), consistent with Figure~\ref{fig:minimal-refine}(b).
++Equation~\eqref{eq:regret-decomposition} gives fixed QCBO the permanent floor \(R_T\ge3.96T\). At integer cost checkpoints $12,\ldots,b$, its gap sum is at least $3.96(b-11)$. Refinement can expose the useful singleton arm, but its paid split time and finite-budget recommendation quality are empirical quantities; they are not fixed by the recovery corollary.
+ 
+ 
+ \begin{figure}[t]
+   \centering
+-  \includegraphics[width=\linewidth]{figures/minimal_refine}
+-  \caption{\textsc{MediatedChain}, mean $\pm$ standard error over $30$ seeds. (a) Best-so-far population objective; dotted lines mark $V(\Pi)=4$ and $y^\star=0.04$, and the dashed vertical line marks refinement at trial $7$. (b) Cumulative incumbent regret; the dotted line is the floor $3.96\,t$. Fixed QCBO cannot execute $\doo(X_1)$; HQCBO exposes this arm after splitting and reaches the fine optimum.}
++  \pendingresults{Matched noisy MediatedChain comparison with paid refinement; the full static audit is required.}
++  \caption{\textsc{MediatedChain} under noisy feedback (pending complete audit), with $30$ paired seeds and budget $120$. The fixed-coarse optimum is $4$ and the fine optimum is $0.04$. All new-arm measurements are paid; split costs vary by seed. Exposing the singleton arm does not guarantee attainment of the fine optimum.}
+   \label{fig:minimal-refine}
+ \end{figure}
+ 
+@@ -644,21 +644,23 @@
+ 
+ \begin{figure*}[t]
+   \centering
+-  \includegraphics[width=0.95\linewidth]{figures/family_suite}
++  \includegraphics[width=0.95\linewidth]{figures/dynamic_population}
+   \captionsetup{width=\linewidth}
+-  \caption{Quotient methods (orange, dashed) against their base methods (blue) under the released family protocols, mean $\pm$ standard error over paired seeds; graph-free BO in yellow where run. (a) Toy, (b) Synthetic, (c) Coral: minimization; on Coral BO runs off the axis at the marked value. (d) Stationary, (e) independent, (f) nonstationary: three time slices concatenated, boundaries marked. (g) ToyGraph, (h) PSAGraph: maximization.}
++  \caption{Corrected dynamic comparison: (a) stationary, (b) independent, and (c) \texttt{nonstat\_regularized}. Fine/full-menu, fine/coarse-menu and quotient/coarse-menu methods are shown separately. Population values are minimized and evaluated under each method's committed intervention history. Means and pointwise $95\%$ Student-$t$ intervals use $20$ paired seeds; Monte Carlo scoring uncertainty is reported separately. Fixed rounds do not imply equal intervention cost. Model-based results remain pending.}
+   \label{fig:family-suite}
+ \end{figure*}
+ 
+-Figure~\ref{fig:family-suite} compares each quotient construction with its base optimizer on the eight family tasks; the graphs and quotients are in Appendix~\ref{app:dags}. Table~\ref{tab:qmcbo-invariance} reports identical final values for all tested QMCBO seed pairs. This is consistent with the invariance construction. Table~\ref{tab:family-finals} reports finite-budget final objective values. Quotient methods perform better on some tasks and worse on others. These differences combine action restrictions with modeling and optimization effects; they do not directly estimate the nonnegative coarsening price $\Delta(\Pi)$.
++Figure~\ref{fig:family-suite} and Table~\ref{tab:family-finals} report the completed dynamic comparison ($180$ runs). For the sum of committed slice population values, the paired quotient/coarse minus fine/coarse difference is $-1.024$ (pointwise $95\%$ interval $[-1.300,-0.748]$) on the stationary SCM, $0$ on the independent SCM, and $-0.233$ ($[-1.051,0.585]$) on the regularized nonstationary SCM. The independent setup has equal scored outcomes for every paired seed; this is not a separate full-trajectory identity claim. The intervals reflect between-seed variation; scoring error is recorded separately.
++
++These comparisons hold the action menu fixed. Fine/full-menu results additionally change available actions, and finite-budget differences do not directly estimate the nonnegative coarsening price $\Delta(\Pi)$. The separately named regularized nonstationary SCM replaces the original reciprocal-denominator benchmark. Corrected MCBO and its protected-pair comparison in Table~\ref{tab:qmcbo-invariance} remain in progress. Historical Toy/Synthetic/Coral CBO-family runs are archived separately and are not included as corrected primary evidence.
+ 
+ 
+ \begin{table}[t]
+   \centering
+-  \caption{Final objective value, mean $\pm$ standard error over paired seeds.}
++  \caption{Sum of committed dynamic slice population values (lower is better), mean $\pm$ pointwise $95\%$ Student-$t$ half-width across $20$ seeds. Full-menu fine results and the two matched coarse-menu methods are separated. These are sequential-policy outcomes, not regret relative to a known optimum.}
+   \label{tab:family-finals}
+   \small
+-  \adjustbox{max width=\linewidth}{\input{tables/family_effects}}
++  \adjustbox{max width=\linewidth}{\input{tables/dynamic_population}}
+ \end{table}
+ 
+ 
+@@ -667,9 +669,9 @@
+ 
+ Graph-agnostic and causal entropy optimization methods learn over candidate graphs online \citep{mukherjeeGraphAgnosticCausal2024,branchiniCausalEntropyOptimization2023}, while causal-bandit guarantees price learning an unknown graph within the horizon \citep{luCausalBanditsUnknown2021}. Our setting instead studies commitment to a fixed coarse input. These approaches are complementary: a graph learner could operate over, or trigger refinement of, a quotient.
+ 
+-The construction builds on cluster-DAG identification \citep{CausalEffectIdentification} and is related to causal abstraction and macro-level structure learning \citep{beckersAbstractingCausalModels2019,madaleno2026a}. We coarsen manipulable inputs and explicitly characterize the actions removed by that choice.
+-
+-In attempting to optimally solve a sequential decision-making problem, CBO is closely related to multi-armed bandit (MAB) algorithms. Causal MABs (CMABs), that is MAB problems where an agent intervenes on an SCM that generates reward, were first studied by \citet{bareinboim2015bandits} and \citet{lattimore2016causal}. Several works have studied different aspects of CMABs such as using graphical information to sub-select potentially optimal actions \citep{lee2018structural,lee2019structural}, optimizing under a budget \citep{nair2021budgeted}, learning with limited or missing graphical information \cite{park2025structural,konobeev2023causal}. A setting related to ours is causally abstracted MABs (CAMABs) \citep{zennaro2024causally,dyer2025using} where two CMABs are related by a causal abstraction \citep{rubenstein2017causal} which might be seen as subsuming the relation between a DAG and a CDAG \citep{schooltink2024aligning}; however, while CAMABs tries to exploit the connection between two CMABs to transfer information and solve them within the standard MAB framework, QCBO addresses sequential intervention selection when the exact causal relationships among the variables are unknown.
++The construction builds on cluster-DAG identification \citep{CausalEffectIdentification} and is related to causal abstraction and macro-level structure learning \citep{beckersAbstractingCausalModels2019,madaleno2026a}. We coarsen manipulable inputs and explicitly characterize the actions removed by that choice. MCBO already permits vector-valued mechanisms \citep{sussexMODELBASEDCAUSALBAYESIAN2023}; our contribution is their use on a supplied quotient with whole-cluster interventions. Original CBO also discusses natural mediator responses outside intervention domains \citep{agliettiCausalBayesianOptimization2020b}; here the completion result gives sufficient conditions for losslessness.
++
++In attempting to optimally solve a sequential decision-making problem, CBO is closely related to multi-armed bandit (MAB) algorithms. Causal MABs (CMABs), that is MAB problems where an agent intervenes on an SCM that generates reward, were first studied by \citet{bareinboim2015bandits} and \citet{lattimore2016causal}. Several works have studied different aspects of CMABs such as using graphical information to sub-select potentially optimal actions \citep{lee2018structural,lee2019structural}, optimizing under a budget \citep{nair2021budgeted}, learning with limited or missing graphical information \cite{park2025structural,konobeev2023causal}. A setting related to ours is causally abstracted MABs (CAMABs) \citep{zennaro2024causally,dyer2025using}, where decision problems are related by a causal abstraction \citep{rubenstein2017causal,schooltink2024aligning}. In particular, AT-UCB uses an abstract model to eliminate candidate actions and relates optimal rewards across levels. QCBO instead fixes a supplied quotient and studies invariance to quotient-preserving graph errors and the price of restricting interventions to whole clusters; abstraction-based action elimination is not claimed as new.
+ 
+ \section{Discussion and limitations}
+ \label{sec:limitations}
+@@ -677,10 +679,12 @@
+ Exact invariance holds between supplied graphs with the same quotient. Protection relative to a true-graph run requires that shared quotient to match the true quotient. Invariance does not imply low regret: an optimizer can behave identically under protected graph errors while suffering from an uninformative prior or a restricted action space. The sufficient zero-price conditions are properties of the true SCM and intervention domains; QCBO does not require them to run. Exogenous separation is a structural assumption that cannot generally be verified from observational data alone. Refinement is heuristic, with recovery conditional on exposing a fine-optimal intervention and on subsequent incumbent consistency. Different partitions also induce different arm counts, initialization costs, and intervention costs. Finally, QMCBO inherits the causal-sufficiency
+ assumption of its model-based factorization.
+ 
++The controlled examples were constructed after exploratory work and do not establish average benefit across real problems. The noisy minimum-measured-response rule is not proved incumbent-consistent, and its population quality need not improve monotonically. Dynamic residual covariance and finite-particle integration are approximations; the regularized nonstationary SCM is a separate benchmark. The committed-graph CEO comparator cannot represent the latent confounding in ParallelParent or FrontDoor. The PSA study is a synthetic simulator comparison, not clinical validation. Static and MCBO conclusions await their complete frozen-matrix audits.
++
+ \section{Conclusion}
+ \label{sec:conclusion}
+ 
+-Quotient causal optimizers are invariant to graph errors that leave the supplied C-DAG unchanged. Restricting interventions to unions of clusters can incur a price, which cannot increase under refinement and vanishes under the stated structural conditions. Hierarchical refinement offers a conditional route to recovering the fine optimum.
++Quotient causal optimizers satisfying the quotient contract are invariant to graph errors that leave the supplied C-DAG unchanged. Restricting interventions to unions of clusters can incur a price, which cannot increase under refinement and vanishes under the stated structural conditions. Hierarchical refinement offers a conditional route to recovering the fine optimum.
+ 
+ \bibliographystyle{abbrvnat}
+ \bibliography{qcbo_aistats}
+@@ -694,31 +698,32 @@
+ 
+ \subsection{Method-specific results}
+ 
+-\begin{proposition}[Identity recovery]
++\begin{proposition}[Singleton construction identity]
+ \label{prop:identity}
+-At \(\Pi=\Pi_{\mathrm{fine}}\), the quotient graph equals the fine graph, the QCBO exploration set equals \(\operatorname{MIS}(\widehat{\Gg})\), and its prior construction coincides arm by arm with CBO. QDCBO and QMCBO likewise reduce to DCBO and MCBO.
++At \(\Pi=\Pi_{\mathrm{fine}}\), the quotient graph equals the fine graph, the QCBO exploration set equals \(\operatorname{MIS}(\widehat{\Gg})\), and its prior construction coincides arm by arm with matched CBO when the identification and estimation routines agree. The dynamic quotient graphs and model-based structural factorization likewise reduce to their fine counterparts. Equality of optimizer trajectories additionally requires matching GP parameterization, acquisition, initialization, observation policy, numerical settings and random-number streams.
+ \end{proposition}
+ 
+ \begin{proof}
+-    At the singleton partition, \(\chi\) is one-to-one and quotienting changes no edge. Unions of manipulable singleton clusters are exactly the subsets of \(\mathbf X\), so Equation~\eqref{eq:qcbo-arms} is Equation~\eqref{eq:mis}. The C-DAG identification queries are then the same queries used by CBO. The dynamic slice graphs and model-based joint cluster mechanisms also reduce to their node-level counterparts.
++    At the singleton partition, \(\chi\) is one-to-one and quotienting changes no edge. Unions of manipulable singleton clusters are exactly the subsets of \(\mathbf X\), so Equation~\eqref{eq:qcbo-arms} is Equation~\eqref{eq:mis}. The C-DAG identification queries are then the same queries used by matched nonempty-MIS CBO; equal numerical estimators yield equal priors. The dynamic slice graphs and model-based joint cluster mechanisms also reduce to their node-level counterparts. These facts establish construction identity. When the additional implementation inputs and routines coincide, induction over updates gives equal trajectories.
+ \end{proof}
+ 
+-\begin{proposition}[Soundness of joint cluster mechanisms]
++\begin{proposition}[Soundness of structural cluster kernels]
+ \label{prop:cluster-soundness}
+-Under causal sufficiency and a valid partition, let
++Assume an acyclic causally sufficient SCM \(\mathcal M\) with mutually independent node disturbances and a valid partition. Let
+ $\emptyset\ne S\subseteq\Pi_{\mathbf X}$ and
+ $X=\bigcup_{C\in S}C$. For every $x\in D(X)$,
+ \[
+- P(\mathbf V\setminus X\mid\doo(X=x))
++ P_{\mathcal M}(d\mathbf v_{\mathbf V\setminus X}\mid\doo(X=x))
+  =\left.
+  \prod_{C\in\Pi\setminus S}
+- P(\mathbf V_C\mid\mathbf V_{\operatorname{pa}(C)})
++ K_C(d\mathbf v_C\mid\mathbf v_{\operatorname{pa}(C)})
+  \right|_{X=x}.
+ \]
++Here \(K_C\) is the SCM-defined cluster kernel, and the product composes these kernels in quotient topological order, with intervened coordinates fixed.
+ \end{proposition}
+ 
+ \begin{proof}
+-Apply the fine truncated factorization and group its factors by clusters. Within a cluster, the chain rule combines the member-level factors into the joint conditional mechanism. Validity orders the resulting mechanisms along the C-DAG.
++Each node equation and its independent disturbance define a structural kernel at every parent assignment. Compose the member kernels within each cluster in their internal topological order to obtain \(K_C\). A whole-cluster intervention deletes all member kernels of each intervened cluster and fixes its coordinates. Grouping the remaining kernels gives the displayed law; validity orders them along the C-DAG. Independence of cluster disturbances from parent clusters makes \(K_C\) a version of the observational conditional, equal almost surely in the observational parent distribution. The SCM defines its values elsewhere; observational data alone need not identify this extension, even at individual zero-probability points in the support.
+ \end{proof}
+ 
+ \begin{proposition}[Sub-cluster effects are not identified by cluster mechanisms]
+@@ -748,9 +753,9 @@
+ 
+ \subsection{Price and protected-class separation}
+ 
+-\begin{lemma}[MIS reduction]
++\begin{lemma}[MIS reduction with the null intervention]
+ \label{lem:mis-reduction}
+-Let \(\mathcal G\) be an ADMG with manipulable variables \(\mathbf X\) and target \(Y\). For \(X\subseteq\mathbf X\), define
++Let \(\mathcal G\) be the latent-projection ADMG of the acyclic SCM \(\mathcal M\) whose interventional distributions are evaluated, with manipulable variables \(\mathbf X\) and target \(Y\). Assume the product-domain convention of Section~2.1, the population attainment assumptions of Section~\ref{sec:price}, and integrability of the target also under the null intervention. For \(X\subseteq\mathbf X\), define
+ \[
+  X':=X\cap\An_{\mathcal G_{\bar X}}(Y).
+ \]
+@@ -761,17 +766,24 @@
+   P(Y\mid\doo(X=x))
+   =P\!\left(Y\mid\doo(X'=x|_{X'})\right);
+  \]
+-\item if \(X'\ne\varnothing\), then \(X'\in\operatorname{MIS}(\mathcal G)\); \item consequently, optimizing over \(\{\varnothing\}\cup\operatorname{MIS}(\mathcal G)\) attains the same population optimum as optimizing over all subsets of \(\mathbf X\).
++\item if \(X'\ne\varnothing\), then \(X'\in\operatorname{MIS}(\mathcal G)\); \item defining \(D(\varnothing)=\{\varnothing\}\) and \(f_{\varnothing}(\varnothing)=\mu_{\varnothing}:=\E_{\mathcal M}[Y]\), optimizing over \(\{\varnothing\}\cup\operatorname{MIS}(\mathcal G)\) attains the same population optimum as optimizing over all subsets of \(\mathbf X\).
+ \end{enumerate}
+ \end{lemma}
+ 
+ \begin{proof}
+-Set \(R:=X\setminus X'\). Suppose that some \(r\in R\) has a directed path to \(Y\) in \(\mathcal G_{\bar X'}\). This path cannot enter \(X'\). Let \(r^\star\) be the last member of \(R\) on the path. The subpath from \(r^\star\) to \(Y\) contains no further member of \(X\), so it also exists in \(\mathcal G_{\bar X}\). This contradicts \(r^\star\notin\An_{\mathcal G_{\bar X}}(Y)\). Thus, while \(X'\) remains intervened on, variables in \(R\) cannot causally affect \(Y\), proving (i).
++Set \(R:=X\setminus X'\). Suppose that some \(r\in R\) has a directed path to \(Y\) in \(\mathcal G_{\bar X'}\). This path cannot enter \(X'\). Let \(r^\star\) be the last member of \(R\) on the path. The subpath from \(r^\star\) to \(Y\) contains no further member of \(X\), so it also exists in \(\mathcal G_{\bar X}\). This contradicts \(r^\star\notin\An_{\mathcal G_{\bar X}}(Y)\). Thus, while \(X'\) remains intervened on, variables in \(R\) cannot causally affect \(Y\), proving (i) by coupling the same exogenous disturbances. The product-domain convention makes the restricted assignment admissible.
+ 
+ For every \(v\in X'\), a directed path from \(v\) to \(Y\) in \(\mathcal G_{\bar X}\) cannot enter another member of \(X\). It therefore also exists in \(\mathcal G_{\bar X'}\), proving (ii). Applying (i) and (ii) to every candidate intervention proves (iii).
+ \end{proof}
+  
+-Consequently, when the null intervention is handled consistently, the best value over quotient MIS expanded to fine variables equals the best value over the corresponding cluster-union action family.
++For a valid quotient of this true graph, put \(\mathcal E_\Pi=\ESpi(\Gg^{\Pi})\) and \(W(\Pi)=\min_{X\in\mathcal E_\Pi}\mu^\star(X)\), with \(W(\Pi)=+\infty\) if \(\mathcal E_\Pi\) is empty. All intervened clusters are fully manipulable. The same last-removed-ancestor argument applies to whole clusters: after retained clusters are fixed, a fine directed path from a removed cluster to \(Y\) would project to a directed quotient path, a contradiction. Thus
++\[
++ \min\{\mu_{\varnothing},W(\Pi)\}
++ =\min\{\mu_{\varnothing},V(\Pi)\}.
++\]
++Since \(\mathcal E_\Pi\subseteq\mathcal U(\Pi)\), we have \(V(\Pi)\le W(\Pi)\). If \(W(\Pi)\le\mu_{\varnothing}\), the displayed identity forces \(V(\Pi)=W(\Pi)\). Without such a condition, equality need not hold for the nonempty families.
++
++For example, take independent standard normals \(U,U_Z\), with \(A=0.1U\), \(Z=U_Z\), \(Y=A^2\), manipulable variables \(\{A,Z\}\), and domains \(D_A=[1,2]\), \(D_Z=[-1,1]\). The only graph edge is \(A\to Y\), so the only nonempty MIS is \(\{A\}\), with value \(1\). Intervening on \(Z\) alone gives \(\E[A^2]=0.01\). At singleton resolution, therefore, \(V=0.01<W=1\); the removed action reduces to the null intervention. Observation-only rounds do not make the null action eligible in the nonempty recommendation protocol.
+ 
+ For \(X_1\to X_2\to Y\), intervening on both variables gives \(X'=\{X_2\}\); fixing \(X_2\) already blocks the effect of \(X_1\).
+ 
+@@ -906,11 +918,9 @@
+  \bigl(y_t^{\mathrm{best}}-f_X(x)\bigr)_+
+  \mid\mathcal D_t\right].
+ \]
+-The arm-based implementation selects an arm and value maximizing $\operatorname{EI}_{X,t}(x)/c(X,x)$, where $c(X,x)$ is the intervention cost. Model-based experiments retain their base method's lower confidence bound for minimization, or upper confidence bound for maximization,
+-\[
+- \mu_{X,t}(x)\mp\sqrt{\beta_t}\,\sigma_{X,t}(x),
+-\]
+-where $\beta_t>0$ controls exploration.
++The arm-based implementation selects an arm and value maximizing $\operatorname{EI}_{X,t}(x)/c(X,x)$, where $c(X,x)=|X|$ in the controlled experiments. Under noisy feedback this is a plug-in criterion using the smallest measured outcome; unaffordable arms are masked before purchase. MCBO instead uses its optimistic mechanism acquisition, with multiplier $\beta=10$ in $\mu+\beta\sigma\eta$, not $\sqrt{10}$. The executed acquisition is \texttt{qSimpleRegret} with $q=1$ and 128 Sobol samples. Residual draws are fixed within each acquisition optimization and broadcast across candidate batches.
++
++Population scoring does not select the recommendation. Static minimization recommends the purchased point with the smallest measured outcome, breaking ties by canonical arm order and then event index. MCBO maximization recommends the eligible point with the largest measured outcome, breaking ties by first occurrence. The population value of this data-selected point need not improve monotonically. Population-best-visited values are separate oracle diagnostics; algorithm, measurement and scoring random streams are separately keyed.
+ 
+ 
+ \subsection{Causal-effect estimation}
+@@ -928,18 +938,38 @@
+  
+ Complete identification determines whether a causal effect is a functional of the observational distribution, whereas backdoor, frontdoor, and $g$-computation describe the functionals currently implemented.
+ 
++In the corrected static protocol, arm GPs learn a Gaussian likelihood variance on the raw target scale, initialized at $\max(0.01,0.1\operatorname{Var}(Y))$ and bounded by $[10^{-6},10^6]$; rebuilt models are fitted before acquisition evaluation. Exact population expectations are reserved for post-run scoring.
++
++For coherent dynamic multivariate nonroot mechanisms, an intrinsic-coregionalization GP supplies the mean and latent task covariance. Joint-row leave-one-out residuals hold out all outputs of one observational row together: with $\alpha=K^{-1}y$ and output indices $I$, the residual is $([K^{-1}]_{II})^{-1}\alpha_I$. Their centered sample covariance $S$ is replaced by $0.9S+0.1\operatorname{diag}(S)+10^{-8}\max\{\operatorname{tr}(S)/m,1\}I_m$ and added to latent predictive covariance, excluding the stock likelihood to avoid double counting. This is a residual approximation, not recovery of pure structural noise. Multivariate roots use their joint empirical law. Integration retains within-input task covariance, not a globally correlated posterior function across particles.
++
+ 
+ \section{Experimental details}
+ \label{app:additional-results}
+-\paragraph{Controlled suite.} Each SCM provides one shared observational dataset, of which the optimizer receives the first $n_{\mathrm{obs}}=100$ rows. Disturbances are independent standard Gaussians; shared latent variables induce the stated bidirected edges. We use $30$ paired seeds, three initial points per arm sampled uniformly from the declared domains, unit cost per intervened variable, and $T=50$ trials, or $60$ for \textsc{MediatedChain}. Initial and sequential outcomes are evaluated by the same closed-form population expectation. Each run logs the selected arm and values as well as the incumbent. For protected perturbations, arm sequences and values are compared exactly and incumbents to $10^{-8}$. Table~\ref{tab:minimal-taxonomy} lists every perturbation, Table~\ref{tab:minimal-ablations} the final values and regrets of every method, and Figure~\ref{fig:cost-indexed} with Table~\ref{tab:cost-accounting} the same runs indexed by cumulative cost, so that differing arm counts and initialization budgets are visible.
+-
+-\paragraph{Family suite.} The CBO family uses ToyGraph, CompleteGraph (``Synthetic'') and SimplifiedCoralGraph with $10$ seeds, $n_{\mathrm{obs}}=100$, ten initial points per arm, $40$ trials and minimization; Coral is the linear reef-ecosystem SCM of \citet{agliettiCausalBayesianOptimization2020b}, fit to $50$ field observations. The DCBO family uses the stationary, independent and nonstationary temporal SCMs with $20$ seeds, three time slices, ten trials per slice and minimization. The MCBO family uses ToyGraph and PSAGraph with $20$ seeds, $T=100$, $\beta=10$, zero observation noise and maximization; PSAGraph adapts the prostate-specific-antigen simulator of the original CBO study. CBO/QCBO share one arm-based implementation with cost-normalized EI; DCBO/QDCBO and MCBO/QMCBO retain the released implementations. Table~\ref{tab:qmcbo-invariance} reports paired invariance counts for the model-based family.
++\paragraph{Controlled suite.} Historical exact-response runs are archived separately. The present comparison uses noisy measurements and data-selected recommendations; its result floats remain marked pending until the complete frozen matrix passes its audit. Table~\ref{tab:minimal-taxonomy} specifies the graph perturbations.
++
++The corrected protocol uses 100 shared observational rows and three arm-keyed initial measurements per arm, with one noisy SCM row per purchase. Independent standard Gaussian disturbances, including shared latent disturbances, follow the declared SCM. All initial, sequential and refinement data cost one unit per intervened variable, within budgets $B=100$ for ParallelParent/FrontDoor and $B=120$ for MediatedChain. Domains are $[-3,3]$ for manipulators except MediatedChain's $X_2\in[-2,2]$; natural mediator responses are not clipped. Population scoring evaluates the measured-data recommendation after purchase. Endpoints are its regret at $B$ and the sum of regret at integer costs $12,\ldots,B$, carrying forward the latest recommendation. The frozen matrix has 24 configurations and 30 paired seeds (2000--2029); complete audited corrected results are reported separately from the historical runs.
++
++The committed-graph CEO comparator receives the same data and budget, with one observable candidate DAG, learned Gaussian likelihood and 35 acquisition anchors. Its DAG cannot represent the latent confounding in ParallelParent or FrontDoor. The upstream ``noiseless'' callback replays the purchased noisy row, without another measurement or oracle query. The adapter masks unaffordable arms and acquires no additional observational rows; this is not a test of graph-uncertainty learning.
++
++\paragraph{Family suite.} Historical CBO-family ToyGraph, CompleteGraph (``Synthetic'') and SimplifiedCoralGraph runs are archived separately. The completed dynamic suite and the ongoing corrected MCBO suite use the protocols below. Historical nonstationary dynamic values and population-best-visited MCBO scores are not reused.
++
++The corrected MCBO matrix compares fine/full-menu, fine/coarse-menu and quotient/coarse-menu configurations on both SCMs, with 20 paired seeds (2000--2019) and 100 sequential rounds. Initialization supplies five observational rows and two rows per nonnull allowed target, keyed by target. ToyGraph at zero additive noise is scored exactly; PSA reward is negative PSA and uses an independent 100,000-draw scoring stream. Toy's null action is eligible when in its menu, whereas PSA observational rows are not eligible recommendations. The primary paired contrast holds the coarse menu fixed; the full-menu comparison is separate. Final recommendation reward and its sum across rounds are reported without an equal-cost claim. An additional 80 edited runs test protected complete-trace equality: delete $X\to Z$ in ToyGraph and add aspirin$\to$statin in PSAGraph. All 120 main runs and the corresponding protected pairs are required for their respective analyses.
++
++The coherent dynamic protocol compares the same three menu/model configurations on stationary, independent and \texttt{nonstat\_regularized} SCMs, using 20 paired seeds, 100 observational trajectories, three slices, ten scheduler trials per slice and 100 acquisition anchors. Trial zero is observational bookkeeping, giving nine purchases per slice. The new regularized companion replaces the change-point denominator by $\sqrt{1+X_0^2}$ at $t=1$, so $Z_1=-X_1/\sqrt{1+X_0^2}+Z_0+\varepsilon_{Z,1}$; its graph includes $X_0\to Z_1$ and $Z_1\to Y_2$. The original reciprocal-normal objective is excluded from primary population comparisons. Predictive integration uses 1,024 particles, checked separately against 4,096; learner feedback uses 2,048 common-noise particles and post-run scoring uses 100,000 independent particles. Each slice is scored under its committed intervention prefix. These are fixed-round finite-Monte-Carlo population comparisons, not single-row measurements, equal-cost comparisons or regret against a known global optimum.
++
++For corrected comparisons, paired effects use pointwise two-sided 95\% Student-$t$ intervals across seeds (29 degrees of freedom for static and 19 for MCBO/dynamic). Monte Carlo scoring uncertainty is reported separately. Frozen source, runtime and event checks reject incomplete matrices; engineering pilots are not replication evidence. Corrected numerical results must not be substituted by the historical figures or tables.
++The dynamic matrix contains $180$ runs and has passed its complete audit.
++The static primary contrast is QCBO minus CBO within condition. Seeds,
++not individual trials, are the replication units. Monte Carlo scoring
++errors across dynamic slices are not assumed independent. A2/A3 are engineering diagnostics,
++not additional 30-seed corrected comparisons. Missing or failed units
++block the affected primary analysis.
++
++
+ 
+ \begin{table}[H]
+   \centering
+-  \caption{Controlled misspecifications and measured paired trajectory
+-  deviations. Rows whose quotient is unchanged are predicted invariant by
+-  Proposition~\ref{prop:contract}.}
++  \caption{Controlled graph perturbations and their structural consequences. A1/B1 occur in the corrected noisy matrix; A2/A3 are engineering diagnostics. Unchanged quotients predict invariance only under the shared-input contract. No measured trajectory deviations are asserted here.}
+   \label{tab:minimal-taxonomy}
+   \small
+   \adjustbox{max width=\textwidth}{\input{tables/minimal_taxonomy}}
+@@ -947,33 +977,33 @@
+ 
+ \begin{table}[H]
+   \centering
+-  \caption{Controlled suite: final population objective and cumulative incumbent regret $R_T$ for every method and condition, mean $\pm$ standard error over $30$ paired seeds. $T=50$, and $T=60$ for \textsc{MediatedChain}.}
++  \caption{Corrected controlled results (pending): population recommendation gap at total budgets $100$ or $120$, and the sum at integer cost checkpoints $12,\ldots,B$, for the frozen $24\times30$ matrix. Historical exact-response values are excluded.}
+   \label{tab:minimal-ablations}
+   \small
+-  \adjustbox{max width=\textwidth}{\input{tables/minimal_ablations}}
++  \pendingresults{All 24 configurations and 30 seeds per configuration are required.}
+ \end{table}
+ 
+ \begin{figure}[H]
+   \centering
+-  \includegraphics[width=0.95\textwidth]{figures/cost_indexed}
+-  \caption{Best-so-far population objective against cumulative intervention cost, including the initial design and HQCBO's split initialization. (a) \textsc{ParallelParent}, correct graph. (b) \textsc{FrontDoor}, correct graph. (c) \textsc{MediatedChain}, log scale. Curves stop at the last budget reached by every seed.}
++  \pendingresults{Cost-indexed attribution controls from the corrected noisy suite; results await the full static audit.}
++  \caption{Corrected noisy controlled attribution comparisons (pending complete audit), indexed by total intervention cost including initialization and refinement. Budgets are $100$ for ParallelParent/FrontDoor and $120$ for MediatedChain. Population scores evaluate measured-data recommendations and are not supplied to the learner.}
+   \label{fig:cost-indexed}
+ \end{figure}
+ 
+ \begin{table}[H]
+   \centering
+-  \caption{Cost accounting for the controlled suite: arm count, initialization cost, logged intervention cost, total, and the final objective at the full budget and at the smallest common budget $C^\ast$.}
++  \caption{Corrected controlled resource accounting (pending). Initialization, sequential and refinement purchases are charged once at one unit per intervened variable. Report actual spend, unspent budget and refused unaffordable splits alongside outcomes.}
+   \label{tab:cost-accounting}
+   \small
+-  \adjustbox{max width=\textwidth}{\input{tables/cost_accounting}}
++  \pendingresults{Paid initialization, sequential measurements, refinement and unspent budget will be reported from the complete static matrix.}
+ \end{table}
+ 
+ \begin{table}[H]
+   \centering
+-  \caption{Paired graph-view perturbation in the model-based family: number of seed pairs with identical final values, and mean absolute final deviation.}
++  \caption{Corrected model-based protected-pair audit (pending). ToyGraph deletes $X\to Z$ and PSAGraph adds aspirin$\to$statin. Both preserve the chosen quotient. Quotient invariance requires exact decoded trace equality, excluding acquisition diagnostics, with no numerical tolerance; equality of the fine comparator is descriptive.}
+   \label{tab:qmcbo-invariance}
+   \small
+-  \input{tables/qmcbo_e2}
++  \pendingresults{All 80 edited runs and their unedited counterparts are required. Exact decoded action, measurement, recommendation, cost and score traces are checked; final-score equality alone is insufficient.}
+ \end{table}
+ 
+  

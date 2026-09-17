@@ -1,0 +1,72 @@
+{
+  "schema": 2,
+  "equality": "exact numeric equality; final, incumbent, and X/score separated",
+  "e1": {
+    "PSAGraph|MCBO": {
+      "final_mean": -5.152578409280233,
+      "final_sem": 0.00017130512071338865,
+      "secs": 6816.950820291042,
+      "n": 20
+    },
+    "ToyGraph|MCBO": {
+      "final_mean": 1.3917535069685436,
+      "final_sem": 0.12821289667039648,
+      "secs": 1394.0229427337647,
+      "n": 20
+    },
+    "PSAGraph|QMCBO": {
+      "final_mean": -5.1528240989980825,
+      "final_sem": 0.0002100075925600246,
+      "secs": 2254.4211199402807,
+      "n": 20
+    },
+    "ToyGraph|QMCBO": {
+      "final_mean": 2.160500444031772,
+      "final_sem": 0.0035481005490845216,
+      "secs": 1394.019622051716,
+      "n": 20
+    }
+  },
+  "e2_identity": {
+    "PSAGraph|MCBO": {
+      "n": 20,
+      "identical_final": 0,
+      "identical_incumbent_trajectory": 0,
+      "identical_decisions_and_scores": 0,
+      "mean_abs_dfinal": 0.0007622369854453304,
+      "max_abs_incumbent_deviation": 0.4603484223833769,
+      "max_abs_intervention_deviation": 1.0,
+      "max_abs_score_deviation": 1.1670595865440312
+    },
+    "PSAGraph|QMCBO": {
+      "n": 20,
+      "identical_final": 20,
+      "identical_incumbent_trajectory": 20,
+      "identical_decisions_and_scores": 20,
+      "mean_abs_dfinal": 0.0,
+      "max_abs_incumbent_deviation": 0.0,
+      "max_abs_intervention_deviation": 0.0,
+      "max_abs_score_deviation": 0.0
+    },
+    "ToyGraph|MCBO": {
+      "n": 20,
+      "identical_final": 9,
+      "identical_incumbent_trajectory": 9,
+      "identical_decisions_and_scores": 0,
+      "mean_abs_dfinal": 0.27697384009276255,
+      "max_abs_incumbent_deviation": 1.2503981015502768,
+      "max_abs_intervention_deviation": 1.0,
+      "max_abs_score_deviation": 2.1472153976246133
+    },
+    "ToyGraph|QMCBO": {
+      "n": 20,
+      "identical_final": 20,
+      "identical_incumbent_trajectory": 20,
+      "identical_decisions_and_scores": 20,
+      "mean_abs_dfinal": 0.0,
+      "max_abs_incumbent_deviation": 0.0,
+      "max_abs_intervention_deviation": 0.0,
+      "max_abs_score_deviation": 0.0
+    }
+  }
+}

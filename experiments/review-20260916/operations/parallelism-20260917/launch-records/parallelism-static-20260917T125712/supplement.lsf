@@ -1,0 +1,55 @@
+#!/bin/bash
+#BSUB -q hpc
+#BSUB -n 1
+#BSUB -W 08:00
+#BSUB -R "rusage[mem=6GB]"
+#BSUB -o /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/matched_replication_%J_%I.out
+#BSUB -e /zhome/15/b/215295/Repositories/ccbo-experiments-20260916/logs/matched_replication_%J_%I.err
+set -euo pipefail
+BASE=/zhome/15/b/215295/Repositories/ccbo-experiments-20260916
+PYTHON=/zhome/15/b/215295/venvs/ccbo/bin/python
+RELEASE="$BASE/releases/matched-preflight-v3"
+CAMPAIGN=989629b3691bc2b0a015eff4beee55e5dbb24a287692401acf66f87605bc23d4
+STOP="$BASE/results/matched-replication/$CAMPAIGN/STOP.json"
+handle_failure() {
+    code=$1; command=$2; signal=$3
+    trap - ERR TERM INT EXIT
+    if ! "$PYTHON" "$BASE/server-launch/record_campaign_stop.py" --path "$STOP" --manifest-id "$CAMPAIGN" --index "${LSB_JOBINDEX:-unknown}" --job-id "${LSB_JOBID:-unknown}" --exit-code "$code" --signal "$signal" --command "$command"; then
+        echo "Could not persist STOP marker; operator intervention required" >&2
+    fi
+    exit "$code"
+}
+trap 'handle_failure "$?" "$BASH_COMMAND" ERR' ERR
+trap 'handle_failure 143 "$BASH_COMMAND" TERM' TERM
+trap 'handle_failure 130 "$BASH_COMMAND" INT' INT
+trap 'code=$?; if (( code != 0 )); then handle_failure "$code" "$BASH_COMMAND" EXIT; fi' EXIT
+if [[ -e "$STOP" ]]; then
+    echo "Campaign STOP marker exists; this queued task will not execute" >&2
+    exit 99
+fi
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 PYTHONHASHSEED=0
+[[ ${LSB_JOBINDEX:-} =~ ^[0-9]+$ ]] || { echo 'Missing numeric LSF array index' >&2; exit 2; }
+(( LSB_JOBINDEX >= 1 && LSB_JOBINDEX <= 720 )) || { echo 'Invalid array index' >&2; exit 2; }
+"$PYTHON" "$BASE/server-launch/check_matched_launch_gate.py" --release "$RELEASE" --preflight-results "$BASE/results/matched-preflight" --diagnostic-results "$BASE/results/matched-hq-diagnostic"
+# A killed process or lost node may never execute the shell failure trap.
+# Refuse further units if the scheduler records such a failed/unknown peer.
+scheduler_states=$(bjobs -a -noheader -o stat "$LSB_JOBID")
+[[ -n "$scheduler_states" ]] || { echo 'Empty supplementary scheduler query' >&2; exit 2; }
+original_states=$(bjobs -a -noheader -o stat 29424844)
+[[ -n "$original_states" ]] || { echo 'Empty original scheduler query' >&2; exit 2; }
+scheduler_states="$scheduler_states
+$original_states"
+[[ -n "$scheduler_states" ]] || { echo 'Cannot verify scheduler states' >&2; exit 2; }
+if [[ "$scheduler_states" == *EXIT* || "$scheduler_states" == *UNKWN* || "$scheduler_states" == *ZOMBI* ]]; then
+    echo 'Scheduler reports failed/unknown peer; stopping campaign' >&2
+    exit 98
+fi
+cd "$RELEASE"
+export PYTHONPATH=.
+# Recheck immediately before the scientific subprocess in case a peer failed
+# while this task was validating source/preflight data.
+if [[ -e "$STOP" ]]; then
+    echo "Campaign stopped during gate verification; refusing execution" >&2
+    exit 99
+fi
+"$PYTHON" scripts/run_frozen_unit.py --manifest replication-manifest.json --index "$((LSB_JOBINDEX-1))" --results "$BASE/results/matched-replication"

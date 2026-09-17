@@ -1,0 +1,1412 @@
+{
+  "archive_audit": {
+    "ceo_minimal": {
+      "decision_or_metadata_files": 210,
+      "recorded_values": {
+        "n_obs": [
+          100
+        ],
+        "ninit": [
+          3
+        ],
+        "num_anchor_points": [
+          35
+        ],
+        "seed": [
+          0,
+          1,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          2,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "trials": [
+          50,
+          60
+        ]
+      }
+    },
+    "family_cbo": {
+      "decision_or_metadata_files": 90,
+      "recorded_values": {
+        "engine_sha": [
+          "f75a19c3bd2cff4d59916e2d40f8ba43a791bf58"
+        ],
+        "estimator": [
+          {
+            "gcomp_reps": 4,
+            "gh_nodes": 20,
+            "mc_draws": 400,
+            "mediator_law": "plug-in Gaussian (GP mean, likelihood variance)",
+            "noise_fixed": 1e-10,
+            "seed": 0,
+            "variance_policy": "predictive"
+          }
+        ],
+        "max_N": [
+          100,
+          150
+        ],
+        "n_init": [
+          10
+        ],
+        "n_obs": [
+          100
+        ],
+        "seed": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "trials": [
+          40
+        ]
+      }
+    },
+    "minimal": {
+      "decision_or_metadata_files": 1320,
+      "recorded_values": {
+        "engine_sha": [
+          "f75a19c3bd2cff4d59916e2d40f8ba43a791bf58"
+        ],
+        "estimator": [
+          {
+            "gcomp_reps": 4,
+            "gh_nodes": 20,
+            "mc_draws": 400,
+            "mediator_law": "plug-in Gaussian (GP mean, likelihood variance)",
+            "noise_fixed": 1e-10,
+            "seed": 0,
+            "variance_policy": "predictive"
+          }
+        ],
+        "max_N": [
+          100,
+          150
+        ],
+        "n_init": [
+          3
+        ],
+        "n_obs": [
+          100
+        ],
+        "seed": [
+          0,
+          1,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          2,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "trials": [
+          50,
+          60
+        ]
+      }
+    },
+    "qdcbo": {
+      "decision_or_metadata_files": 240,
+      "recorded_values": {
+        "T": [
+          3
+        ],
+        "engine_sha": [
+          "9f25b415ff90502533cf3b013c0a10fd14571781"
+        ],
+        "seed": [
+          0,
+          1,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "stock_quirks": [
+          false
+        ],
+        "trials": [
+          10
+        ]
+      }
+    },
+    "qmcbo": {
+      "decision_or_metadata_files": 160,
+      "recorded_values": {
+        "engine_sha": [
+          "9f25b415ff90502533cf3b013c0a10fd14571781"
+        ],
+        "num_trials": [
+          100
+        ],
+        "seed": [
+          0,
+          1,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      }
+    }
+  },
+  "ceo": {
+    "adapter_patches": [
+      "stub absent plotting notebook import",
+      "preserve multi-character variable names in intervention blanket",
+      "interventional grid per-dimension cap: two variables 15, three 7, otherwise 4; scalar retains requested size",
+      "restore InverseGamma.from_EV: a=E^2/V+2, b=E*(a-1)",
+      "exact ndarray bytes for GP memo keys",
+      "remove unused emission-GP deepcopy in posterior update"
+    ],
+    "aliases": {
+      "A3": "A0",
+      "B1": "B0"
+    },
+    "all_nonempty_subsets": true,
+    "initial_observations": 100,
+    "initial_points_per_nonempty_arm": 3,
+    "num_anchor_points": 35,
+    "number_of_trials": "T+1 includes initial incumbent; T=50 PP/FD,60 MC",
+    "numpy_python_random_seed": "seed",
+    "pinned_internal_defaults": {
+      "acquisition": {
+        "KDE": "statsmodels KDEUnivariate.fit defaults; fallback bw=0.5 on failure",
+        "actual_scalar_candidates": 35,
+        "actual_two_variable_candidates": 5,
+        "anchor_seed": "(run seed+1)*(temporal index+1)*iteration",
+        "fantasy_quadrature": "5-node Gauss-Hermite",
+        "function": "CausalEntropySearch/cost when arm fitted and arm mapping present; manual causal EI/cost before fitted model",
+        "global_mixture_samples": 1000,
+        "local_minimum_joint_candidate_points": 100,
+        "local_minimum_joint_seed": 0,
+        "local_minimum_samples": 200,
+        "mixture_sampling": "stratified arm resampling plus local KDE sampling",
+        "nominal_anchor_parameter": 35,
+        "optimization": "finite sampled-candidate argmax, no gradient optimizer",
+        "scalar_fantasy_grid": "stored scalar intervention grid (35 points)",
+        "shortcut": "optimization-only entropy calculation when normalized posterior on graph index0 >0.90",
+        "two_variable_fantasy_grid": "acquisition candidates themselves"
+      },
+      "arm_gp": {
+        "class": "GPRegression with causal mean and CausalRBF ARD=False; lengthscale=variance=1; initial noise=1e-5",
+        "inverse_gamma_priors_mean_variance": {
+          "kernel_variance": [
+            1,
+            1
+          ],
+          "lengthscale": [
+            1,
+            1
+          ],
+          "likelihood_variance": [
+            1,
+            0.2
+          ]
+        },
+        "likelihood": "learned, not fixed",
+        "optimizer": "5 optimize_restarts, preserve surrounding numpy state and seed fit with run seed"
+      },
+      "conditional_gp": {
+        "class": "GPy GPRegression RBF ARD=False; initial lengthscale=variance=noise=1",
+        "inverse_gamma_priors_mean_variance": {
+          "kernel_variance": [
+            4,
+            0.5
+          ],
+          "lengthscale": [
+            1,
+            1
+          ],
+          "likelihood_variance": [
+            3,
+            1
+          ]
+        },
+        "likelihood": "learned, not fixed",
+        "optimizer": "10 robust optimize_restarts, seed=0; GPy 1.13.2 defaults"
+      },
+      "defaults": {
+        "concat": false,
+        "cost_type": 1,
+        "do_cdcbo": false,
+        "hp_i_prior": true,
+        "online": false,
+        "use_mc": false
+      },
+      "dependency_defaults": "Historical main freeze; GPy 1.13.2, statsmodels and sklearn versions recorded in environments; no adapter convergence-tolerance override",
+      "root_mechanism": "MyKDE Gaussian sklearn KernelDensity defaults (bandwidth=1.0); predict estimates mean and variance from separate sets of 500 samples",
+      "source_revision": "35dd277"
+    },
+    "pinned_source_sha256": {
+      "src/bases/ceo_base.py": "46a838e9f67bb5c4a5713cb344198385a119bd872de3a35acdcb77192d0409ab",
+      "src/bayes_opt/causal_acquisition_functions.py": "3f4dc883453c7ea7c3f7cf9bf9e5c32451db9da7d7994e3158b8b916fb1b0c6e",
+      "src/bayes_opt/intervention_computations.py": "965c6a4c7df36a7c8693bd7a76dd875f36b3c38af4c033b17d547ef36536d71a",
+      "src/methods/ceo.py": "89fc81f49bd0af0b0b88d0b4f39c292f8d011bf51c7d405545dcdd433765d25b",
+      "src/utils/ces_utils.py": "4ef1dd26c8e0d967756ae2b4f9afcd6411fc8fe52c4c0610d201b2f78a0d99f5",
+      "src/utils/gp_utils.py": "172fa4feeee8feab692ad061294a9b0f7a3a585ad70fb600167aae4502753a6c",
+      "src/utils/sem_utils/emissions.py": "8f9dce433b97c93e68da60b3f8c6b5d13d3fb4ed321273c88a36535a7801551f"
+    },
+    "pool_order": "asserted observable graph first, then other observable-distinct variants; uniform prior",
+    "pools": {
+      "FrontDoor": [
+        "B0"
+      ],
+      "MediatedChain": [
+        "C0"
+      ],
+      "ParallelParent": [
+        "A0",
+        "A1",
+        "A2"
+      ]
+    },
+    "restriction": "observable DAGs cannot encode bidirected changes; baseline observable DAG is not true latent ADMG",
+    "role": "supplementary stochastic-learning comparator, exact population scoring",
+    "sample_anchor_points": true,
+    "seam_validation_seed": "10000+seed",
+    "seed_anchor_points": "seed+1",
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29
+    ],
+    "sources": [
+      "scripts/run_ceo_minimal.py",
+      "scripts/ceo_adapter.py"
+    ],
+    "stateful_RandomState": "seed"
+  },
+  "coral_provenance": {
+    "files": {
+      "SEM_data.mat": {
+        "bytes": 13224,
+        "sha256": "c8df2e388cda8f7123eab028c33bde5e08fde64747dacb44da3a10f4ceae840f"
+      },
+      "observations.pkl": {
+        "bytes": 88755,
+        "sha256": "a36653db094c0fc9e7b19f7b85887ae3906809fd3f859f1f1bd037c1d143b2d0"
+      },
+      "true_observations.pkl": {
+        "bytes": 88755,
+        "sha256": "a36653db094c0fc9e7b19f7b85887ae3906809fd3f859f1f1bd037c1d143b2d0"
+      }
+    },
+    "fitted_simulator": "OLS child regressions; fitted Gamma Light root; 3-component GaussianMixture Nutrients root",
+    "license_status": "Current repository README states no license file. Bounded upstream README inspection did not establish code/data redistribution terms. Author must document applicable licenses/permissions separately.",
+    "mat_entries_per_measurement": 95,
+    "pickle_columns": [
+      "C",
+      "CO",
+      "D",
+      "L",
+      "N",
+      "O",
+      "P",
+      "S",
+      "T",
+      "TE",
+      "Y"
+    ],
+    "pickle_shape": [
+      1000,
+      11
+    ],
+    "pickles_byte_identical": true,
+    "primary_attribution": {
+      "dataset_url": "http://lod.bco-dmo.org/id/dataset/720788",
+      "original_data_as_cited_by_CBO": "Andersson/Bates2018 BCO-DMO dataset720788, version2018-03-02; CBO reports fitting on50 observations",
+      "original_graph": "Courtney et al.2017 Environmental controls on modern scleractinian coral and reef-scale calcification, Science Advances3(11):e1701356; graph modified to remove cycles in CBO",
+      "paper": "Aglietti, Lu, Paleyes, Gonzalez (2020), Causal Bayesian Optimization, PMLR108:3155-3164, section4.3",
+      "paper_url": "https://proceedings.mlr.press/v108/aglietti20a/aglietti20a.pdf",
+      "upstream_repo": "https://github.com/VirgiAgl/CausalBayesianOptimization"
+    },
+    "runtime_use": "run_cbo_family loads observations.pkl, first100 for learner; full true_observations.pkl fits simulator regressions/root distributions. No direct SEM_data.mat read on this runner path.",
+    "scope": "Bounded local-artifact/source attribution audit; no invented redistribution license or undocumented preprocessing chain",
+    "unverified": "Exact transformation from source environmental measurements/SEM_data.mat to local identical1000-row pickles, and immutable source revision for these inherited files."
+  },
+  "dynamic": {
+    "acquisition": {
+      "continuous_restarts": "not applicable",
+      "function": "causal EI / cost; manual prior EI before arm fit",
+      "optimizer": "finite deterministic grid argmax",
+      "sample_anchor_points": false,
+      "scalar_grid": 100,
+      "seed_anchor_points": 1,
+      "two_coordinate_grid": "10 by 10 Cartesian grid"
+    },
+    "arm_gp": {
+      "fitting": "initial GPy optimize, subsequent GPyModelWrapper.optimize; runner n_restart=1",
+      "fixed_noise_variance": 1e-05,
+      "kernel": "CausalRBF ARD=False initial lengthscale=variance=1",
+      "outputscale_prior": "Gamma(shape=2,rate=0.5) with hp_i_prior=True"
+    },
+    "mechanism_gp": {
+      "joint": "GPy GPCoregionalizedRegression, RBF times ICM, per-output Gaussian noise; optimize_restarts(10,robust=True), seed=0; other settings GPy 1.13.2 defaults",
+      "root": "Gaussian KernelDensity; sklearn version in main freeze",
+      "scalar": "GPy RBF ARD=False; initial lengthscale=variance=noise_var=1; optimize_restarts(10,robust=True); fit seed=0"
+    },
+    "other_flags": {
+      "hp_i_prior": true,
+      "stock_quirks": false,
+      "transfer_hp_i": false,
+      "transfer_hp_o": false,
+      "use_di": false,
+      "use_mc": false
+    },
+    "protocol": {
+      "domains": {
+        "X": [
+          -4,
+          1
+        ],
+        "Z": [
+          -3,
+          3
+        ]
+      },
+      "initial_intervention_samples": null,
+      "nonstationary_change_slice": 1,
+      "observation_trajectories": 100,
+      "online": false,
+      "partition": [
+        [
+          "X",
+          "Z"
+        ]
+      ],
+      "setups": [
+        "stat",
+        "ind",
+        "nonstat"
+      ],
+      "target": "minimize Y",
+      "time_slices": 3,
+      "trials_per_slice": 10
+    },
+    "rng": "numpy and Python random seeded per run; PYTHONHASHSEED=0; mechanism fit seed=0",
+    "shared_patches": [
+      "transition regressors read parent time, response child time",
+      "intervention and seed tested is not None (honors zero)"
+    ],
+    "sources": [
+      "ccbo/qdcbo/runner.py",
+      "ccbo/qdcbo/qdcbo_base.py",
+      "ccbo/qdcbo/stock_fixes.py",
+      "DCBO@85a9bdf/dcbo/utils/gp_utils.py",
+      "DCBO@85a9bdf/dcbo/bases/dcbo_base.py",
+      "DCBO@85a9bdf/dcbo/bayes_opt/intervention_computations.py"
+    ]
+  },
+  "environments": {
+    "ccbo-py310": {
+      "freeze_file": "envs/requirements-ccbo-py310.txt",
+      "python": "3.10.18",
+      "sha256": "b6793151af0012f12c3ee312e7e2795b602fcb5ca8eadcd133ea8fbc5e8891cb",
+      "versions": {
+        "Cython": "3.2.8",
+        "GPy": "1.13.2",
+        "Jinja2": "3.1.6",
+        "MarkupSafe": "3.0.3",
+        "PyYAML": "6.0.3",
+        "Pygments": "2.20.0",
+        "ananke-causal": "0.5.0",
+        "annotated-types": "0.7.0",
+        "array-api-compat": "1.15.0",
+        "botorch": "0.16.1",
+        "certifi": "2026.6.17",
+        "cffi": "2.1.0",
+        "charset-normalizer": "3.4.9",
+        "click": "8.4.2",
+        "contourpy": "1.3.2",
+        "cryptography": "49.0.0",
+        "cuda-bindings": "13.3.1",
+        "cuda-pathfinder": "1.5.6",
+        "cuda-toolkit": "13.0.3.0",
+        "cycler": "0.12.1",
+        "dcor": "0.7",
+        "decorator": "5.3.1",
+        "dill": "0.4.1",
+        "emcee": "3.1.6",
+        "emukit": "0.5.1",
+        "exceptiongroup": "1.3.1",
+        "filelock": "3.31.1",
+        "fonttools": "4.63.0",
+        "fsspec": "2026.6.0",
+        "google-ai-generativelanguage": "0.6.15",
+        "google-api-core": "2.32.0",
+        "google-api-python-client": "2.198.0",
+        "google-auth": "2.56.0",
+        "google-auth-httplib2": "0.4.0",
+        "google-generativeai": "0.8.6",
+        "googleapis-common-protos": "1.75.0",
+        "gpytorch": "1.15.2",
+        "graphviz": "0.21",
+        "grpcio": "1.82.1",
+        "grpcio-status": "1.71.2",
+        "httplib2": "0.32.0",
+        "idna": "3.18",
+        "iniconfig": "2.3.0",
+        "jax": "0.4.38",
+        "jaxlib": "0.4.38",
+        "joblib": "1.5.3",
+        "kiwisolver": "1.5.0",
+        "klepto": "0.2.8",
+        "linear_operator": "0.6.1",
+        "llvmlite": "0.48.0",
+        "lxml": "6.1.1",
+        "matplotlib": "3.10.9",
+        "ml_dtypes": "0.5.4",
+        "mpmath": "1.3.0",
+        "multipledispatch": "1.0.0",
+        "mypy_extensions": "1.1.0",
+        "mystic": "0.4.5",
+        "networkx": "3.4.2",
+        "numba": "0.66.0",
+        "numpy": "1.26.4",
+        "nvidia-cublas": "13.1.1.3",
+        "nvidia-cuda-cupti": "13.0.85",
+        "nvidia-cuda-nvrtc": "13.0.88",
+        "nvidia-cuda-runtime": "13.0.96",
+        "nvidia-cudnn-cu13": "9.20.0.48",
+        "nvidia-cufft": "12.0.0.61",
+        "nvidia-cufile": "1.15.1.6",
+        "nvidia-curand": "10.4.0.35",
+        "nvidia-cusolver": "12.0.4.66",
+        "nvidia-cusparse": "12.6.3.3",
+        "nvidia-cusparselt-cu13": "0.8.1",
+        "nvidia-nccl-cu12": "2.30.7",
+        "nvidia-nccl-cu13": "2.29.7",
+        "nvidia-nvjitlink": "13.3.33",
+        "nvidia-nvshmem-cu13": "3.4.5",
+        "nvidia-nvtx": "13.0.85",
+        "opt_einsum": "3.4.0",
+        "packaging": "26.2",
+        "pandas": "1.5.3",
+        "paramz": "0.9.6",
+        "patsy": "1.0.2",
+        "pgmpy": "0.1.26",
+        "pillow": "12.3.0",
+        "platformdirs": "4.11.0",
+        "pluggy": "1.6.0",
+        "pox": "0.3.7",
+        "proto-plus": "1.28.1",
+        "protobuf": "5.29.6",
+        "py-spy": "0.4.2",
+        "pyasn1": "0.6.4",
+        "pyasn1_modules": "0.4.2",
+        "pycparser": "3.0",
+        "pydantic": "2.13.4",
+        "pydantic_core": "2.46.4",
+        "pygraphviz": "2.0.1",
+        "pyparsing": "3.3.2",
+        "pyre-extensions": "0.0.32",
+        "pyro-api": "0.1.2",
+        "pyro-ppl": "1.9.1",
+        "pytest": "9.1.1",
+        "python-dateutil": "2.9.0.post0",
+        "python-pptx": "1.0.2",
+        "pytz": "2026.2",
+        "requests": "2.34.2",
+        "scikit-learn": "1.7.2",
+        "scipy": "1.12.0",
+        "seaborn": "0.13.2",
+        "sentry-sdk": "2.66.0",
+        "six": "1.17.0",
+        "statsmodels": "0.13.5",
+        "sympy": "1.14.0",
+        "threadpoolctl": "3.6.0",
+        "tomli": "2.4.1",
+        "torch": "2.13.0",
+        "tqdm": "4.69.0",
+        "triton": "3.7.1",
+        "typing-inspect": "0.9.0",
+        "typing-inspection": "0.4.2",
+        "typing_extensions": "4.16.0",
+        "uritemplate": "4.2.0",
+        "urllib3": "2.7.0",
+        "wandb": "0.28.1",
+        "xgboost": "3.2.0",
+        "xlsxwriter": "3.2.9"
+      }
+    },
+    "mcbo-py39": {
+      "freeze_file": "envs/requirements-mcbo-py39.txt",
+      "python": "3.9.18",
+      "sha256": "96ffc471b86241188de5f112ad9ed1ffbdd7adab361072b7d8423a6495030db9",
+      "versions": {
+        "GitPython": "3.1.54",
+        "PyYAML": "6.0.3",
+        "annotated-types": "0.7.0",
+        "botorch": "0.7.2",
+        "certifi": "2026.7.22",
+        "charset-normalizer": "3.4.9",
+        "click": "8.1.8",
+        "contourpy": "1.3.0",
+        "cycler": "0.12.1",
+        "eval_type_backport": "0.4.0",
+        "fonttools": "4.60.2",
+        "gitdb": "4.0.12",
+        "gpytorch": "1.9.0",
+        "idna": "3.18",
+        "importlib_resources": "6.5.2",
+        "joblib": "1.5.3",
+        "kiwisolver": "1.4.7",
+        "linear-operator": "0.1.1",
+        "matplotlib": "3.9.4",
+        "multipledispatch": "1.0.0",
+        "numpy": "1.26.4",
+        "nvidia-cublas-cu11": "11.10.3.66",
+        "nvidia-cuda-nvrtc-cu11": "11.7.99",
+        "nvidia-cuda-runtime-cu11": "11.7.99",
+        "nvidia-cudnn-cu11": "8.5.0.96",
+        "opt_einsum": "3.4.0",
+        "packaging": "26.2",
+        "pandas": "2.3.3",
+        "pillow": "11.3.0",
+        "platformdirs": "4.4.0",
+        "protobuf": "6.33.6",
+        "pydantic": "2.13.4",
+        "pydantic_core": "2.46.4",
+        "pyparsing": "3.3.2",
+        "pyro-api": "0.1.2",
+        "pyro-ppl": "1.8.6",
+        "python-dateutil": "2.9.0.post0",
+        "pytz": "2026.2",
+        "requests": "2.32.5",
+        "scikit-learn": "1.6.1",
+        "scipy": "1.13.1",
+        "sentry-sdk": "2.66.1",
+        "six": "1.17.0",
+        "smmap": "5.0.3",
+        "threadpoolctl": "3.6.0",
+        "torch": "1.13.1",
+        "tqdm": "4.69.0",
+        "typing-inspection": "0.4.2",
+        "typing_extensions": "4.16.0",
+        "tzdata": "2026.3",
+        "urllib3": "2.6.3",
+        "wandb": "0.26.1",
+        "zipp": "3.23.1"
+      }
+    }
+  },
+  "historical_engines": {
+    "dynamic_model_based": "9f25b415ff90502533cf3b013c0a10fd14571781",
+    "static": "f75a19c3bd2cff4d59916e2d40f8ba43a791bf58"
+  },
+  "model_based": {
+    "acquisition": {
+      "domain": "[0,1]^d; eta=2*x_tail-1",
+      "function": "qSimpleRegret of mechanism hallucinated network",
+      "initialization_batch_limit": "10*d",
+      "mc_samples": 128,
+      "num_restarts": "10*d",
+      "optimization_batch_limit": 2,
+      "optimizer": "BoTorch 0.7.2 optimize_acqf; unconstrained-box scipy L-BFGS-B; no custom convergence tolerances",
+      "posterior_mean_extra_start": false,
+      "raw_samples": "100*d, d=acquisition bounds dimension including optimism coordinates"
+    },
+    "baseline_identity": "structural singleton reduction only; learned versus fixed likelihood prevents general numeric equality",
+    "protocol": {
+      "actual_mcbo_acquisition_q": 1,
+      "beta": 10,
+      "configured_batch_size": 2,
+      "envs": [
+        "ToyGraph",
+        "PSAGraph"
+      ],
+      "initial_interventions_per_distinct_nonnull_target": 2,
+      "initial_observations": 5,
+      "learning_rows_per_round": 1,
+      "n_init_evals": "2*(input_dim+1), unused by causal initial design",
+      "objective": "maximize final coordinate (negative original outcome)",
+      "rounds": 100,
+      "run_seeds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "score": "running maximum of MC mean estimates, including initial points; separate from one sampled network observation for learning",
+      "score_draws_per_candidate": 100000,
+      "total_initial_rows": {
+        "PSAGraph_MCBO": 11,
+        "PSAGraph_QMCBO": 7,
+        "ToyGraph_MCBO": 9,
+        "ToyGraph_QMCBO": 7
+      }
+    },
+    "psa": {
+      "A": "sigmoid(-8+0.10*age+0.03*bmi)",
+      "A_S_cancer_simulator_noise": "none: deterministic given parents; declared additive-noise metadata uses Normal(0,0.001), distinct from actual simulator functions",
+      "PSA": "Normal(6.8+0.04*age-0.15*bmi-0.60*S+0.55*A+cancer,0.4 standard deviation)",
+      "S": "sigmoid(-13+0.10*age+0.20*bmi)",
+      "age": "Uniform(55,75)",
+      "bmi": "Normal(27-0.01*age,0.7 standard deviation)",
+      "cancer": "sigmoid(2.2-0.05*age+0.01*bmi-0.04*S+0.02*A)",
+      "intervention_bounds_A_S": [
+        0,
+        1
+      ],
+      "node_order": [
+        "age",
+        "bmi",
+        "A",
+        "S",
+        "cancer",
+        "Y"
+      ],
+      "reward": "-PSA"
+    },
+    "quotient_gp": {
+      "features": "sorted fine members of all parent clusters; min/max across full accumulated train_Y before row masking; constant zero feature for roots; zero-range guard",
+      "fit": "fit_gpytorch_mll(ExactMarginalLogLikelihood), no local optimizer/tolerance override",
+      "mask": "exclude row if ANY member of cluster was intervened",
+      "multi": "KroneckerMultiTaskGP; Matern 2.5 ARD times full-rank task kernel; custom MultitaskGaussianLikelihood(num_tasks=m,rank=m); no explicit outcome transform",
+      "multi_likelihood_defaults": "GPyTorch 1.9.0 MultitaskGaussianLikelihood defaults with explicit rank=m (not BoTorch default likelihood constructor)",
+      "optimism": "mean + beta*eta*sqrt(max(latent variance,1e-12)); full correlated learned task residual plus global noise, Cholesky jitter 1e-9; singleton adds environmental noise",
+      "singleton": "SingleTaskGP with Standardize(m=1), learned Gaussian noise; BoTorch 0.7.2 defaults (scaled Matern 2.5 ARD)"
+    },
+    "rng": "torch.manual_seed(seed), numpy.seed(seed), upstream torch.seed neutralized; float64; single-thread defaults; same stream also advances during 100000-draw scoring",
+    "sources": [
+      "ccbo/qmcbo/runner.py",
+      "ccbo/qmcbo/qgp_network.py",
+      "ccbo/qmcbo/quotient.py",
+      "MCBO@0d0650e/mcbo/mcbo_trial.py",
+      "MCBO@0d0650e/mcbo/utils/initial_design.py",
+      "MCBO@0d0650e/mcbo/acquisition_function_optimization/optimize_acqf.py"
+    ],
+    "targets": {
+      "PSAGraph_MCBO": [
+        "A",
+        "S",
+        "A+S"
+      ],
+      "PSAGraph_QMCBO": [
+        "A+S"
+      ],
+      "ToyGraph_MCBO": [
+        "X1",
+        "X0",
+        "null"
+      ],
+      "ToyGraph_QMCBO": [
+        "X0+X1",
+        "null"
+      ]
+    },
+    "upstream_gp": {
+      "class": "FixedNoiseGP",
+      "fit": "exact MLL, fit_gpytorch_model; BoTorch 0.7.2 defaults",
+      "kernel": "BoTorch 0.7.2 scaled Matern nu=2.5 ARD; Gamma(3,6) lengthscale and Gamma(2,0.15) outputscale priors",
+      "noise": "environment additive_noise_dists[k].variance; Toy ZeroDist reports 1e-6 despite exactly-zero samples",
+      "outcome_transform": "Standardize(m=1)"
+    }
+  },
+  "observation_schedule": {
+    "ceo_minimal": {},
+    "family_cbo": {
+      "CompleteGraph/BO": {
+        "intervention_rounds_max": 40,
+        "intervention_rounds_min": 40,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 10
+      },
+      "CompleteGraph/CBO": {
+        "intervention_rounds_max": 37,
+        "intervention_rounds_min": 37,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 10
+      },
+      "CompleteGraph/QCBO": {
+        "intervention_rounds_max": 37,
+        "intervention_rounds_min": 37,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 10
+      },
+      "SimplifiedCoralGraph/BO": {
+        "intervention_rounds_max": 40,
+        "intervention_rounds_min": 40,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 10
+      },
+      "SimplifiedCoralGraph/CBO": {
+        "intervention_rounds_max": 39,
+        "intervention_rounds_min": 39,
+        "observe_rounds_max": 1,
+        "observe_rounds_min": 1,
+        "seeds": 10
+      },
+      "SimplifiedCoralGraph/QCBO": {
+        "intervention_rounds_max": 39,
+        "intervention_rounds_min": 39,
+        "observe_rounds_max": 1,
+        "observe_rounds_min": 1,
+        "seeds": 10
+      },
+      "ToyGraph/BO": {
+        "intervention_rounds_max": 40,
+        "intervention_rounds_min": 40,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 10
+      },
+      "ToyGraph/CBO": {
+        "intervention_rounds_max": 37,
+        "intervention_rounds_min": 37,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 10
+      },
+      "ToyGraph/QCBO": {
+        "intervention_rounds_max": 37,
+        "intervention_rounds_min": 37,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 10
+      }
+    },
+    "minimal": {
+      "FrontDoor/B0/BO": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "FrontDoor/B0/BOS": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "FrontDoor/B0/CBO": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B0/CBONP": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B0/QCBO": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B0/QCBONP": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B1/BO": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "FrontDoor/B1/BOS": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "FrontDoor/B1/CBO": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B1/CBONP": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B1/QCBO": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "FrontDoor/B1/QCBONP": {
+        "intervention_rounds_max": 49,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 1,
+        "seeds": 30
+      },
+      "MediatedChain/C0/BO": {
+        "intervention_rounds_max": 60,
+        "intervention_rounds_min": 60,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "MediatedChain/C0/BOS": {
+        "intervention_rounds_max": 60,
+        "intervention_rounds_min": 60,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "MediatedChain/C0/CBO": {
+        "intervention_rounds_max": 58,
+        "intervention_rounds_min": 57,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "MediatedChain/C0/CBONP": {
+        "intervention_rounds_max": 58,
+        "intervention_rounds_min": 57,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "MediatedChain/C0/HQCBO": {
+        "intervention_rounds_max": 58,
+        "intervention_rounds_min": 57,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "MediatedChain/C0/HQCBOGF": {
+        "intervention_rounds_max": 58,
+        "intervention_rounds_min": 57,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "MediatedChain/C0/QCBO": {
+        "intervention_rounds_max": 58,
+        "intervention_rounds_min": 57,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "MediatedChain/C0/QCBONP": {
+        "intervention_rounds_max": 58,
+        "intervention_rounds_min": 57,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "ParallelParent/A0/BO": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A0/BOS": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A0/CBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A0/CBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A0/QCBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A0/QCBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A1/BO": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A1/BOS": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A1/CBO": {
+        "intervention_rounds_max": 48,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "ParallelParent/A1/CBONP": {
+        "intervention_rounds_max": 48,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 2,
+        "seeds": 30
+      },
+      "ParallelParent/A1/QCBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A1/QCBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A2/BO": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A2/BOS": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A2/CBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A2/CBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A2/QCBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A2/QCBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A3/BO": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A3/BOS": {
+        "intervention_rounds_max": 50,
+        "intervention_rounds_min": 50,
+        "observe_rounds_max": 0,
+        "observe_rounds_min": 0,
+        "seeds": 30
+      },
+      "ParallelParent/A3/CBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A3/CBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A3/QCBO": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      },
+      "ParallelParent/A3/QCBONP": {
+        "intervention_rounds_max": 47,
+        "intervention_rounds_min": 47,
+        "observe_rounds_max": 3,
+        "observe_rounds_min": 3,
+        "seeds": 30
+      }
+    },
+    "qdcbo": {},
+    "qmcbo": {}
+  },
+  "remaining_release_facts": [
+    "Current Overleaf source unavailable; replacement blocks need real manuscript assembly and publication-width check.",
+    "Public/anonymous release URL remains author pending; reporting identity uses final SHA-256 source manifest.",
+    "Coral exact preprocessing lineage and code/data redistribution terms remain unverified; local hashes and primary attribution are recorded.",
+    "Model-based sidecars do not store every numerical default; source-derived entries rely on historical engine and pinned upstream/environment provenance, not direct per-run recording."
+  ],
+  "reporting_release_identity": {
+    "manifest_value": "generated by parent release task after final edits",
+    "public_url": "author pending",
+    "scheme": "SHA-256 reporting-source fingerprint manifest, not Git commit"
+  },
+  "schema": 1,
+  "scope": "Source-audited implementation configuration; archived settings explicitly separated from defaults. No optimizer rerun.",
+  "source_file_sha256": {
+    "ccbo/adjustment.py": "5af4fde435acf9ab5b99f4c22c4007ab565522d075a7ec5fdf21f20cb24a7b43",
+    "ccbo/cbo/utils/BO_functions.py": "86e4ac8d0ef3929e3d56820bde981f4f6408862a4b241012b5cb4f71f4102f35",
+    "ccbo/cbo/utils/CBO_functions.py": "f41b60060991d5d988b68fa4005fccd73cd84d358889c9d5e004c52d02286a64",
+    "ccbo/cbo/utils/causal_optimizer.py": "c2db681d6ba9e40526d20b3f8171719b673fcd79b38643348234cd582c6364a3",
+    "ccbo/coarsened_graph.py": "5c6dfac28877628e5718dd9eb389a7d78a16ee9285a21df2faf4ddc4cf2f4f0d",
+    "ccbo/minimal_suite.py": "f1077d048814ee7438fb51738b6b873c0eb67a3a9ac1d3eafc7c9b3388628bae",
+    "ccbo/qdcbo/qdcbo_base.py": "0371dc0fe39d977245a95a2273a0c9425931f6c9deeb271c2404e3f067c68847",
+    "ccbo/qdcbo/runner.py": "a0d3736f00407a515d9274226782dec80153b564b077650a1a5b9dadcd91c0f9",
+    "ccbo/qdcbo/stock_fixes.py": "8015fc1a6852951be4a5a443e3f60e022cf4cb80022df9d3c186a7f3291dd8f7",
+    "ccbo/qmcbo/qgp_network.py": "921ea7ea7250a937096babdf40eb2a1e2380518d66b43523f0134d98695223fc",
+    "ccbo/qmcbo/quotient.py": "ca41fb44757243322f44cf84df2b41ae74c53621823d62a4d93ccde21b8b42a4",
+    "ccbo/qmcbo/runner.py": "9678b297549be1518781ca4f9a0744c184fb5da8e173d7b7305bf02224996f63",
+    "scripts/ceo_adapter.py": "2bfaca6766e73a439ffac3a999cf3ef665eade1d402f68c5ff985d9fb8d9cf13",
+    "scripts/run_ceo_minimal.py": "1861ec9cc2e3046844b739701db86573ee047a1d5999df85bb7b90322e6bb322"
+  },
+  "static": {
+    "acquisition": {
+      "function": "CausalExpectedImprovement divided by intervention cost",
+      "local_starts": 1,
+      "optimizer": "Emukit 0.5.1 OptLbfgs (box domains); no tolerance override",
+      "raw_uniform_anchors": 100
+    },
+    "arm_gp": {
+      "causal_mean_gradient_relative_central_step": 0.0001,
+      "fit": "GPyModelWrapper default n_restarts=1; GPy 1.13.2/Emukit 0.5.1 optimizer defaults",
+      "kernel": "RBF or CausalRBF; ARD=False; lengthscale=1; variance=1",
+      "likelihood_variance_fixed": 1e-10
+    },
+    "conditional_gp": {
+      "fitting": "GPRegression.optimize(messages=False); GPy 1.13.2 defaults, no local optimizer/tolerance override",
+      "initialization": "GPy constructor defaults",
+      "kernel": "GPy 1.13.2 RBF ARD",
+      "likelihood_variance_bounds": [
+        1e-06,
+        10
+      ]
+    },
+    "controlled_domains": {
+      "FrontDoor": {
+        "M": [
+          -3,
+          3
+        ],
+        "X1": [
+          -3,
+          3
+        ]
+      },
+      "MediatedChain": {
+        "X1": [
+          -3,
+          3
+        ],
+        "X2": [
+          -2,
+          2
+        ]
+      },
+      "ParallelParent": {
+        "X1": [
+          -3,
+          3
+        ],
+        "X2": [
+          -3,
+          3
+        ]
+      }
+    },
+    "identification": {
+      "caught_gate_exceptions": [
+        "ValueError",
+        "TypeError",
+        "KeyError",
+        "AssertionError"
+      ],
+      "estimator_fit_exception_action": "propagates; no catch-all fit fallback",
+      "estimator_priority": [
+        "backdoor",
+        "frontdoor",
+        "gcomputation"
+      ],
+      "gate": "Ananke 0.5.0 OneLineID",
+      "gate_exception_action": "warn; status error; fail closed to observational fallback",
+      "missing_ananke": "ImportError propagates",
+      "states": [
+        "identified",
+        "not_identified",
+        "error",
+        "not_run"
+      ],
+      "unsupported_or_nonidentified": "constant observational Y mean and pandas sample variance (ddof=1)"
+    },
+    "initial_design": {
+      "controlled_cli_overrides_library_default": true,
+      "controlled_points_per_arm": 3,
+      "cost": "n_init * sum of arm cardinalities at unit per-variable cost; split init additional",
+      "family_points_per_arm": 10,
+      "seed": "run seed; refined design seed+1000"
+    },
+    "integration": {
+      "common_random_number_seed": 0,
+      "gauss_hermite_nodes_per_mediator": 20,
+      "gcomp_observational_replications": 4,
+      "gh_max_mediators": 2,
+      "intermediate_law": "Normal(fitted GP mean, fitted likelihood variance); excludes intermediate GP epistemic variance",
+      "mc_draws_more_than_two_mediators": 400
+    },
+    "observations": {
+      "additional_cap": 50,
+      "batch_max": 20,
+      "initial": 100,
+      "observation_cost": 0,
+      "probability": "clip((observed convex-hull volume/domain volume)/(n_obs/effective_cap),0,1); fresh phase forces observe when available",
+      "refresh": "refit observational models and invalidate cached do-functions after revealing rows"
+    },
+    "prior_variance": {
+      "archived_policy": "predictive",
+      "epistemic_diagnostic": "sum(w*var_f) + spread/n_obs",
+      "predictive": "lik_var + sum(w*(mu-mean)^2) + sum(w*var_f)",
+      "total": "lik_var + sum(w*(mu-mean)^2)"
+    },
+    "sources": [
+      "ccbo/adjustment.py",
+      "ccbo/coarsened_graph.py",
+      "ccbo/cbo/utils/BO_functions.py",
+      "ccbo/cbo/utils/causal_optimizer.py",
+      "ccbo/cbo/utils/CBO_functions.py",
+      "ccbo/minimal_suite.py"
+    ],
+    "target": "minimize population mean Y; natural responses not clipped to intervention bounds"
+  },
+  "upstream": {
+    "CEO": "35dd277",
+    "DCBO": "85a9bdf",
+    "MCBO": "0d0650e"
+  },
+  "validation": {
+    "dcbo_tests": {
+      "failures": 0,
+      "lsf_job": 29424419,
+      "skipped": 0,
+      "tests": 15
+    },
+    "mcbo_tests": {
+      "failures": 0,
+      "lsf_job": 29424418,
+      "skipped": 0,
+      "tests": 11
+    },
+    "singleton_probe": {
+      "n": 40,
+      "nodes": [
+        {
+          "max_abs_mean_difference": 1.2378986724570495e-14,
+          "max_abs_variance_difference": 0.0005635986829229042,
+          "node": 0,
+          "quotient_likelihood": "GaussianLikelihood",
+          "quotient_model": "SingleTaskGP",
+          "upstream_likelihood": "FixedNoiseGaussianLikelihood",
+          "upstream_model": "FixedNoiseGP"
+        },
+        {
+          "max_abs_mean_difference": 0.006338531831726835,
+          "max_abs_variance_difference": 0.0059380402147680145,
+          "node": 1,
+          "quotient_likelihood": "GaussianLikelihood",
+          "quotient_model": "SingleTaskGP",
+          "upstream_likelihood": "FixedNoiseGaussianLikelihood",
+          "upstream_model": "FixedNoiseGP"
+        },
+        {
+          "max_abs_mean_difference": 0.03561920162928478,
+          "max_abs_variance_difference": 0.0015446759343537703,
+          "node": 2,
+          "quotient_likelihood": "GaussianLikelihood",
+          "quotient_model": "SingleTaskGP",
+          "upstream_likelihood": "FixedNoiseGaussianLikelihood",
+          "upstream_model": "FixedNoiseGP"
+        }
+      ],
+      "scope": "One synthetic fit; structural identity is not numerical identity to pinned upstream MCBO",
+      "seed_data": 7,
+      "seed_fit": 123
+    }
+  }
+}

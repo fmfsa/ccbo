@@ -9,9 +9,8 @@ observational dataset (first 100 rows), same objective.
 Protocol (prespecified before any result was seen)
 --------------------------------------------------
 * Objective seam: every method optimises E[Y | do(x)] of the TRUE SCM. The
-  vendored CBO/QCBO arms estimate it with a common-random-numbers Monte
-  Carlo mean (``Intervention_function``, 100k samples); CEO's NOISELESS
-  path (trajectory/incumbent scoring) receives the same surface EXACTLY
+  controlled CBO/QCBO arms receive closed-form population expectations;
+  CEO's NOISELESS path (trajectory/incumbent scoring) receives the same surface EXACTLY
   via MinimalBench's closed forms patched in as its per-arm noiseless
   target functions. ``seam_gate`` verifies the closed forms against a
   fresh Monte-Carlo estimate of the true latent SEM at random levels.
@@ -19,11 +18,11 @@ Protocol (prespecified before any result was seen)
   update its graph posterior — consists of genuine stochastic draws from
   the TRUE latent SEM (latent confounders included, then discarded),
   drawn through CEO's own stateful per-seed RandomState. This is CEO's
-  native regime; the fine methods instead receive CRN-MC mean
-  evaluations, an asymmetry disclosed in the paper's protocol appendix.
+  native regime; controlled CBO/QCBO instead receive exact population
+  evaluations. This asymmetry must be disclosed in the protocol appendix.
 * CEO's candidate DAGs are over OBSERVABLES only (its machinery has no
   bidirected edges), so conditions that only add a latent confounder are
-  observationally identical to their base condition and are ALIASED:
+  indistinguishable in CEO's candidate graph representation and are ALIASED:
   A3 -> A0, B1 -> B0. This inability to represent the confounder error
   class is itself a documented finding, mirroring the CB10 protocol's P7.
 * Pool ("hedge"): the asserted condition's observable DAG first (CEO's

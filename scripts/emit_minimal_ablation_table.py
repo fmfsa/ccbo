@@ -1,6 +1,6 @@
 """Ablation table (engine v3): finals and cumulative incumbent regret for
-every MinimalBench arm per condition, plus the paired HQCBO-GF vs HQCBO
-contrast.  Reads artifacts/summaries/minimal_exact.json (run
+the paper's MinimalBench methods per condition. HQCBO uses hierarchy-only
+refinement (archive key HQCBOGF). Reads artifacts/summaries/minimal_exact.json (run
 summarize_minimal_exact.py first) and writes paper/tables/minimal_ablations.tex.
 """
 
@@ -10,12 +10,13 @@ import argparse
 import json
 from pathlib import Path
 
-ARMS = ["BO", "BOS", "CBO", "CBONP", "QCBO", "QCBONP", "HQCBO", "HQCBOGF"]
-LABEL = {"BO": r"\BO{}", "BOS": r"\BOS{}", "CBO": r"\CBO{}", "CBONP": r"\CBONP{}",
-         "QCBO": r"\QCBO{}", "QCBONP": r"\QCBONP{}", "HQCBO": r"\HQCBO{}",
-         "HQCBOGF": r"\HQCBOGF{}"}
+from scripts.publication_methods import publication_name, validate_summary
+
+ARMS = ["BO", "BOS", "CBO", "CBONP", "QCBO", "QCBONP", "HQCBOGF"]
+LABEL = {a: publication_name(a, latex=True) for a in ARMS}
 ROWS = [("ParallelParent", "A0", "PP A0 (correct)", 50),
         ("ParallelParent", "A1", r"PP A1 (del $X_1{\to}Y$)", 50),
+        ("ParallelParent", "A2", r"PP A2 (add $X_1{\to}X_2$)", 50),
         ("ParallelParent", "A3", r"PP A3 (assume $X_1\leftrightarrow Y$)", 50),
         ("FrontDoor", "B0", "FD B0 (correct)", 50),
         ("FrontDoor", "B1", r"FD B1 (assume $X_1\leftrightarrow M$)", 50),
@@ -29,14 +30,15 @@ def main() -> None:
     args = ap.parse_args()
     s = json.loads(Path(args.summary).read_text())
     g = s["groups"]
+    validate_summary(g)
 
     lines = [r"\begin{tabular}{@{}llrr@{}}", r"\toprule",
-             r"\textbf{Condition} & \textbf{Arm} & \textbf{Final} & $R_T$ \\", r"\midrule"]
+             r"\textbf{Condition} & \textbf{Method} & \textbf{Final} & $R_T$ \\", r"\midrule"]
     for scm, cond, title, T in ROWS:
         first = True
         for arm in ARMS:
             key = f"{scm}_{cond}_{arm}"
-            if key not in g:
+            if arm == "HQCBOGF" and scm != "MediatedChain":
                 continue
             r = g[key]
             lines.append(
@@ -45,15 +47,6 @@ def main() -> None:
                 rf"${r['cumulative_regret_mean']:.2f}{{\scriptstyle\,\pm\,}}{r['cumulative_regret_se']:.2f}$ \\")
             first = False
         lines.append(r"\addlinespace[2pt]")
-    ref = s.get("refinement", {}).get("HQCBOGF_minus_HQCBO")
-    if ref:
-        lines.append(r"\midrule")
-        lines.append(
-            rf"\multicolumn{{4}}{{@{{}}l}}{{\emph{{Paired \HQCBOGF{{}} $-$ \HQCBO{{}} (MC C0, $n{{=}}{ref['n']}$): "
-            rf"$\Delta$final ${ref['final_mean']:+.4f}$ "
-            rf"$[{ref['final_ci95'][0]:+.4f},\,{ref['final_ci95'][1]:+.4f}]$; "
-            rf"$\Delta R_{{60}}$ ${ref['regret_mean']:+.2f}$ "
-            rf"$[{ref['regret_ci95'][0]:+.2f},\,{ref['regret_ci95'][1]:+.2f}]$}}}} \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
