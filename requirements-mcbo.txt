@@ -1,0 +1,7 @@
+# Python 3.9; the MCBO authors' backend requires these older GP APIs.
+-e .[mcbo,test]
+numpy==1.26.4
+scipy==1.13.1
+pandas==2.3.3
+linear-operator==0.1.1
+pyro-ppl==1.8.6

@@ -1,6 +1,4 @@
 """Actual-backend gates for union-parent temporal models (no expensive fits)."""
-import importlib.util
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -15,10 +13,7 @@ except FileNotFoundError:
 from ccbo.qdcbo.coherent import (fit_conditional_mechanisms, integrate_predictive,
                                 make_prior_functions, predictive_moments)
 
-PATH = Path(__file__).resolve().parents[2] / 'scripts' / 'validate_dynamic_sem.py'
-spec = importlib.util.spec_from_file_location('dynamic_diagnostic_fixture', PATH)
-fixture = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(fixture)
+from ccbo.tests import dynamic_fixtures as fixture
 
 
 def graph():

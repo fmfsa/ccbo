@@ -19,7 +19,7 @@ Two vintages of API coexist during the Lee-2019 refactor:
 """
 
 import itertools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import networkx as nx
 
@@ -985,3 +985,48 @@ if __name__ == '__main__':
     print('vertices:', sorted(projected['vertices']))
     print('directed:', sorted(projected['di']))
     print('bidirected:', sorted((sorted(tuple(e)) for e in projected['bi'])))
+
+
+def apply_ops(edges,
+              ops):
+    """Apply a sequence of structural ops to ``edges`` (returns a new list)."""
+    out = list(edges)
+    for op in ops:
+        kind, u, v = op
+        if kind == "add":
+            if (u, v) in out:
+                raise ValueError(f"add: edge {u}->{v} already present")
+            out.append((u, v))
+        elif kind == "del":
+            if (u, v) not in out:
+                raise ValueError(f"del: edge {u}->{v} not present")
+            out.remove((u, v))
+        elif kind == "rev":
+            if (u, v) not in out:
+                raise ValueError(f"rev: edge {u}->{v} not present")
+            out.remove((u, v))
+            if (v, u) in out:
+                raise ValueError(f"rev: reversed edge {v}->{u} already present")
+            out.append((v, u))
+        else:
+            raise ValueError(f"unknown op kind: {kind!r}")
+    return out
+
+def is_acyclic(edges, nodes) -> bool:
+    """Kahn-style acyclicity check (no external deps)."""
+    succ = defaultdict(list)
+    indeg = {n: 0 for n in nodes}
+    for u, v in edges:
+        succ[u].append(v)
+        indeg[v] = indeg.get(v, 0) + 1
+        indeg.setdefault(u, indeg.get(u, 0))
+    queue = [n for n, d in indeg.items() if d == 0]
+    seen = 0
+    while queue:
+        n = queue.pop()
+        seen += 1
+        for m in succ[n]:
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                queue.append(m)
+    return seen == len(indeg)

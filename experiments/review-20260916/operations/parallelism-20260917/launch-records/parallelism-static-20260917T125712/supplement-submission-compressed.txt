@@ -1,2 +1,0 @@
-Job <29426697> is submitted to queue <hpc>.
-

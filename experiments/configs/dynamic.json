@@ -1,0 +1,110 @@
+{
+  "suite": "dynamic",
+  "seeds": [
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019
+  ],
+  "defaults": {
+    "--T": "3",
+    "--trials": "10",
+    "--n-obs": "100",
+    "--num-anchor-points": "100",
+    "--mechanism-protocol": "coherent",
+    "--objective-protocol": "population-mc",
+    "--predictive-samples": "1024",
+    "--feedback-samples": "2048",
+    "--score-samples": "100000"
+  },
+  "cases": [
+    {
+      "id": "stat-DCBO-native-seed{seed}",
+      "options": {
+        "--setup": "stat",
+        "--algo": "DCBO",
+        "--action-menu": "native"
+      }
+    },
+    {
+      "id": "stat-DCBO-coarse-seed{seed}",
+      "options": {
+        "--setup": "stat",
+        "--algo": "DCBO",
+        "--action-menu": "coarse"
+      }
+    },
+    {
+      "id": "stat-QDCBO-native-seed{seed}",
+      "options": {
+        "--setup": "stat",
+        "--algo": "QDCBO",
+        "--action-menu": "native"
+      }
+    },
+    {
+      "id": "ind-DCBO-native-seed{seed}",
+      "options": {
+        "--setup": "ind",
+        "--algo": "DCBO",
+        "--action-menu": "native"
+      }
+    },
+    {
+      "id": "ind-DCBO-coarse-seed{seed}",
+      "options": {
+        "--setup": "ind",
+        "--algo": "DCBO",
+        "--action-menu": "coarse"
+      }
+    },
+    {
+      "id": "ind-QDCBO-native-seed{seed}",
+      "options": {
+        "--setup": "ind",
+        "--algo": "QDCBO",
+        "--action-menu": "native"
+      }
+    },
+    {
+      "id": "nonstat_regularized-DCBO-native-seed{seed}",
+      "options": {
+        "--setup": "nonstat_regularized",
+        "--algo": "DCBO",
+        "--action-menu": "native"
+      }
+    },
+    {
+      "id": "nonstat_regularized-DCBO-coarse-seed{seed}",
+      "options": {
+        "--setup": "nonstat_regularized",
+        "--algo": "DCBO",
+        "--action-menu": "coarse"
+      }
+    },
+    {
+      "id": "nonstat_regularized-QDCBO-native-seed{seed}",
+      "options": {
+        "--setup": "nonstat_regularized",
+        "--algo": "QDCBO",
+        "--action-menu": "native"
+      }
+    }
+  ]
+}

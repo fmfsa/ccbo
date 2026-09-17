@@ -141,3 +141,22 @@ class ExistingBackendIntegrationTests(unittest.TestCase):
         self.assertEqual(meta["new_observation_rows"],0)
 
 if __name__=="__main__": unittest.main()
+
+
+def test_ceo_graphs_keep_correct_chain_and_declared_graph_edits():
+    from ccbo.baselines.ceo import observable_edges, variant_graph
+    assert set(observable_edges(mb.MC_NAME, 'C0')) == {('X1', 'X2'), ('X2', 'Y')}
+    for condition in mb.PERTURBATIONS:
+        scm, cond = condition['scm'], condition['id']
+        expected = set(mb.variant_edges(cond))
+        graph = variant_graph(scm, cond)
+        assert set(observable_edges(scm, cond)) == expected
+        assert set(graph.edges()) == {(u + '_0', v + '_0') for u, v in expected}
+
+
+def test_ceo_hidden_confounding_does_not_create_observed_parent_nodes():
+    from ccbo.baselines.ceo import SCMS, variant_graph
+    for scm, cond in [(mb.PP_NAME, 'A0'), (mb.FD_NAME, 'B0')]:
+        graph = variant_graph(scm, cond)
+        assert set(graph.nodes()) == {v + '_0' for v in SCMS[scm]['nodes']}
+        assert all(not v.startswith('U') for v in graph.nodes())

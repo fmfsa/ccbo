@@ -1,8 +1,5 @@
-"""
-CCBO — Coarsened Causal Bayesian Optimization.
+"""Coarsened causal Bayesian optimization: QCBO, QMCBO and QDCBO.
 
-Subpackages:
-    ccbo.cbo        — Forked from CausalBayesianOptimization (Aglietti et al., 2020)
-    ccbo.repare_lib — Forked from RePaRe (Madaleno et al., 2023)
-    ccbo.rccbo      — RCCBO: Recursive Coarsened Causal Bayesian Optimization
+CBO components derive from Aglietti et al. (2020); external baselines are
+fetched separately at the revisions recorded in scripts/fetch_*.sh.
 """

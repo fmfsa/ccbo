@@ -94,7 +94,7 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ccbo import coarsening
-from ccbo.clusterbench10 import apply_ops, is_acyclic
+from ccbo.coarsening import apply_ops, is_acyclic
 
 # ---------------------------------------------------------------------------
 # Shared parameterization

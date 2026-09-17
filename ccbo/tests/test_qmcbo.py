@@ -1,7 +1,7 @@
 """Unit tests for QMCBO's quotient transformation (ccbo/qmcbo/quotient.py).
 
 Pure-python where possible; the torch-dependent target-lifting tests import
-torch (present in the ccbo env — MCBO ran on it). The invariance test IS the
+torch only when the optional MCBO dependencies are installed. The invariance test IS the
 mechanism of the E2 result: an intra-cluster (or quotient-redundant) edit of
 the fine DAG leaves the quotient view byte-identical.
 """
@@ -75,7 +75,7 @@ def test_partition_validation():
 
 
 def test_lift_targets():
-    import torch
+    torch = pytest.importorskip("torch")
     targets = [torch.tensor([0, 1, 0]), torch.tensor([1, 0, 0]),
                torch.tensor([0, 0, 0])]
     lifted = lift_targets(targets, TOY_PART)

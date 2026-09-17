@@ -1,52 +1,19 @@
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *.so
-
-# OS
-.DS_Store
-
-# Virtualenvs
-.venv/
-venv/
-.env
-
-# IDEs
-.idea/
-.vscode/
-
-# pytest / type-check caches
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-# Experiment outputs — large pickles, regenerated on the server
+.venv*/
+venv/
+.env
+.DS_Store
+.idea/
+.vscode/
+third_party/
 results/
 results_*/
-
-# Vendored external benchmark (35 MB: binaries, wandb runs, run logs).
-# Placed/cloned locally, not part of this project's source.
-third_party/
-
-# Paper build artefacts (keep .tex and final .pdf)
-paper/*.aux
-paper/*.log
-paper/*.out
-paper/*.bbl
-paper/*.blg
-paper/*.fdb_latexmk
-paper/*.fls
-paper/*.synctex.gz
-paper/*.tex.bak
-
-# Local personal config
-Coarsened Causal Bayesian Optimization.json
-.claude/
-ccbo.egg-info/
-__pycache__/
-*.pyc
-.pytest_cache/
 logs/
-
-# Scratch: local page renders, downloaded PDFs (7 MB, not project source).
-tmp/
+build/
+dist/

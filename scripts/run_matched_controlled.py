@@ -63,7 +63,7 @@ def main():
                   feedback_mode="single_true_SCM_draw", recommendation_rule="minimum_measured_Y;ties_canonical_arm_then_execution_index",
                   budget=DEFAULT_BUDGET[args.scm] if args.budget is None else args.budget,
                   observational_sha256=hashlib.sha256(obs_bytes).hexdigest())
-    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "scripts/matched_ceo_runtime.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/ceo_adapter.py", "scripts/run_ceo_minimal.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py"]
+    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "scripts/matched_ceo_runtime.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "ccbo/baselines/ceo.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py"]
     config["source_sha256"] = {f:digest(ROOT/f) for f in source_files}
     if args.method == "CEO":
         ceo_path = Path(args.ceo_root) if args.ceo_root else ROOT/"third_party"/"CEO"

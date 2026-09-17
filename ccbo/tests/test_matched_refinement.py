@@ -50,7 +50,7 @@ class RefinementBackendTests(unittest.TestCase):
     def test_actual_split_has_graph_guard_plain_new_arms_and_full_prefix(self):
         # Controlled trigger fixture for exercising post-split backend, never a run setting.
         a,_=run_scalar(mb.MC_NAME,"C0","QCBO",1000,max_purchases=5)
-        with patch("ccbo.benchmark._plateau",side_effect=lambda h,k,d,t:len(h)>=6), patch.object(mb,"population_evaluator",side_effect=AssertionError("oracle used for refinement")):
+        with patch("matched_refinement._plateau",side_effect=lambda h,k,d,t:len(h)>=6), patch.object(mb,"population_evaluator",side_effect=AssertionError("oracle used for refinement")):
             b,meta=run_hqcbo(mb.MC_NAME,"C0",1000,max_purchases=7)
         self.assertEqual(a.events,b.events[:len(a.events)])
         split=meta["refinement"]
@@ -67,7 +67,7 @@ class RefinementBackendTests(unittest.TestCase):
         self.assertTrue(any(a.get("acquisition_snapshots") and len(a["acquisition_snapshots"][0]["arm"])==1 for a in meta["gp_noise_audit"]))
 
     def test_budget_refuses_split_without_free_information(self):
-        with patch("ccbo.benchmark._plateau",side_effect=lambda h,k,d,t:len(h)>=6):
+        with patch("matched_refinement._plateau",side_effect=lambda h,k,d,t:len(h)>=6):
             e,meta=run_hqcbo(mb.MC_NAME,"C0",1000,budget=20)
         self.assertFalse(meta["refinement"]["accepted"])
         self.assertEqual(e.cost,20)

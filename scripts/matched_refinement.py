@@ -74,7 +74,6 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
     from ccbo.coarsened_graph import CoarsenedGraph
     from ccbo.cbo.utils import compute_coverage
     from ccbo.cbo.cbo import CBO
-    from ccbo.benchmark import _plateau
     mb.register_variants()
     algorithm_seed=keyed_seed(scm,seed,"algorithm")
     np.random.seed(algorithm_seed)
@@ -136,3 +135,12 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
         prior_mask=prior_mask,final_arms=arms,gp_noise_audit=getattr(experiment,"gp_noise_audit",[]),
         noise_policy="learned raw-target homoscedastic variance; init=max(.01,.1*VarY), bounds=[1e-6,1e6]",
         post_split_graph_access="guarded; cached original-quotient priors only")
+
+
+def _plateau(traj, k, delta, task):
+    """True when the best-so-far trajectory improved < ``delta`` over the last
+    ``k`` steps."""
+    if len(traj) < k + 1:
+        return False
+    gain = (traj[-1 - k] - traj[-1]) if task == 'min' else (traj[-1] - traj[-1 - k])
+    return gain < delta

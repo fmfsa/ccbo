@@ -30,7 +30,6 @@ import pytest
 
 from ccbo.coarsened_graph import CoarsenedGraph
 from ccbo import minibench as mb
-from ccbo.benchmark import _split_partition
 
 
 class _StubGraph:
@@ -226,16 +225,6 @@ def test_mc_quotient_mis_is_the_cluster_arm():
         f"MediatedChain quotient MIS wrong: {cg._exploration_set}")
     assert cg._arm_identifiable[("X1", "X2")], (
         "the whole-cluster arm is identifiable (no confounders)")
-
-
-def test_mc_refine_map_splits_validly():
-    coarse = mb.coarse_partition(mb.MC_NAME)
-    new_partition, split = _split_partition(
-        coarse, mb.MC_REFINE_MAP, ["X1", "X2"])
-    assert split == [frozenset({"X1", "X2"})]
-    assert sorted(new_partition, key=lambda s: sorted(s)) == sorted(
-        mb.fine_partition(mb.MC_NAME), key=lambda s: sorted(s)), (
-        f"one split must reach the identity partition: {new_partition}")
 
 
 # ---------------------------------------------------------------------------

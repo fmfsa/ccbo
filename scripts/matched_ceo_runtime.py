@@ -14,12 +14,12 @@ from ccbo.matched_protocol import Experiment, BudgetExhausted, PilotComplete, ob
 
 
 def run_ceo(scm, cond, seed, budget=None, n_init=3, anchors=35, ceo_root=None, max_purchases=None):
-    import ceo_adapter
+    from ccbo.baselines import ceo as ceo_adapter
     if ceo_root:
         ceo_adapter.CEO_ROOT = os.path.abspath(ceo_root)
     ceo_adapter.ensure_ceo()
     # Reuse graph/SEM declarations only, never its initialization/target/scorer.
-    import run_ceo_minimal as definitions
+    from ccbo.baselines import ceo as definitions
     import src.bases.ceo_base as base
     from src.methods.ceo import CEO
     from src.utils.sem_utils.sem_estimate import build_sem_hat
