@@ -48,7 +48,7 @@ def ensure_dcbo_on_path():
     """Make ``import dcbo`` resolve to the authors' stack
     (github.com/neildhir/DCBO, fetched by ``scripts/fetch_dcbo.sh`` into
     ``third_party/DCBO``). Same bootstrap pattern as
-    scripts/ceo_adapter.ensure_ceo.
+    ccbo.baselines.ceo.ensure_ceo.
 
     No monkeypatches are needed: unlike CEO, DCBO's ``fit_gp`` uses a plain
     RBF kernel with no ``InverseGamma.from_EV`` prior (checked against

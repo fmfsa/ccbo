@@ -7,32 +7,24 @@ name = "ccbo"
 version = "0.1.0"
 description = "Coarsened Causal Bayesian Optimization"
 requires-python = ">=3.9"
-dependencies = [
-    "numpy<2",  # third_party/CEO uses numpy.core.multiarray / np.PINF (removed in 2.x)
-    "pandas",
-    "scipy",
-    "networkx",
-    "matplotlib",
-    "seaborn",
-    "GPy",
-    "emukit",
-    "torch",
-    "botorch",
-    "gpytorch",
-    "dcor",
-    "ananke-causal",
-    "causalchamber",
-    "statsmodels",     # third_party/CEO (KDE in the CES acquisition)
-    "scikit-learn",    # third_party/CEO
-    "tqdm",            # third_party/CEO
+dependencies = ["numpy<2", "scipy", "pandas", "networkx", "matplotlib"]
+
+[project.optional-dependencies]
+static = [
+    "GPy==1.13.2", "emukit==0.5.1", "ananke-causal==0.5.0",
+    "seaborn", "scikit-learn", "statsmodels", "PyYAML", "tqdm",
+    "graphviz", "pygraphviz",
 ]
+mcbo = ["torch==1.13.1", "botorch==0.7.2", "gpytorch==1.9.0", "wandb==0.26.1"]
+test = ["pytest>=7,<10"]
 
 [tool.setuptools.packages.find]
 include = ["ccbo*"]
 
+[tool.setuptools.package-data]
+ccbo = ["cbo/data/**/*.pkl", "cbo/data/**/*.npy", "cbo/data/**/*.mat"]
+
 [tool.pytest.ini_options]
-testpaths = ["ccbo/tests"]
+testpaths = ["ccbo/tests", "experiments/tests"]
 addopts = "-m 'not slow'"
-markers = [
-    "slow: long-running validation (GP fits / MC sampling / full RCCBO runs); run with -m slow",
-]
+markers = ["slow: additional GP-fitting and Monte Carlo regression checks"]

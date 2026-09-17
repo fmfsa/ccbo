@@ -6,8 +6,10 @@ within-cluster correlation. This module provides the joint formulation:
 one multi-output GP per **cluster** (ICM task kernel across the cluster's
 member coordinates; ``KroneckerMultiTaskGP``), composed along the C-DAG with
 joint (correlated) within-cluster sampling. Singleton clusters reduce to the
-stock ``SingleTaskGP`` per-node mechanism, so the finest partition recovers
-MCBO exactly (Q-Identity).
+single-output per-node mechanism. This is a structural singleton reduction,
+not exact numerical recovery of pinned upstream MCBO: that implementation
+uses FixedNoiseGP with supplied noise variances, whereas singleton clusters
+here use SingleTaskGP with learned noise.
 
 Structure-free ceiling: by Q-Exposure, any cluster mechanism finer than the
 joint conditional (e.g. an intra-cluster sequential factorization) requires
@@ -126,6 +128,12 @@ class JointQuotientGPNetwork(Model):
         X_c = self._cluster_features(c, self.train_Y)[mask]
         Y_c = self.train_Y[..., self.partition[c]][mask]
         if len(self.partition[c]) == 1:
+            if self.algo_profile.get("scalar_fit_policy") == "upstream-fixed":
+                from ccbo.qmcbo.corrected import scalar_gp
+                k = self.partition[c][0]
+                self.cluster_GPs[c] = scalar_gp(
+                    X_c, Y_c, self.env_profile["additive_noise_dists"][k].variance)
+                return
             gp = SingleTaskGP(train_X=X_c, train_Y=Y_c,
                               outcome_transform=Standardize(m=1))
         else:
@@ -243,9 +251,9 @@ class JointHallucinatedNetwork(JointMVNetwork):
         super().__init__(net, X)   # maps do-values once (stock semantics)
         self.beta = net.algo_profile["beta"]
         n_nodes = net.env_profile["dag"].get_n_nodes()
-        # Split AFTER the do_map applied in super().__init__ (do_map only
-        # touches the leading value coords, never the eta tail) — mirrors
-        # the stock HallucinatedGaussianProcessNetwork exactly.
+        # Split AFTER do_map, preserving physical interventions. The historical
+        # upstream class incorrectly re-splits its original normalized X;
+        # corrected_backend fixes that same defect for the fine baseline.
         self.X, self.eta = (self.X[:, :, 0:(-n_nodes)],
                             (self.X[:, :, -n_nodes:] - 0.5) * 2)
 
@@ -268,7 +276,13 @@ class JointHallucinatedNetwork(JointMVNetwork):
                     len(members))
             chol = torch.linalg.cholesky(
                 noise_cov + 1e-9 * torch.eye(len(members)))
-            z = torch.randn(nodes_samples[..., members].shape)
+            shape = nodes_samples[..., members].shape
+            if self.algo_profile.get("scalar_fit_policy") == "upstream-fixed":
+                # Common residuals across candidate batches: smooth fixed SAA,
+                # invariant to candidate permutation and optimizer batch limits.
+                z = torch.randn([shape[0]] + [1] * (len(shape)-2) + [shape[-1]]).expand(shape)
+            else:
+                z = torch.randn(shape)
             joint_noise = z @ chol.T
         for j, k in enumerate(members):
             m_k = mean[..., j] if multi else mean.squeeze(-1)
@@ -280,6 +294,11 @@ class JointHallucinatedNetwork(JointMVNetwork):
             if multi:
                 noise = joint_noise[..., j]
             else:
-                noise = self.env_profile["additive_noise_dists"][k].rsample(
-                    sample_shape=nodes_samples[..., k].shape)
+                if self.algo_profile.get("scalar_fit_policy") == "upstream-fixed":
+                    from ccbo.qmcbo.corrected import broadcast_noise
+                    noise = broadcast_noise(self.env_profile["additive_noise_dists"][k],
+                                            nodes_samples[..., k].shape)
+                else:
+                    noise = self.env_profile["additive_noise_dists"][k].rsample(
+                        sample_shape=nodes_samples[..., k].shape)
             nodes_samples[..., k] = out + noise

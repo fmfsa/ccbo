@@ -1,10 +1,4 @@
-"""The causal-prior pipeline must not depend on Python's per-process hash
-seed.  ``sorted()`` over frozenset-typed C-DAG vertices is only a partial
-order, so before the 2026-09-10 fix the adjustment set chosen among equal-size
-candidates, the GP input column order and the g-computation step order all
-followed ``PYTHONHASHSEED`` (the CBO-family CompleteGraph and Coral priors
-differed between processes).  These tests fit the priors in two fresh
-interpreters with different hash seeds and require identical moments."""
+"""Causal prior moments must be independent of Python hash ordering."""
 
 import json
 import os
@@ -20,15 +14,19 @@ _PROBE = textwrap.dedent("""
     import json, sys, warnings, logging
     warnings.filterwarnings("ignore"); logging.disable(logging.CRITICAL)
     import numpy as np
-    sys.path.insert(0, "scripts")
-    from run_cbo_family import PARTITIONS, _load_graph
+    from ccbo import minibench as mb
+    from ccbo.matched_protocol import observational_data
+    from ccbo.run_experiment import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
     dataset, n_obs = sys.argv[1], int(sys.argv[2])
+    mb.register_variants()
     out = {}
     for algo in ("CBO", "QCBO"):
         np.random.seed(0)
-        graph, obs, _ = _load_graph(dataset, n_obs)
-        cg = CoarsenedGraph(graph, PARTITIONS[(dataset, algo)], dataset, obs,
+        obs = observational_data(dataset, 0).iloc[:n_obs]
+        graph = get_original_graph(dataset, obs)
+        partition = mb.fine_partition(dataset) if algo == "CBO" else mb.coarse_partition(dataset)
+        cg = CoarsenedGraph(graph, partition, dataset, obs,
                             num_mc_samples=500)
         do = cg.get_all_do()
         ranges = cg.get_interventional_ranges()
@@ -64,12 +62,12 @@ def test_vertex_key_is_canonical():
     assert adj._sorted_v(["X2", frozenset({"A"}), "X1"]) == ["X1", "X2", frozenset({"A"})]
 
 
-def test_complete_graph_priors_are_hash_independent():
-    r0, r1 = _run("0", "CompleteGraph", 60), _run("1", "CompleteGraph", 60)
+def test_parallel_parent_priors_are_hash_independent():
+    r0, r1 = _run("0", "ParallelParent", 60), _run("1", "ParallelParent", 60)
     assert r0 and r0 == r1
 
 
 @pytest.mark.slow
-def test_coral_priors_are_hash_independent():
-    r0, r1 = _run("0", "SimplifiedCoralGraph", 100), _run("7", "SimplifiedCoralGraph", 100)
+def test_frontdoor_priors_are_hash_independent():
+    r0, r1 = _run("0", "FrontDoor", 100), _run("7", "FrontDoor", 100)
     assert r0 and r0 == r1

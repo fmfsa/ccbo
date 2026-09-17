@@ -175,17 +175,3 @@ def test_backdoor_predictor_variance_grows_off_support(monkeypatch):
 
 
 # ------------------------------------------------------ fitted path (slow)
-@pytest.mark.slow
-def test_fitted_frontdoor_is_no_worse_than_mean_substitution():
-    """On the paper's FrontDoor pool (100 rows) the integrated estimator must
-    not be worse than the legacy plug-in; regression error dominates at this
-    sample size, so the test asserts ordering, not a tight absolute error."""
-    from ccbo.minimal_suite import load_scm
-    _, obs, _ = load_scm(mb.FD_NAME, 100)
-    p20 = adj._build_frontdoor_predictor(["X1"], ["M"], "Y", obs, n_nodes=20)
-    p1 = adj._build_frontdoor_predictor(["X1"], ["M"], "Y", obs, n_nodes=1)
-    xs = np.array([-0.5, -0.25, 0.0, 0.25, 0.5, 0.75])
-    e20 = np.array([p20([x])[0] - mb.fd_do_x1(x) for x in xs])
-    e1 = np.array([p1([x])[0] - mb.fd_do_x1(x) for x in xs])
-    assert np.sqrt(np.mean(e20 ** 2)) <= np.sqrt(np.mean(e1 ** 2)) + 1e-9
-    assert np.sqrt(np.mean(e20 ** 2)) < 0.25

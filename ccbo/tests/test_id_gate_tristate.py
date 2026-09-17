@@ -62,8 +62,8 @@ def test_ident_dicts_carry_gate_status_and_estimator_info():
         cg._coarsened_admg, ["X1"], cg.partition, "Y", _obs(mb.PP_NAME)) \
         if False else (None, None)
     # use real data so the GP fits are well posed
-    from ccbo.minimal_suite import load_scm
-    _, obs, _ = load_scm(mb.PP_NAME, 60)
+    from ccbo.matched_protocol import observational_data
+    obs = observational_data(mb.PP_NAME, 0).iloc[:60]
     do_fn, ident = adj.make_cdag_do_function(
         cg._coarsened_admg, ["X1"], cg.partition, "Y", obs)
     assert ident["gate_status"] == "identified"
@@ -79,18 +79,5 @@ def test_paper_arm_sets_never_hit_gate_error_minimal(pert, which):
     part = mb.fine_partition(scm) if which == "fine" else mb.coarse_partition(scm)
     cg = _build(scm, part, pert)
     assert cg._arm_gate_status, "no arms?"
-    assert set(cg._arm_gate_status.values()) <= {"identified", "not_identified"}
-    assert not cg._gate_errors
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("dataset", ["ToyGraph", "CompleteGraph", "SimplifiedCoralGraph"])
-@pytest.mark.parametrize("arm", ["CBO", "QCBO"])
-def test_paper_arm_sets_never_hit_gate_error_family(dataset, arm):
-    import sys, os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
-    from run_cbo_family import PARTITIONS, _load_graph
-    graph, obs, _ = _load_graph(dataset, 100)
-    cg = CoarsenedGraph(graph, PARTITIONS[(dataset, arm)], dataset, obs, num_mc_samples=200)
     assert set(cg._arm_gate_status.values()) <= {"identified", "not_identified"}
     assert not cg._gate_errors

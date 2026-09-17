@@ -303,9 +303,9 @@ def identify_adjustment(dag, S, Y, observed):
 #   "total": v = lik_var + spread -- the plug-in Var[Y | do(a)] with the GP
 #       epistemic term removed.  Kept for comparison runs: off the
 #       observational support (or for an interpolating outcome fit) it
-#       collapses to ~0, which makes the CausalRBF kernel identically zero
-#       and the arm surrogate unable to learn from its own pulls (the
-#       2026-09-09 preliminary family run: flat Coral trajectories).
+#       can collapse to ~0, removing the causal rank-one adjustment. The
+#       additive RBF term remains nonzero, so this does not by itself make
+#       the arm surrogate unable to learn from interventions.
 #   "epistemic": diagnostic only.
 #
 # Override with the environment variable ``CCBO_VARIANCE_POLICY`` *before*
