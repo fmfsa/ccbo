@@ -110,3 +110,68 @@ def test_parallel_failure_does_not_launch_remaining_units_or_kill_peer(tmp_path)
     assert completed == [selected[1]['id']]
     with pytest.raises(ValueError): paper.run_many(selected,tmp_path,jobs=0,identity='test')
     with pytest.raises(ValueError): paper.run_many([selected[0],selected[0]],tmp_path,jobs=2,identity='test')
+
+
+@pytest.fixture
+def scoped_mcbo_analysis(tmp_path, monkeypatch):
+    """Supply already-decoded rows to isolate the suite-level inference gates."""
+    spec = importlib.util.spec_from_file_location('paper_analyze', Path(__file__).parents[1] / 'analyze.py')
+    analysis = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(analysis)
+    records = {}
+    for unit in paper.units('mcbo'):
+        options = unit['options']
+        (tmp_path / 'paper' / 'mcbo' / unit['id']).mkdir(parents=True)
+        records[unit['id']] = dict(
+            unit_id=unit['id'], seed=unit['seed'], code_identity='a' * 64,
+            env_name=options['--env'], algo=options['--algo'], menu=options['--menu'],
+            misspec=options.get('--misspec', ''), endpoint=1., equal_round_sum=100.,
+            _initial={(0,): [unit['seed']]}, _events=[{'measured_y': 1.}])
+    def decoded(folder, unit):
+        row = records[unit['id']]
+        if isinstance(row, Exception):
+            raise row
+        return row
+    monkeypatch.setattr(analysis, 'parse_unit', decoded)
+    return analysis, tmp_path, records
+
+
+def test_mcbo_main_scope_preserves_exact_protected_failure(scoped_mcbo_analysis):
+    analysis, results, records = scoped_mcbo_analysis
+    edited = next(r for r in records.values() if r['algo']=='QMCBO' and r['misspec'])
+    # Below the numeric close() tolerance, but exact trace equality must fail.
+    edited['_events'][0]['measured_y'] += 1e-12
+    full = analysis.summarize(results, 'mcbo')
+    main = analysis.summarize(results, 'mcbo', main_only=True)
+    assert full['expected_units'] == full['valid_units'] == 200
+    assert not full['inference_allowed']
+    assert len(full['protected_checks']) == 80
+    assert full['failures'] == [{'unit_id': edited['unit_id'], 'error': 'Protected executed trace differs'}]
+    assert main['expected_units'] == main['valid_units'] == 120
+    assert main['scope'] == 'main_performance' and main['inference_allowed']
+    assert main['protected_checks'] == []
+    assert all(not r['misspec'] for r in main['units'])
+
+
+@pytest.mark.parametrize('invalid', ['parse_failure', 'missing'])
+def test_mcbo_main_scope_rejects_invalid_main(scoped_mcbo_analysis, invalid):
+    analysis, results, records = scoped_mcbo_analysis
+    unit_id = next(k for k,r in records.items() if not r['misspec'])
+    if invalid == 'parse_failure':
+        records[unit_id] = ValueError('Cost mismatch')
+    else:
+        (results / 'paper' / 'mcbo' / unit_id).rmdir()
+    result = analysis.summarize(results, 'mcbo', main_only=True)
+    assert result['expected_units'] == 120 and result['valid_units'] == 119
+    assert not result['inference_allowed'] and result['paired_effects'] == []
+    if invalid == 'parse_failure':
+        assert result['failures'] == [{'unit_id': unit_id, 'error': 'Cost mismatch'}]
+    else:
+        assert result['missing_units'] == [unit_id]
+
+
+def test_main_scope_is_only_for_paper_mcbo(scoped_mcbo_analysis):
+    analysis, results, _ = scoped_mcbo_analysis
+    for suite, smoke in [('static', False), ('dynamic', False), ('mcbo', True)]:
+        with pytest.raises(ValueError, match='Main-only scope requires paper MCBO'):
+            analysis.summarize(results, suite, smoke=smoke, main_only=True)
