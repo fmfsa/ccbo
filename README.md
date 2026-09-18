@@ -90,3 +90,20 @@ The CBO implementation derives from Aglietti et al. (2020). External
 [CEO](https://github.com/nicola144/CEO), [DCBO](https://github.com/neildhir/DCBO),
 and [MCBO](https://github.com/ssethz/mcbo) code is fetched at the revisions in the
 fetch scripts; retain those projects' license and attribution files.
+
+To reproduce figures and LaTeX tables from complete experiment outputs:
+
+```bash
+python experiments/plot.py --results OUT --outdir FIGURES --suite all
+```
+
+Use the same `OUT` passed to `experiments/run.py` (containing `paper/static`,
+`paper/dynamic`, and `paper/mcbo`). `--suite static`, `dynamic`, or `mcbo` also
+works independently; `family` combines dynamic and MCBO panels, and `all` adds
+the static figures. Requires NumPy,
+SciPy and Matplotlib. Every requested performance matrix must pass
+`experiments/analyze.py` before plotting. MCBO main-performance validity is
+checked separately from the exact protected-trace audit: failures remain in
+`mcbo-audit.json` and its protected-pair table, never tolerance-based passes.
+Incomplete runs cannot produce inferential paper figures. Output data are
+read from the run directory; no result archive is bundled with the code.

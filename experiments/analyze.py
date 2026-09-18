@@ -406,7 +406,8 @@ def compare_protected(suite,rows):
     return checks
 
 
-def summarize(results,suite,smoke=False):
+def summarize(results,suite,smoke=False,main_only=False):
+    require(not main_only or (suite=='mcbo' and not smoke), 'Main-only scope requires paper MCBO')
     api=runner();expected=api.units(suite,smoke=smoke)
     if not smoke:
         require(len(expected)=={'static':720,'mcbo':200,'dynamic':180}[suite],
@@ -438,10 +439,15 @@ def summarize(results,suite,smoke=False):
     if smoke:
         # Accept any declared pilot seed without mixing it with paper evidence.
         expected=api.units(suite,seeds=range(1000,1005),smoke=True)
+    excluded=set()
+    if main_only:
+        excluded={u['id'] for u in expected if u['options'].get('--misspec','')}
+        expected=[u for u in expected if u['id'] not in excluded]
+        require(len(expected)==120, 'Wrong main MCBO matrix')
     expected_by_id={u['id']:u for u in expected};mode='smoke' if smoke else 'paper'
     folder=Path(results)/mode/suite;rows=[];failures=[];seen=set()
     for path in sorted(folder.iterdir()) if folder.exists() else []:
-        if not path.is_dir():continue
+        if not path.is_dir() or path.name in excluded:continue
         if path.name not in expected_by_id:
             failures.append(dict(unit_id=path.name,error='Unit outside declared matrix'));continue
         seen.add(path.name)
@@ -467,7 +473,7 @@ def summarize(results,suite,smoke=False):
     failures.extend(dict(unit_id=p['unit_id'],error='Protected executed trace differs') for p in protected if p['required'] and not p['exact_equal'])
     missing=sorted(set(expected_by_id)-seen)
     complete=not smoke and not missing and not failures and len(rows)==len(expected)
-    output=dict(schema=1,suite=suite,mode=mode,expected_units=len(expected),valid_units=len(rows),complete=complete,
+    output=dict(schema=1,suite=suite,mode=mode,scope='main_performance' if main_only else 'full',expected_units=len(expected),valid_units=len(rows),complete=complete,
                 inference_allowed=complete,status='complete' if complete else 'descriptive_only',
                 missing_units=missing,failures=failures,protected_checks=protected,
                 analysis_source_sha256=digest(__file__),units=[{k:v for k,v in r.items() if not k.startswith('_')} for r in rows],paired_effects=[])
