@@ -69,6 +69,7 @@ def static_events(unit, config, events, scores, summary, replication, nominal_bu
             require(math.isfinite(z) and -bound-1e-9 <= z <= bound+1e-9, "invalid intervention domain")
             require(close(e["measured"][v],z), "measured clamped coordinate mismatch")
         require(set(e["measured"]) == nodes|{"Y"} and all(math.isfinite(v) for v in e["measured"].values()), "invalid measured row")
+        require(close(e["measured"]["Y"], population(scm,arm,x)), "measured target is not the population expectation")
         require(e["cost"] == len(arm), "purchase cost != arm size")
         cost += len(arm)
         require(e["cum_cost"] == cost and cost <= budget, "cumulative cost mismatch or overshoot")
@@ -331,8 +332,8 @@ def parse_unit(folder,unit):
         native={k:options['--'+k] for k in ('scm','cond','method')};native['seed']=unit['seed']
         for k,v in native.items():require(config[k]==summary[k]==v,'Static config identity mismatch: '+k)
         for k,v in config.items():require(summary.get(k)==v,'Summary/config mismatch: '+k)
-        require(config['protocol_id']=='matched-controlled-noisy-v2' and config['n_obs']==100 and config['n_init']==3,'Unsupported static protocol')
-        require(config['feedback_mode']=='single_true_SCM_draw' and config['recommendation_rule']=='minimum_measured_Y;ties_canonical_arm_then_execution_index','Wrong feedback/recommendation protocol')
+        require(config['protocol_id']=='matched-controlled-population-v3' and config['n_obs']==100 and config['n_init']==3,'Unsupported static protocol')
+        require(config['feedback_mode']=='population_expectation' and config['recommendation_rule']=='minimum_measured_Y;ties_canonical_arm_then_execution_index','Wrong feedback/recommendation protocol')
         require(config['stage']==options['--stage'],'Wrong stage')
         require(config['budget']==(120 if native['scm']=='MediatedChain' else 100),'Wrong budget')
         require(config.get('max_purchases')==(int(options['--max-purchases']) if '--max-purchases' in options else None),'Wrong purchase cap')
@@ -345,7 +346,7 @@ def parse_unit(folder,unit):
         require({tuple(e['arm']) for e in events if e['phase']=='init'}==static_arms(native['scm'],native['cond'],native['method']),'Wrong initial action menu')
         metrics=static_events(native,config,events,scores,summary,unit['mode']=='paper')
         record.update(native,**metrics,observational_sha256=config['observational_sha256'],wall_seconds=summary['wall_seconds'],
-                      _events=events,_initial=[{k:e[k] for k in ('arm','x','measured','noise_seed')} for e in events if e['phase']=='init'])
+                      _events=events,_initial=[{k:e[k] for k in ('arm','x','measured')} for e in events if e['phase']=='init'])
         return record
     paths=typed_files(folder);info=load(paths['info']);data=load(paths['decisions'])
     with paths['csv'].open(newline='') as f:csv_rows=list(csv.DictReader(f))

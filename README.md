@@ -50,7 +50,9 @@ corresponding environment's Python for each command below.
 | MCBO | 10 × 20 = 200 | 100 optimization rounds |
 | Dynamic | 9 × 20 = 180 | Three slices, 10 trials per slice |
 
-`experiments/configs/*.json` contains the complete settings. MCBO includes the
+Static measurements return the exact population expectation E[Y | do(X = x)]
+of the true SCM, the evaluation convention of the CBO reference implementation;
+observational data are sampled. `experiments/configs/*.json` contains the complete settings. MCBO includes the
 matched action-menu control and protected graph edits. Dynamic experiments use
 1,024 predictive particles, 2,048 feedback draws, and 100,000 scoring draws; the
 regularized nonstationary SCM is explicitly named.

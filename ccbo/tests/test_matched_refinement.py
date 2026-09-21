@@ -50,7 +50,7 @@ class RefinementBackendTests(unittest.TestCase):
     def test_actual_split_has_graph_guard_plain_new_arms_and_full_prefix(self):
         # Controlled trigger fixture for exercising post-split backend, never a run setting.
         a,_=run_scalar(mb.MC_NAME,"C0","QCBO",1000,max_purchases=5)
-        with patch("matched_refinement._plateau",side_effect=lambda h,k,d,t:len(h)>=6), patch.object(mb,"population_evaluator",side_effect=AssertionError("oracle used for refinement")):
+        with patch("matched_refinement._plateau",side_effect=lambda h,k,d,t:len(h)>=6):
             b,meta=run_hqcbo(mb.MC_NAME,"C0",1000,max_purchases=7)
         self.assertEqual(a.events,b.events[:len(a.events)])
         split=meta["refinement"]

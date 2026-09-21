@@ -1,4 +1,4 @@
-"""Graph-free noisy HQCBO for MediatedChain, using resumed vendored CBO.
+"""Graph-free HQCBO for MediatedChain, using resumed vendored CBO.
 
 The original quotient's cached priors survive; newly exposed singleton arms use
 plain GPs. After exposure the backend receives a graph-access guard. Refinement
@@ -7,7 +7,7 @@ uses measured incumbents only and pays the complete split design before use.
 import numpy as np
 from ccbo import minibench as mb
 from ccbo.matched_protocol import (Experiment, BudgetExhausted, PilotComplete,
-    canonical_arm, domains, keyed_seed, noisy_scalar_runtime, observational_data)
+    canonical_arm, domains, keyed_seed, scalar_runtime, observational_data, FEEDBACK_MODE)
 
 
 class NoGraphAccess:
@@ -32,8 +32,8 @@ class RefinementExperiment(Experiment):
             rng=np.random.RandomState(keyed_seed(self.scm,self.seed,"split-levels",arm))
             xs=np.column_stack([rng.uniform(*domains(self.scm)[v],self.n_init) for v in arm])
             rows[arm]=[]
-            for i,x in enumerate(xs):
-                rows[arm].append(self._buy(arm,x,"split_init",keyed_seed(self.scm,self.seed,"split-noise",arm,i)))
+            for x in xs:
+                rows[arm].append(self._buy(arm,x,"split_init"))
         return rows
 
 
@@ -92,7 +92,7 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
     split=None
     prior_mask=[True]*len(arms)
     backend_graph=cg
-    with noisy_scalar_runtime(experiment):
+    with scalar_runtime(experiment):
         try:
             while True:
                 experiment.check_available()
@@ -124,16 +124,13 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
                         # The graph object is not consulted again, even to rebuild priors.
         except (BudgetExhausted,PilotComplete):
             pass
-    for model,audit in zip(getattr(experiment,"_noise_models",[]),getattr(experiment,"gp_noise_audit",[])):
-        audit["final_variance"]=float(model.likelihood.variance)
-        audit["fixed_after_fit"]=bool(model.likelihood.variance.is_fixed)
-    if hasattr(experiment,"_noise_models"): del experiment._noise_models
     if any(experiment.affordable(a) for a in experiment.arms) and not (max_purchases is not None and experiment.sequential_index==max_purchases):
         raise RuntimeError("HQCBO stopped with affordable actions remaining")
     return experiment,dict(backend="vendored-CBO-resumed-graphfree-refinement",
         algorithm_seed=algorithm_seed,new_observation_rows=0,refinement=split,
         prior_mask=prior_mask,final_arms=arms,gp_noise_audit=getattr(experiment,"gp_noise_audit",[]),
-        noise_policy="learned raw-target homoscedastic variance; init=max(.01,.1*VarY), bounds=[1e-6,1e6]",
+        feedback_mode=FEEDBACK_MODE,
+        noise_policy="fixed interventional likelihood variance (engine NOISE_VAR); exact population feedback",
         post_split_graph_access="guarded; cached original-quotient priors only")
 
 

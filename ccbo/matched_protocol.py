@@ -1,7 +1,12 @@
-"""Matched controlled experiments: learner-visible stochastic data and accounting.
+"""Matched controlled experiments: population feedback and learner accounting.
 
-Population scoring lives in a separate, post-run function. No oracle values are
-computed during a learner run. Historical exact experiment defaults are untouched.
+Every measurement returns the exact population expectation E[Y | do(X = x)] of
+the true SCM. This is the evaluation convention of the CBO reference
+implementation (Aglietti et al., 2020), whose target function averages 100,000
+SEM draws under a fixed seed; here the closed forms in ``minibench`` replace the
+Monte Carlo average. Observational data remain sampled from the SCM. The seed
+stream is pinned to the earlier single-draw protocol so observational datasets
+and initial intervention levels are identical across protocol versions.
 """
 from __future__ import annotations
 
@@ -15,7 +20,11 @@ from pathlib import Path
 import numpy as np
 from ccbo import minibench as mb
 
-PROTOCOL_ID = "matched-controlled-noisy-v2"
+PROTOCOL_ID = "matched-controlled-population-v3"
+# Pinned seed stream: keeps D^O and initial intervention levels identical to the
+# single-draw protocol so the two protocol versions differ only in feedback.
+SEED_STREAM_ID = "matched-controlled-noisy-v2"
+FEEDBACK_MODE = "population_expectation"
 DEFAULT_BUDGET = {mb.PP_NAME: 100, mb.FD_NAME: 100, mb.MC_NAME: 120}
 NODES = {mb.PP_NAME: ("X1", "X2", "Y"), mb.FD_NAME: ("X1", "M", "Y"),
          mb.MC_NAME: ("X1", "X2", "Y")}
@@ -30,7 +39,7 @@ class BudgetExhausted(Exception):
 
 
 def keyed_seed(*parts):
-    encoded = json.dumps([PROTOCOL_ID, *parts], separators=(",", ":"))
+    encoded = json.dumps([SEED_STREAM_ID, *parts], separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(encoded.encode()).digest()[:4], "little")
 
 
@@ -69,6 +78,31 @@ def sample_true(scm, iv, z):
     raise ValueError(scm)
 
 
+def natural_means(scm, iv):
+    """Population means of the non-intervened manipulable variables under do(iv)."""
+    row = dict(iv)
+    if scm == mb.PP_NAME:
+        row.setdefault("X1", 0.)
+        row.setdefault("X2", 0.)
+    elif scm == mb.FD_NAME:
+        row.setdefault("X1", 0.)
+        row.setdefault("M", mb.FD_B * row["X1"])
+    elif scm == mb.MC_NAME:
+        row.setdefault("X1", 0.)
+        row.setdefault("X2", mb.MC_BETA * row["X1"])
+    else:
+        raise ValueError(scm)
+    return row
+
+
+def population_row(scm, iv):
+    """One measurement: intervened coordinates, natural means of the remaining
+    manipulable variables, and the exact target expectation E[Y | do(iv)]."""
+    row = natural_means(scm, iv)
+    row["Y"] = mb.population_do(scm, list(iv), [iv[v] for v in iv])
+    return {v: float(row[v]) for v in NODES[scm]}
+
+
 def observational_data(scm, seed):
     """A replicate-specific shared 100-row true-SCM observational dataset."""
     import pandas as pd
@@ -95,9 +129,8 @@ class Experiment:
             rng = np.random.RandomState(keyed_seed(scm, seed, "init-levels", arm))
             xs = np.column_stack([rng.uniform(*domains(scm)[v], self.n_init) for v in arm])
             self.initial[arm] = []
-            for i, x in enumerate(xs):
-                row = self._buy(arm, x, "init", keyed_seed(scm, seed, "init-noise", arm, i))
-                self.initial[arm].append(deepcopy(row))
+            for x in xs:
+                self.initial[arm].append(deepcopy(self._buy(arm, x, "init")))
 
     @property
     def remaining(self):
@@ -112,7 +145,7 @@ class Experiment:
         if not any(self.affordable(a) for a in self.arms):
             raise BudgetExhausted()
 
-    def _buy(self, arm, values, phase, noise_seed):
+    def _buy(self, arm, values, phase):
         supplied = tuple(arm)
         x = np.asarray(values, dtype=float).ravel()
         if len(supplied) != len(x) or len(set(supplied)) != len(supplied):
@@ -125,11 +158,10 @@ class Experiment:
             raise BudgetExhausted()
         if any(not np.isfinite(v) or not domains(self.scm)[k][0]-1e-9 <= v <= domains(self.scm)[k][1]+1e-9 for k,v in iv.items()):
             raise ValueError("intervention outside declared domain")
-        z = np.random.RandomState(noise_seed).randn(4)
-        row = sample_true(self.scm, iv, z)
+        row = population_row(self.scm, iv)
         self.cost += len(arm)
         event = dict(event_id=len(self.events), phase=phase, arm=list(arm),
-                     x=[iv[v] for v in arm], measured=row, noise_seed=noise_seed,
+                     x=[iv[v] for v in arm], measured=row,
                      cost=len(arm), cum_cost=self.cost)
         self.events.append(event)
         recommendation = min(self.events, key=lambda e: (e["measured"]["Y"], tuple(e["arm"]), e["event_id"]))
@@ -138,8 +170,7 @@ class Experiment:
 
     def purchase(self, arm, values):
         self.check_available()
-        row = self._buy(arm, values, "sequential",
-                        keyed_seed(self.scm, self.seed, "sequential-noise", self.sequential_index))
+        row = self._buy(arm, values, "sequential")
         self.sequential_index += 1
         return row
 
@@ -160,7 +191,11 @@ class Experiment:
 
 
 def score_events(scm, events, budget):
-    """Post-run oracle evaluation of data-selected recommendations; never cummin μ."""
+    """Post-run population scoring of data-selected recommendations.
+
+    Under population feedback the measured target equals the population value,
+    so the recommendation is the best executed action; the routine is kept as
+    the single scoring path for every method and protocol version."""
     oracle = mb.population_evaluator(scm)
     optimum = {mb.PP_NAME: 0., mb.FD_NAME: 0., mb.MC_NAME: mb.MC_SIGMA_2**2}[scm]
     result, best, oracle_best = [], None, float("inf")
@@ -187,58 +222,57 @@ def score_events(scm, events, budget):
 
 
 @contextmanager
-def noisy_scalar_runtime(experiment):
-    """Scoped opt-in likelihood and affordable-arm hooks; exact defaults preserved.
+def scalar_runtime(experiment):
+    """Scoped affordable-arm and budget hooks around the vendored CBO loop.
 
-    Raw-target Gaussian variance is estimated, initialized at max(.01,.1 VarY),
-    bounded [1e-6,1e6]. This homoscedastic approximation is explicitly recorded.
+    Surrogate construction is left to the engine: interventional targets are
+    exact population expectations, so the interventional likelihood variance
+    stays fixed at the engine default (``BO_functions.NOISE_VAR``) and
+    hyperparameters follow the reference loop unchanged. Every rebuilt arm
+    surrogate and every acquisition call is audited so the fixed-noise policy
+    is verifiable post hoc.
     """
     import importlib
     cbo = importlib.import_module("ccbo.cbo.cbo")
     bo = importlib.import_module("ccbo.cbo.bo")
     old_build, old_next, old_fix = cbo.update_BO_models, cbo.find_next_y_point, bo.fix_noise
 
-    def learn_noise(model, value=None):
-        model.likelihood.variance.unfix()
-        model.likelihood.variance[:] = max(.01, .1*float(np.var(model.Y)))
-        model.likelihood.variance.constrain_bounded(1e-6, 1e6, warning=False)
+    def record(gpy_model):
         if not hasattr(experiment, "gp_noise_audit"):
             experiment.gp_noise_audit = []
-            experiment._noise_models = []
-        experiment._noise_models.append(model)
-        experiment.gp_noise_audit.append(dict(initial_variance=float(model.likelihood.variance), fixed=bool(model.likelihood.variance.is_fixed), policy="learned", n_rows=len(model.Y)))
-        return model
+        audit = dict(variance=float(gpy_model.likelihood.variance),
+                     fixed=bool(gpy_model.likelihood.variance.is_fixed),
+                     policy="fixed", n_rows=len(gpy_model.Y), acquisition_snapshots=[])
+        experiment.gp_noise_audit.append(audit)
+        return audit
 
     def build(*args, **kwargs):
         wrapper = old_build(*args, **kwargs)
-        learn_noise(wrapper.model)
-        # Vendored CBO rebuilds the selected GP before acquisition, discarding
-        # its previous post-response fit. Fit the newly rebuilt noisy GP here.
-        wrapper.optimize()
-        audit = experiment.gp_noise_audit[-1]
-        audit["fitted_before_acquisition"] = True
-        audit["fitted_variance"] = float(wrapper.model.likelihood.variance)
-        audit["fitted_parameters"] = wrapper.model.param_array.tolist()
-        audit["acquisition_snapshots"] = []
-        wrapper._matched_noise_audit = audit
+        wrapper._matched_noise_audit = record(wrapper.model)
         return wrapper
+
+    def fix_noise_bo(gpy_model, *args, **kwargs):
+        # The joint BO baseline builds its single surrogate in ccbo.cbo.bo.
+        gpy_model = old_fix(gpy_model, *args, **kwargs)
+        record(gpy_model)
+        return gpy_model
 
     def next_point(space, model, current, arm, costs, task="min"):
         experiment.check_available()
         if not experiment.affordable(arm):
             return np.full((1, 1), -np.inf), np.zeros((1, len(arm)))
         audit = getattr(model, "_matched_noise_audit", None)
-        if audit is None or not audit.get("fitted_before_acquisition"):
-            raise RuntimeError("noisy CBO acquisition received an unfitted model")
-        parameters = model.model.param_array.tolist()
-        if parameters != audit["fitted_parameters"]:
-            raise RuntimeError("CBO acquisition parameters differ from pre-acquisition fit")
+        if audit is None:
+            raise RuntimeError("acquisition received a surrogate built outside the matched runtime")
+        if not model.model.likelihood.variance.is_fixed:
+            raise RuntimeError("interventional likelihood variance must stay fixed under population feedback")
         audit["acquisition_snapshots"].append(dict(
             arm=list(arm), n_rows=len(model.model.Y),
-            variance=float(model.model.likelihood.variance), parameters=parameters))
+            variance=float(model.model.likelihood.variance),
+            parameters=model.model.param_array.tolist()))
         return old_next(space, model, current, arm, costs, task=task)
 
-    cbo.update_BO_models, cbo.find_next_y_point, bo.fix_noise = build, next_point, learn_noise
+    cbo.update_BO_models, cbo.find_next_y_point, bo.fix_noise = build, next_point, fix_noise_bo
     try:
         yield
     finally:
@@ -272,7 +306,7 @@ def run_scalar(scm, cond, method, seed, budget=None, n_init=3, max_purchases=Non
     _, _, coverage = compute_coverage(obs, manip, ranges)
     experiment = Experiment(scm, seed, arms, budget, n_init, max_purchases)
     xs, ys, bestx, besty, bestarm = experiment.scalar_initial(arms)
-    with noisy_scalar_runtime(experiment):
+    with scalar_runtime(experiment):
         try:
             if method == "BO":
                 NonCausal_BO(experiment.budget, cg, ranges, xs[0], ys[0], costs,
@@ -285,15 +319,11 @@ def run_scalar(scm, cond, method, seed, budget=None, n_init=3, max_purchases=Non
                     target_evaluator=experiment.target, force_observe_on_entry=False)
         except (BudgetExhausted, PilotComplete):
             pass
-    for model, audit in zip(getattr(experiment, "_noise_models", []), getattr(experiment, "gp_noise_audit", [])):
-        audit["final_variance"] = float(model.likelihood.variance)
-        audit["fixed_after_fit"] = bool(model.likelihood.variance.is_fixed)
-    if hasattr(experiment, "_noise_models"):
-        del experiment._noise_models
     experiment.check_available_if_complete = not any(experiment.affordable(a) for a in experiment.arms)
     if not experiment.check_available_if_complete and not (max_purchases is not None and experiment.sequential_index == max_purchases):
         raise RuntimeError("backend stopped with affordable actions remaining")
     return experiment, dict(backend="vendored-CBO" if method != "BO" else "vendored-BO",
                             algorithm_seed=algorithm_seed, new_observation_rows=0,
                             gp_noise_audit=getattr(experiment, "gp_noise_audit", []),
-                            noise_policy="learned raw-target homoscedastic variance; init=max(.01,.1*VarY), bounds=[1e-6,1e6]")
+                            feedback_mode=FEEDBACK_MODE,
+                            noise_policy="fixed interventional likelihood variance (engine NOISE_VAR); exact population feedback")

@@ -12,7 +12,7 @@ from unittest.mock import patch
 import numpy as np
 from ccbo import minibench as mb
 from ccbo.matched_protocol import (Experiment, BudgetExhausted, PilotComplete,
-    all_arms, sample_true, score_events, observational_data, keyed_seed, run_scalar)
+    all_arms, sample_true, population_row, score_events, observational_data, keyed_seed, run_scalar)
 
 
 class MatchedProtocolTests(unittest.TestCase):
@@ -34,11 +34,25 @@ class MatchedProtocolTests(unittest.TestCase):
         self.assertFalse(a.equals(observational_data(mb.FD_NAME,1001)))
         self.assertNotEqual(keyed_seed("a","observational"), keyed_seed("a","init-noise"))
 
-    def test_measurement_does_not_call_population_oracle(self):
-        with patch.object(mb, "population_evaluator", side_effect=AssertionError("oracle reached learner")):
-            a = Experiment(mb.PP_NAME,1000,all_arms(mb.PP_NAME))
-            a.purchase(("X1",),[.2])
-        self.assertEqual(len(a.events),10)
+    def test_measurement_is_exact_population_expectation(self):
+        for scm in (mb.PP_NAME, mb.FD_NAME, mb.MC_NAME):
+            a = Experiment(scm, 1000, all_arms(scm))
+            oracle = mb.population_evaluator(scm)
+            for e in a.events:
+                self.assertEqual(e["measured"]["Y"], oracle(e["arm"], e["x"]))
+                for v, z in zip(e["arm"], e["x"]):
+                    self.assertEqual(e["measured"][v], z)
+            first = a.purchase(("X1",), [.2])
+            self.assertEqual(first["Y"], oracle(["X1"], [.2]))
+            self.assertEqual(first, a.purchase(("X1",), [.2]))  # deterministic feedback
+        self.assertEqual(len(a.events), 11)  # MediatedChain: 3 arms x 3 initial rows + 2 purchases
+
+    def test_natural_means_of_unintervened_variables(self):
+        self.assertEqual(population_row(mb.PP_NAME, {"X1": .2}), {"X1": .2, "X2": 0., "Y": mb.pp_do_x1(.2)})
+        self.assertEqual(population_row(mb.FD_NAME, {"X1": .5}), {"X1": .5, "M": 1., "Y": mb.fd_do_x1(.5)})
+        self.assertEqual(population_row(mb.FD_NAME, {"M": 1.}), {"X1": 0., "M": 1., "Y": mb.fd_do_m(1.)})
+        self.assertEqual(population_row(mb.MC_NAME, {"X1": .5}), {"X1": .5, "X2": 1., "Y": mb.mc_do_x1(.5)})
+        self.assertEqual(population_row(mb.MC_NAME, {"X2": 2.}), {"X1": 0., "X2": 2., "Y": 4.})
 
     def test_budget_and_pilot_cap_are_distinct(self):
         e=Experiment(mb.PP_NAME,1000,all_arms(mb.PP_NAME),budget=13)
@@ -95,21 +109,24 @@ class MatchedProtocolTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("MATCHED_INTEGRATION")=="1", "requires full runtime; opt in explicitly")
 class ExistingBackendIntegrationTests(unittest.TestCase):
-    def test_scalar_backends_are_noisy_and_budgeted(self):
+    def test_scalar_backends_are_exact_and_budgeted(self):
+        from ccbo.cbo.utils.BO_functions import NOISE_VAR
         for method in ("CBO","QCBO","BO-S","BO"):
             e,meta=run_scalar(mb.PP_NAME,"A0",method,1000,max_purchases=1)
             self.assertEqual(e.sequential_index,1)
             self.assertEqual(meta["new_observation_rows"],0)
+            self.assertEqual(meta["feedback_mode"],"population_expectation")
             self.assertTrue(meta["gp_noise_audit"])
-            self.assertTrue(all(not x["fixed"] for x in meta["gp_noise_audit"]))
+            self.assertTrue(all(x["fixed"] and x["variance"]==NOISE_VAR for x in meta["gp_noise_audit"]))
             oracle=mb.population_evaluator(e.scm)
-            self.assertTrue(any(abs(row["measured"]["Y"]-oracle(row["arm"],row["x"]))>1e-8 for row in e.events))
+            self.assertTrue(all(row["measured"]["Y"]==oracle(row["arm"],row["x"]) for row in e.events))
             if method == "CBO":
-                with patch.object(mb, "population_evaluator", side_effect=AssertionError("oracle reached backend")), patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached backend")):
-                    poisoned,_=run_scalar(mb.PP_NAME,"A0",method,1000,max_purchases=1)
-                self.assertEqual(e.events,poisoned.events)
+                with patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached backend")):
+                    again,_=run_scalar(mb.PP_NAME,"A0",method,1000,max_purchases=1)
+                self.assertEqual(e.events,again.events)
 
-    def test_affordable_singleton_and_fit_before_acquisition(self):
+    def test_affordable_singleton_acquisitions_are_audited(self):
+        from ccbo.cbo.utils.BO_functions import NOISE_VAR
         e,meta=run_scalar(mb.PP_NAME,"A0","BO-S",1000,budget=13)
         self.assertEqual(sum(x["cost"] for x in e.events if x["phase"]=="init"),12)
         self.assertEqual(e.cost,13)
@@ -118,12 +135,10 @@ class ExistingBackendIntegrationTests(unittest.TestCase):
         audited=[a for a in meta["gp_noise_audit"] if a.get("acquisition_snapshots")]
         self.assertEqual(len(audited),2)  # both affordable singleton acquisitions
         for audit in audited:
-            self.assertTrue(audit["fitted_before_acquisition"])
+            self.assertTrue(audit["fixed"])
             for call in audit["acquisition_snapshots"]:
-                self.assertEqual(call["parameters"],audit["fitted_parameters"])
-                self.assertEqual(call["variance"],audit["fitted_variance"])
+                self.assertEqual(call["variance"],NOISE_VAR)
                 self.assertEqual(call["n_rows"],3)
-        self.assertTrue(any(a["initial_variance"] != a["fitted_variance"] for a in audited))
 
     def test_protected_qcbo_pair_uses_identical_measurements(self):
         a,_=run_scalar(mb.PP_NAME,"A0","QCBO",1000,max_purchases=2)
@@ -134,7 +149,7 @@ class ExistingBackendIntegrationTests(unittest.TestCase):
         import sys
         sys.path.insert(0,str(Path(__file__).resolve().parents[2]/"scripts"))
         from matched_ceo_runtime import run_ceo
-        with patch.object(mb, "population_evaluator", side_effect=AssertionError("oracle reached CEO")), patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached CEO")):
+        with patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached CEO")):
             e,meta=run_ceo(mb.MC_NAME,"C0",1000,max_purchases=3,ceo_root=os.environ.get("CEO_ROOT"))
         self.assertEqual(e.sequential_index,3)
         self.assertEqual(meta["feedback_audit"],dict(measurement_calls=3,bookkeeping_replays=3))
