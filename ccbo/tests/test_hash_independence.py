@@ -16,7 +16,7 @@ _PROBE = textwrap.dedent("""
     import numpy as np
     from ccbo import minibench as mb
     from ccbo.matched_protocol import observational_data
-    from ccbo.run_experiment import get_original_graph
+    from ccbo.scm_graphs import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
     dataset, n_obs = sys.argv[1], int(sys.argv[2])
     mb.register_variants()

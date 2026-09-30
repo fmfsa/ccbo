@@ -223,29 +223,12 @@ def get_hidden_confounders(graph_name):
     multiple clusters.
 
     The confounder information is the same for all structural variants of
-    a graph (e.g. ``CompleteGraph``, ``CompleteGraph_NoBC``).
+    a graph (e.g. ``ParallelParent``, ``ParallelParent_NoX1Y``).
     """
-    if graph_name in ('CompleteGraph', 'CompleteGraph_NoBC', 'CompleteGraph_NoCD'):
-        return [
-            ('U1', ['A', 'Y']),
-            ('U2', ['B', 'Y']),
-        ]
-    elif graph_name == 'ToyGraph':
+    if graph_name == 'ToyGraph':
         return [
             ('U', ['X', 'Y']),
         ]
-    elif graph_name in ('ConfoundedCluster', 'ConfoundedCluster_WrongBC'):
-        # U is the latent confounder shared by B and C in the SEM; it
-        # produces observational corr(B, C) > 0, which is what makes the
-        # WrongBC misspecification (a spurious B -> C edge) actually flip
-        # CBO's identifiability verdict for do(B).
-        return [
-            ('U', ['B', 'C']),
-        ]
-    elif graph_name in ('Tier1Graph', 'Tier1Graph_NoBC'):
-        # No latent confounders: Tier1Graph is a plain DAG, so the NoBC
-        # misspecification only biases priors (Tier-1), never identifiability.
-        return []
     elif graph_name in _REGISTERED_GRAPHS:
         return [(lat, list(vs))
                 for lat, vs in _REGISTERED_GRAPHS[graph_name]['confounders']]
@@ -260,7 +243,8 @@ def get_dag_edges_from_sem(graph_name):
     Parameters
     ----------
     graph_name : str
-        'ToyGraph' or 'CompleteGraph'
+        'ToyGraph' or a graph registered with :func:`register_graph`
+        (the MinimalBench SCMs and their variants).
 
     Returns
     -------
@@ -275,115 +259,6 @@ def get_dag_edges_from_sem(graph_name):
         hidden_nodes = []
         manipulative_variables = ['X', 'Z']
 
-    elif graph_name == 'CompleteGraph':
-        # From the SEM: B->C, C->D, A->E, C->E, D->Y, E->Y
-        # U1->A, U1->Y, U2->B, U2->Y are through hidden confounders
-        # Observable edges only (matches Aglietti et al. 2020, Figure 2):
-        dag_edges = [
-            ('B', 'C'), ('C', 'D'),
-            ('A', 'E'), ('C', 'E'), ('D', 'Y'), ('E', 'Y'),
-        ]
-        nodes = ['A', 'B', 'C', 'D', 'E', 'Y']
-        hidden_nodes = []  # U1, U2 are not in the observable node set
-        manipulative_variables = ['B', 'D', 'E']
-
-    elif graph_name == 'CompleteGraph_NoCD':
-        # Misspecified CompleteGraph: C->D edge removed
-        dag_edges = [
-            ('B', 'C'),
-            ('A', 'E'), ('C', 'E'), ('D', 'Y'), ('E', 'Y'),
-        ]
-        nodes = ['A', 'B', 'C', 'D', 'E', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['B', 'D', 'E']
-
-    elif graph_name == 'CompleteGraph_NoBC':
-        # Misspecified CompleteGraph: B->C edge removed
-        dag_edges = [
-            ('C', 'D'),
-            ('A', 'E'), ('C', 'E'), ('D', 'Y'), ('E', 'Y'),
-        ]
-        nodes = ['A', 'B', 'C', 'D', 'E', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['B', 'D', 'E']
-
-    elif graph_name == 'ConfoundedCluster':
-        # Three direct parents of Y; no manipulable-to-manipulable edges.
-        # U is hidden (declared in get_hidden_confounders) and yields a
-        # bidirected B<->C edge in the projected ADMG.
-        dag_edges = [
-            ('A', 'Y'), ('B', 'Y'), ('C', 'Y'),
-        ]
-        nodes = ['A', 'B', 'C', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['A', 'B', 'C']
-
-    elif graph_name == 'ConfoundedCluster_WrongBC':
-        # Misspecification: a spurious intra-cluster edge B -> C inside the
-        # confounded cluster {B, C}. Together with the U-induced bidirected
-        # B <-> C this forms a bow, so P(Y | do(B)) is NOT identifiable from
-        # this assumed DAG — the fine-grained exploration set loses its best
-        # singleton target {B} (B has the largest effect on Y). Under the
-        # coarsening {A}|{B,C}|{Y}, both endpoints of B->C sit in cluster
-        # {B,C}; Lee-2019 latent projection drops the edge, so the C-DAG is
-        # identical to ConfoundedCluster's and CCBO is provably unaffected.
-        dag_edges = [
-            ('B', 'C'),
-            ('A', 'Y'), ('B', 'Y'), ('C', 'Y'),
-        ]
-        nodes = ['A', 'B', 'C', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['A', 'B', 'C']
-
-    elif graph_name == 'Tier1Graph':
-        # Lossless-coarsening self-healing benchmark. C is a non-manipulable
-        # mediator with two parents B, D; the misspecification deletes B -> C.
-        dag_edges = [
-            ('B', 'C'), ('D', 'C'),
-            ('C', 'Y'), ('B', 'Y'), ('D', 'Y'), ('E', 'Y'),
-        ]
-        nodes = ['B', 'D', 'E', 'C', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['B', 'D', 'E']
-
-    elif graph_name == 'Tier1Graph_NoBC':
-        # Misspecified Tier1Graph: the edge B -> C removed. No arm changes
-        # identifiability (|ES| unchanged) — it only corrupts the prior mean of
-        # every B-containing arm (the C -> Y path is not cut by intervening on
-        # {B,D,E}), so even the optimal arm do(B,D,E) is mis-primed and then
-        # self-heals. Under the coarse partition {B,D}|{E} the cluster edge
-        # {B,D} -> C survives via D -> C (redundancy), so the C-DAG is
-        # byte-identical to Tier1Graph's and QCBO is provably unaffected.
-        dag_edges = [
-            ('D', 'C'),
-            ('C', 'Y'), ('B', 'Y'), ('D', 'Y'), ('E', 'Y'),
-        ]
-        nodes = ['B', 'D', 'E', 'C', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['B', 'D', 'E']
-
-    elif graph_name in ('SimplifiedCoralGraph', 'SimplifiedCoralGraph_NoST'):
-        # SEM from SimplifiedCoralGraph.py:
-        #   N, L exogenous; TE<-L; C<-{N,L,TE}; S<-TE;
-        #   T<-S; D<-S; P<-{S,T,D,TE}; O<-{S,T,D,TE};
-        #   CO<-{S,T,D,TE}; Y<-{L,N,P,O,C,CO,TE}
-        # Manipulative: N, O, C, T, D  (no hidden confounders)
-        dag_edges = [
-            ('L', 'TE'), ('L', 'C'), ('L', 'Y'),
-            ('N', 'C'), ('N', 'Y'),
-            ('TE', 'C'), ('TE', 'S'), ('TE', 'P'), ('TE', 'O'), ('TE', 'CO'), ('TE', 'Y'),
-            ('S', 'T'), ('S', 'D'), ('S', 'P'), ('S', 'O'), ('S', 'CO'),
-            ('T', 'P'), ('T', 'O'), ('T', 'CO'),
-            ('D', 'P'), ('D', 'O'), ('D', 'CO'),
-            ('P', 'Y'), ('O', 'Y'), ('C', 'Y'), ('CO', 'Y'),
-        ]
-        if graph_name == 'SimplifiedCoralGraph_NoST':
-            # Misspecification: remove S->T (intra-cluster edge inside {S,T,D})
-            dag_edges = [e for e in dag_edges if e != ('S', 'T')]
-        nodes = ['N', 'L', 'TE', 'C', 'S', 'T', 'D', 'P', 'O', 'CO', 'Y']
-        hidden_nodes = []
-        manipulative_variables = ['N', 'O', 'C', 'T', 'D']
-
     elif graph_name in _REGISTERED_GRAPHS:
         g = _REGISTERED_GRAPHS[graph_name]
         return (list(g['dag_edges']), list(g['nodes']),
@@ -393,46 +268,6 @@ def get_dag_edges_from_sem(graph_name):
         raise ValueError(f"Unknown graph: {graph_name}")
 
     return dag_edges, nodes, hidden_nodes, manipulative_variables
-
-
-# ---------------------------------------------------------------------------
-# Printing / diagnostic
-# ---------------------------------------------------------------------------
-
-def print_coarsenings(graph_name):
-    """Print all valid coarsenings for a given graph."""
-    dag_edges, nodes, hidden_nodes, manip_vars = get_dag_edges_from_sem(graph_name)
-    hidden_confounders = get_hidden_confounders(graph_name)
-    coarsenings = enumerate_valid_coarsenings(dag_edges, nodes, target='Y',
-                                              hidden_nodes=hidden_nodes,
-                                              hidden_confounders=hidden_confounders)
-
-    print(f"\n{'='*60}")
-    print(f"Valid coarsenings for {graph_name}")
-    print(f"Observable nodes: {nodes}")
-    print(f"Manipulative variables: {manip_vars}")
-    print(f"DAG edges: {dag_edges}")
-    print(f"Number of valid coarsenings: {len(coarsenings)}")
-    print(f"{'='*60}")
-
-    for i, c in enumerate(coarsenings):
-        parts_str = ' | '.join(
-            '{' + ','.join(sorted(p)) + '}' for p in c['partition']
-        )
-        q_edges = list(c['coarsened_dag'].edges)
-        q_edges_str = ', '.join(
-            '{' + ','.join(sorted(u)) + '}→{' + ','.join(sorted(v)) + '}'
-            for u, v in q_edges
-        )
-        print(f"\n  Coarsening {i}: [{parts_str}]")
-        print(f"    Parts: {c['num_parts']}, Quotient edges: {q_edges_str}")
-
-        # Show which manipulative variables are in each coarsened node
-        for part in c['partition']:
-            manip_in_part = sorted(set(manip_vars) & part)
-            if manip_in_part:
-                print(f"    Manipulative node {{{','.join(sorted(part))}}}: "
-                      f"intervene on {manip_in_part}")
 
 
 # ---------------------------------------------------------------------------
@@ -585,8 +420,7 @@ def project_graph_to_M_and_Y(graph_name):
     (both hidden confounders and non-manipulable observables).
 
     Kept for the Prop 4 ablation — demonstrating that when ``N`` is absorbed
-    into bidirected edges, POMIS may collapse (e.g. on CompleteGraph to
-    ``{∅}``).  Not used in the main pipeline.  For the main pipeline use
+    into bidirected edges, POMIS may collapse to ``{∅}``.  Not used in the main pipeline.  For the main pipeline use
     :func:`project_out_hidden`.
     """
     dag_edges, nodes, hidden_nodes, manip_vars = get_dag_edges_from_sem(graph_name)
@@ -850,14 +684,13 @@ def compute_POMIS(admg, manipulable_vertices, target):
         IB(G_X̄, target) ∩ M = X.
 
     The restriction to M is necessary whenever the graph contains
-    non-manipulable variables with direct paths to ``target`` (e.g.
-    SimplifiedCoralGraph: L→Y, TE→Y).  Those nodes are always in IB but
+    non-manipulable variables with direct paths to ``target``.  Those nodes are always in IB but
     cannot be controlled, so the strict Lee-Bareinboim condition
     IB = X would yield an empty POMIS.  Restricting to M recovers the
     correct semantics: X covers all *controllable* causal paths.
 
-    On graphs where IB(G, target) ⊆ M (e.g. CompleteGraph), M-POMIS is
-    identical to the original POMIS.
+    On graphs where IB(G, target) ⊆ M, M-POMIS is identical to the
+    original POMIS.
 
     Parameters
     ----------
@@ -973,18 +806,6 @@ def admg_to_ananke(admg, name_map=None):
     di = [(name_map[u], name_map[v]) for u, v in admg['di']]
     bi = [tuple(sorted(name_map[x] for x in tuple(e))) for e in admg['bi']]
     return ADMG(vs, di, bi), name_map
-
-
-if __name__ == '__main__':
-    print_coarsenings('CompleteGraph')
-    print()
-    print('=' * 60)
-    print('Lee-2019 projection of CompleteGraph onto M ∪ {Y}')
-    print('=' * 60)
-    projected = project_graph_to_M_and_Y('CompleteGraph')
-    print('vertices:', sorted(projected['vertices']))
-    print('directed:', sorted(projected['di']))
-    print('bidirected:', sorted((sorted(tuple(e)) for e in projected['bi'])))
 
 
 def apply_ops(edges,

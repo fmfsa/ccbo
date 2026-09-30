@@ -12,8 +12,7 @@ Protocol note: the CBO-2020 paper's "N = 100 observational samples" is the
 *initial* slice — the runners pass ``initial_num_obs_samples=100`` and use
 only ``observations.pkl[:100]`` to fit priors at trial 0.  The remaining
 rows are the pool the CBO loop's epsilon-greedy *observe* trials draw from
-(20 fresh rows per observation), exactly like the other vendored benchmarks
-(CompleteGraph ships 500 rows, SimplifiedCoralGraph 1000, Tier1Graph 5000).
+(20 fresh rows per observation).
 A pool of exactly 100 rows starves the observe steps (they become no-ops)
 and leaves the do(Z) prior with no coverage below Z ~= -2.5, which repels
 the search from the optimum z* ~= -3.2.

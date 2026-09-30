@@ -13,7 +13,7 @@ spec.loader.exec_module(paper)
 
 
 def test_paper_matrices_and_scientific_settings():
-    for suite, count, seeds in [('static',720,30),('mcbo',200,20),('dynamic',180,20)]:
+    for suite, count, seeds in [('static',630,30),('mcbo',200,20),('dynamic',180,20)]:
         units = paper.units(suite)
         assert len(units) == count
         assert len({u['id'] for u in units}) == count
@@ -64,8 +64,8 @@ def test_completed_resume_requires_intact_data_and_same_code(tmp_path):
 
 
 def test_scientific_settings_match_original_paper_matrices():
-    # Fingerprints independently derived from all 720/200/180 original unit IDs/options.
-    expected = {'static': '7448bc7426e5db07fde112e17ad1235f20483a0eb140dea05cee21f7777a7c53', 'mcbo': 'baa705f814ca543ffceea8f3eac40145cdcd046f56644f5a5a6d83b74661fe43', 'dynamic': 'cedbda111bbed0498f2cac1d17b7629688774cdacbc928d3d729ffa6a5e1edd5'}
+    # Fingerprints of all 630/200/180 unit IDs/options (the original 720 static units minus CEO).
+    expected = {'static': '01d04429ca19fbbc3c54cb83a8d42862132dc04c2d1c82a19e3f2e8ffb6b99a5', 'mcbo': 'baa705f814ca543ffceea8f3eac40145cdcd046f56644f5a5a6d83b74661fe43', 'dynamic': 'cedbda111bbed0498f2cac1d17b7629688774cdacbc928d3d729ffa6a5e1edd5'}
     for suite, sha in expected.items():
         rows = sorted([{"id":u["id"],"options":u["options"]} for u in paper.units(suite)],key=lambda r:r["id"])
         assert hashlib.sha256(json.dumps(rows,sort_keys=True,separators=(",",":")).encode()).hexdigest() == sha

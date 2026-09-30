@@ -32,13 +32,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--scm", required=True, choices=list(DEFAULT_BUDGET))
     p.add_argument("--cond", required=True)
-    p.add_argument("--method", required=True, choices=["CBO", "QCBO", "BO-S", "BO", "CBO-NP", "QCBO-NP", "CEO", "HQCBO", "CBO-FALLBACK"])
+    p.add_argument("--method", required=True, choices=["CBO", "QCBO", "BO-S", "BO", "CBO-NP", "HQCBO", "CBO-FALLBACK"])
     p.add_argument("--seed", required=True, type=int)
     p.add_argument("--stage", required=True, choices=["pilot", "replication"])
     p.add_argument("--max-purchases", type=int, help="pilot only: sequential purchases after initialization")
     p.add_argument("--budget", type=int, help="pilot override only; primary defaults100/120")
-    p.add_argument("--anchors", type=int, default=35)
-    p.add_argument("--ceo-root", default=os.environ.get("CEO_ROOT"))
     p.add_argument("--outdir", required=True)
     args = p.parse_args()
     if args.stage == "replication" and (args.seed not in range(2000,2030) or args.max_purchases is not None or args.budget is not None):
@@ -49,8 +47,6 @@ def main():
         p.error("max-purchases must be positive")
     if not any(x["scm"] == args.scm and x["id"] == args.cond for x in mb.PERTURBATIONS):
         p.error("condition does not belong to selected SCM")
-    if args.stage == "replication" and args.anchors != 35:
-        p.error("replication freezes CEO anchors at35")
     out = Path(args.outdir)
     if out.exists() and any(out.iterdir()):
         p.error("outdir must be empty; stale results cannot be resumed implicitly")
@@ -63,21 +59,12 @@ def main():
                   feedback_mode="single_true_SCM_draw", recommendation_rule="minimum_measured_Y;ties_canonical_arm_then_execution_index",
                   budget=DEFAULT_BUDGET[args.scm] if args.budget is None else args.budget,
                   observational_sha256=hashlib.sha256(obs_bytes).hexdigest())
-    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "scripts/matched_ceo_runtime.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "ccbo/baselines/ceo.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py"]
+    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py"]
     config["source_sha256"] = {f:digest(ROOT/f) for f in source_files}
-    if args.method == "CEO":
-        ceo_path = Path(args.ceo_root) if args.ceo_root else ROOT/"third_party"/"CEO"
-        config["ceo_source_sha256"] = {str(f.relative_to(ceo_path)):digest(f) for f in sorted((ceo_path/"src").rglob("*.py"))}
-        if not config["ceo_source_sha256"]:
-            p.error("CEO source directory is missing or empty")
     (out/"config.json").write_text(json.dumps(config, indent=2))
     started = time.time()
     try:
-        if args.method == "CEO":
-            from matched_ceo_runtime import run_ceo
-            experiment, meta = run_ceo(args.scm, args.cond, args.seed, args.budget,
-                                      anchors=args.anchors, ceo_root=args.ceo_root, max_purchases=args.max_purchases)
-        elif args.method == "CBO-FALLBACK":
+        if args.method == "CBO-FALLBACK":
             from matched_fallback import run_fallback
             experiment, meta = run_fallback(args.scm, args.cond, args.seed, args.budget, max_purchases=args.max_purchases)
         elif args.method == "HQCBO":

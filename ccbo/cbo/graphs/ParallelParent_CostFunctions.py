@@ -1,6 +1,6 @@
 """Cost functions for the ParallelParent SCM (MinimalBench).
 
-Same layout as ConfoundedCluster_CostFunctions.py. The minimal suite uses
+One fixed-cost function per manipulable variable. The minimal suite uses
 ``type_cost=1`` (unit cost per intervention).
 """
 

@@ -68,7 +68,7 @@ def code_identity():
     files += list(CONFIGS.glob('*.json'))
     files += [Path(__file__).resolve()]
     # Include fetched upstream implementations; absent vendors are diagnosed by their backend.
-    for vendor in ('CEO', 'DCBO', 'mcbo'):
+    for vendor in ('DCBO', 'mcbo'):
         path = ROOT / 'third_party' / vendor
         if path.exists():
             files += list(path.rglob('*.py'))

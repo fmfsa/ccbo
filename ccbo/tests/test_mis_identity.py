@@ -6,11 +6,9 @@ Three layers of evidence, per graph:
   1. ``compute_MIS`` on the projected full DAG equals the hand-derived
      Lee & Bareinboim 2018 ground truth (X ⊆ M is a MIS iff X ⊆ An(Y) in
      G_X̄).
-  2. It equals the vendored graphs' ``get_sets()`` MIS.  Two of the four
-     lists shipped by the CBO-2020 authors deviated from the MIS
-     definition (ToyGraph included the non-minimal {X, Z}; CoralGraph
-     truncated at size 3) and were corrected in this fork — the deviation
-     is disclosed in the paper's appendix.
+  2. It equals the vendored graphs' ``get_sets()`` MIS.  The ToyGraph list
+     shipped by the CBO-2020 authors included the non-minimal {X, Z} and
+     was corrected in this fork.
   3. POMIS ⊆ MIS (a POMIS X satisfies IB(G_X̄) ∩ M = X and IB members are
      ancestors of Y in G_X̄).
 
@@ -22,7 +20,6 @@ do(Z)).
 """
 
 import os
-from itertools import combinations
 
 import pandas as pd
 import pytest
@@ -31,26 +28,23 @@ from ccbo.coarsening import (get_dag_edges_from_sem, project_out_hidden,
                              build_coarsened_admg, compute_MIS,
                              compute_POMIS)
 from ccbo.coarsened_graph import CoarsenedGraph
+from ccbo.minibench import register_variants
+from ccbo.scm_graphs import get_original_graph
 
 
 DATA = os.path.join(os.path.dirname(__file__), '..', 'cbo', 'data')
+register_variants()
 
 # Hand-derived LB18 ground truth (sorted lists of sorted member lists).
 EXPECTED_MIS = {
     # X -> Z -> Y, X <-> Y: {X, Z} is NOT minimal (mutilating Z orphans X).
     'ToyGraph': [['X'], ['Z']],
-    # B -> C -> {D, E}, D -> Y, E -> Y: {B, D, E} is NOT minimal
-    # (mutilating D and E orphans B); the other six subsets are.
-    'CompleteGraph': [['B'], ['B', 'D'], ['B', 'E'], ['D'], ['D', 'E'],
-                      ['E']],
-    # B, D, E all keep direct edges to Y: all 7 subsets are minimal.
-    'Tier1Graph': [['B'], ['B', 'D'], ['B', 'D', 'E'], ['B', 'E'], ['D'],
-                   ['D', 'E'], ['E']],
-    # Every manipulable keeps a directed path to Y through never-intervened
-    # non-manipulables: all 31 subsets are minimal.
-    'SimplifiedCoralGraph': sorted(
-        sorted(c) for r in range(1, 6)
-        for c in combinations(['C', 'D', 'N', 'O', 'T'], r)),
+    # X1 -> Y <- X2, X1 <-> X2: both parents keep direct edges to Y.
+    'ParallelParent': [['X1'], ['X1', 'X2'], ['X2']],
+    # X1 -> M -> Y, X1 <-> Y: {X1, M} is NOT minimal (fixing M orphans X1).
+    'FrontDoor': [['M'], ['X1']],
+    # X1 -> X2 -> Y: {X1, X2} is NOT minimal.
+    'MediatedChain': [['X1'], ['X2']],
 }
 
 
@@ -74,23 +68,7 @@ def _computed_mis(name, partition=None):
 def _vendored_mis(name):
     """The vendored graph class's get_sets() MIS, sorted."""
     obs = pd.read_pickle(os.path.join(DATA, name, 'observations.pkl'))
-    if name == 'ToyGraph':
-        from ccbo.cbo.graphs import ToyGraph
-        g = ToyGraph(obs)
-    elif name == 'CompleteGraph':
-        from ccbo.cbo.graphs import CompleteGraph
-        g = CompleteGraph(obs)
-    elif name == 'Tier1Graph':
-        from ccbo.cbo.graphs import Tier1Graph
-        g = Tier1Graph(obs)
-    elif name == 'SimplifiedCoralGraph':
-        from ccbo.cbo.graphs import SimplifiedCoralGraph
-        true_obs = pd.read_pickle(
-            os.path.join(DATA, name, 'true_observations.pkl'))
-        g = SimplifiedCoralGraph(obs, true_obs)
-    else:
-        raise ValueError(name)
-    mis, _, _ = g.get_sets()
+    mis, _, _ = get_original_graph(name, obs).get_sets()
     return sorted(sorted(e) for e in mis)
 
 
@@ -116,13 +94,12 @@ def test_identity_mis_matches_vendored_cbo(name):
 @pytest.mark.parametrize('name,partition', [
     ('ToyGraph', None),
     ('ToyGraph', [frozenset({'X', 'Z'}), frozenset({'Y'})]),
-    ('CompleteGraph', None),
-    ('CompleteGraph', [frozenset({'B'}), frozenset({'D', 'E'}),
-                       frozenset({'Y'})]),
-    ('Tier1Graph', None),
-    ('SimplifiedCoralGraph', None),
-    ('SimplifiedCoralGraph', [frozenset({'C', 'N', 'O'}),
-                              frozenset({'D', 'T'}), frozenset({'Y'})]),
+    ('ParallelParent', None),
+    ('ParallelParent', [frozenset({'X1', 'X2'}), frozenset({'Y'})]),
+    ('FrontDoor', None),
+    ('FrontDoor', [frozenset({'X1', 'M'}), frozenset({'Y'})]),
+    ('MediatedChain', None),
+    ('MediatedChain', [frozenset({'X1', 'X2'}), frozenset({'Y'})]),
 ])
 def test_pomis_subset_of_mis(name, partition):
     _, mis, pomis = _computed_mis(name, partition)

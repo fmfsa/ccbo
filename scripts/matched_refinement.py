@@ -70,7 +70,7 @@ def extend_state(state, arms, experiment, new_rows, ranges):
 def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
     if scm != mb.MC_NAME or cond != "C0":
         raise ValueError("matched HQCBO currently supports only MediatedChain/C0")
-    from ccbo.run_experiment import get_original_graph
+    from ccbo.scm_graphs import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
     from ccbo.cbo.utils import compute_coverage
     from ccbo.cbo.cbo import CBO

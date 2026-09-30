@@ -25,7 +25,7 @@ class NativeFallbackIntegration(unittest.TestCase):
         self.assertEqual({tuple(q) for q in control["forced_functional_queries"]}, {("M",),("X1",),("M","X1")})
 
     def test_native_fallback_functions_mean_and_variance_match_at_multiple_points(self):
-        from ccbo.run_experiment import get_original_graph
+        from ccbo.scm_graphs import get_original_graph
         from ccbo.coarsened_graph import CoarsenedGraph
         mb.register_variants()
         obs=observational_data(mb.FD_NAME,1000)

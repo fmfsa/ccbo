@@ -247,12 +247,12 @@ def noisy_scalar_runtime(experiment):
 
 def run_scalar(scm, cond, method, seed, budget=None, n_init=3, max_purchases=None):
     """Run the existing CBO or joint BO backend on the matched environment."""
-    from ccbo.run_experiment import get_original_graph
+    from ccbo.scm_graphs import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
     from ccbo.cbo.utils import compute_coverage
     from ccbo.cbo.cbo import CBO
     from ccbo.cbo.bo import NonCausal_BO
-    if method not in ("CBO", "QCBO", "BO-S", "BO", "CBO-NP", "QCBO-NP"):
+    if method not in ("CBO", "QCBO", "BO-S", "BO", "CBO-NP"):
         raise ValueError(method)
     mb.register_variants()
     algorithm_seed = keyed_seed(scm, seed, "algorithm")

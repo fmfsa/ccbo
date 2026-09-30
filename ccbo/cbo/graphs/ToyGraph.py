@@ -29,7 +29,7 @@ set).  POMIS on the projected ADMG is {{Z}} — do(X) is dominated because
 X's influence on Y is entirely mediated by Z, and do(X, Z) == do(Z) in
 distribution — so the paper's optimum at {Z} is the POMIS arm.
 
-This class follows the ``Tier1Graph`` / ``ConfoundedCluster`` pattern:
+Like the MinimalBench graphs, this class uses
 generic Monte-Carlo do-functions (``ccbo/generic_do.py``) for the legacy
 raw-graph CBO path; when wrapped in a ``CoarsenedGraph`` the exploration set
 and do-functions are derived at the C-DAG level instead.
