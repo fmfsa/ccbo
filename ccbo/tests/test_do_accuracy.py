@@ -19,7 +19,11 @@ import pytest
 from ccbo.adjustment import make_cdag_do_function
 from ccbo.coarsening import enumerate_valid_coarsenings_manip, compute_POMIS
 from ccbo.generic_do import intervene, sample_from_model
-from ccbo.run_experiment import get_original_graph
+from ccbo.minibench import register_variants
+from ccbo.scm_graphs import get_original_graph
+
+register_variants()
+BENCHMARKS = ['ToyGraph', 'ParallelParent', 'FrontDoor', 'MediatedChain']
 
 
 def true_do_mc(sem_fn, intervention_vars, values, num_samples=50000, seed=42):
@@ -46,12 +50,7 @@ def evaluate_graph(graph_name, num_test_points=5, max_fine_vars=3, verbose=True)
     observational_samples = pd.read_pickle(
         os.path.join(data_path, 'observations.pkl'))[:200]
 
-    true_obs = None
-    true_obs_path = os.path.join(data_path, 'true_observations.pkl')
-    if os.path.exists(true_obs_path):
-        true_obs = pd.read_pickle(true_obs_path)
-
-    original_graph = get_original_graph(graph_name, observational_samples, true_obs)
+    original_graph = get_original_graph(graph_name, observational_samples)
     sem_fn = original_graph.define_SEM
 
     coarsenings = enumerate_valid_coarsenings_manip(graph_name)
@@ -144,16 +143,16 @@ def evaluate_graph(graph_name, num_test_points=5, max_fine_vars=3, verbose=True)
 
 
 @pytest.mark.slow
-def test_completegraph_do_accuracy():
+@pytest.mark.parametrize('graph_name', BENCHMARKS)
+def test_benchmark_do_accuracy(graph_name):
     """All identifiable C-DAG do-functions track the true SEM do-effect.
 
-    RMSE < 0.5 on a target whose range spans several units; loose enough to
+    RMSE < 0.5 on targets whose ranges span several units; loose enough to
     absorb GP-fit noise, tight enough to catch a wrong adjustment formula.
     """
-    results = evaluate_graph('CompleteGraph', num_test_points=3,
-                             verbose=False)
+    results = evaluate_graph(graph_name, num_test_points=3, verbose=False)
     identifiable = [r for r in results if r['rmse'] is not None]
-    assert identifiable, "No identifiable do-functions found on CompleteGraph"
+    assert identifiable, f"No identifiable do-functions found on {graph_name}"
     bad = [r for r in identifiable if r['rmse'] > 0.5]
     assert not bad, (
         "Do-functions with RMSE > 0.5 vs true SEM: "
@@ -166,14 +165,7 @@ def main():
     print("Do-Function Accuracy Validation (Lee-2019 + ananke GID-PO)")
     print("=" * 60)
 
-    benchmarks = ['CompleteGraph']
-    sc_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        'cbo', 'data', 'SimplifiedCoralGraph', 'observations.pkl')
-    if os.path.exists(sc_path):
-        benchmarks.append('SimplifiedCoralGraph')
-
-    for graph_name in benchmarks:
+    for graph_name in BENCHMARKS:
         print(f"\n--- {graph_name} ---")
         results = evaluate_graph(graph_name, num_test_points=5)
 

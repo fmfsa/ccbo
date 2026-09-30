@@ -1,4 +1,4 @@
-# Python 3.10; static QCBO/CBO/CEO and dynamic QDCBO/DCBO.
+# Python 3.10; static QCBO/CBO and dynamic QDCBO/DCBO.
 -e .[static,test]
 numpy==1.26.4
 scipy==1.12.0

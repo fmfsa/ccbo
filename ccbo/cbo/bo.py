@@ -21,6 +21,9 @@ from ccbo.cbo.utils import *
 
 
 from ccbo.cbo.utils.BO_functions import CausalGPyModelWrapper, fix_noise, NOISE_VAR
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interventional_data_y, costs, 
@@ -113,7 +116,7 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 	## BO loop
 	start_time = time.perf_counter()
 	for j in range(num_trials):
-		print('Iteration', j)
+		logger.debug('Iteration %s', j)
 		## Optimize model and get new evaluation point
 		emukit_model.optimize()
 		acquisition = ExpectedImprovement(emukit_model)
@@ -142,7 +145,7 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 			best_x = results[results[:,input_space] == np.min(results[:,input_space]), :input_space][0]
 		else:
 			best_x = results[results[:,input_space] == np.min(results[:,input_space]), :input_space]
-		print('Current best Y', np.min(results[:,input_space]))
+		logger.debug('Current best Y %s', np.min(results[:,input_space]))
 		trial_log.append({
 			'trial': int(j), 'type': 'intervene',
 			'arm': '+'.join(intervention_variables),

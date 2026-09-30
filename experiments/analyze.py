@@ -311,8 +311,8 @@ def typed_files(folder):
 def static_arms(scm,cond,method):
     joint=('M','X1') if scm=='FrontDoor' else ('X1','X2')
     singles=[(v,) for v in joint]
-    if method in ('QCBO','QCBO-NP','HQCBO','BO'):return {joint}
-    if method in ('CEO','BO-S'):return set(singles+[joint])
+    if method in ('QCBO','HQCBO','BO'):return {joint}
+    if method=='BO-S':return set(singles+[joint])
     if scm=='ParallelParent':return {('X2',)} if cond=='A1' else set(singles+[joint])
     return set(singles)
 
@@ -409,7 +409,7 @@ def compare_protected(suite,rows):
 def summarize(results,suite,smoke=False):
     api=runner();expected=api.units(suite,smoke=smoke)
     if not smoke:
-        require(len(expected)=={'static':720,'mcbo':200,'dynamic':180}[suite],
+        require(len(expected)=={'static':630,'mcbo':200,'dynamic':180}[suite],
                 'Paper configuration matrix size changed')
         require({u['seed'] for u in expected}==set(range(2000,2030 if suite=='static' else 2020)),
                 'Paper replication seed set changed')
@@ -425,7 +425,6 @@ def summarize(results,suite,smoke=False):
         require(len(set(keys))==len(keys),'Duplicate scientific configuration/seed')
         if suite=='static':
             cases={(s,c,m) for s,c in [('ParallelParent','A0'),('ParallelParent','A1'),('FrontDoor','B0'),('FrontDoor','B1'),('MediatedChain','C0')] for m in ('CBO','QCBO')}
-            cases.update((s,c,'CEO') for s,c in [('ParallelParent','A0'),('FrontDoor','B0'),('MediatedChain','C0')])
             cases.update([('MediatedChain','C0','HQCBO'),('ParallelParent','A1','CBO-NP'),('FrontDoor','B0','CBO-FALLBACK')])
             cases.update((s,c,m) for s,c in [('ParallelParent','A0'),('FrontDoor','B0')] for m in ('CBO-NP','BO-S','BO'))
             cases.update(('MediatedChain','C0',m) for m in ('BO-S','BO'))

@@ -117,30 +117,6 @@
       }
     },
     {
-      "id": "ParallelParent-A0-CEO-seed{seed}",
-      "options": {
-        "--scm": "ParallelParent",
-        "--cond": "A0",
-        "--method": "CEO"
-      }
-    },
-    {
-      "id": "FrontDoor-B0-CEO-seed{seed}",
-      "options": {
-        "--scm": "FrontDoor",
-        "--cond": "B0",
-        "--method": "CEO"
-      }
-    },
-    {
-      "id": "MediatedChain-C0-CEO-seed{seed}",
-      "options": {
-        "--scm": "MediatedChain",
-        "--cond": "C0",
-        "--method": "CEO"
-      }
-    },
-    {
       "id": "MediatedChain-C0-HQCBO-seed{seed}",
       "options": {
         "--scm": "MediatedChain",

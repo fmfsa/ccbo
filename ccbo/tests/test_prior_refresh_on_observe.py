@@ -99,7 +99,7 @@ def test_an_observation_costs_exactly_one_all_arm_rebuild(draw, monkeypatch):
 
 def _pp_graph(obs):
     from ccbo import minibench as mb
-    from ccbo.run_experiment import get_original_graph
+    from ccbo.scm_graphs import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
     mb.register_variants()
     graph = get_original_graph(mb.PP_NAME, obs)

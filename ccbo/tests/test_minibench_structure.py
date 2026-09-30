@@ -292,29 +292,6 @@ def test_population_do_dispatch(scm, arm, values, expected):
         pytest.approx(expected)
 
 
-def test_exact_interventional_data_uses_population_evaluator():
-    """Providing an exact evaluator must bypass SEM construction entirely."""
-    from collections import OrderedDict
-    from ccbo.data_generation import generate_interventional_data
-
-    def forbidden_sem():
-        raise AssertionError("the SEM sampler must not be called")
-
-    data = generate_interventional_data(
-        forbidden_sem,
-        [["X1", "X2"]],
-        OrderedDict([("X1", (-3.0, 3.0)), ("X2", (-3.0, 3.0))]),
-        num_points=4,
-        seed=7,
-        target_evaluator=mb.population_evaluator(mb.PP_NAME),
-    )
-    x, y = data[0][-2:]
-    expected = np.asarray([
-        mb.pp_do_joint(row[0], row[1]) for row in x
-    ]).reshape(-1, 1)
-    assert y == pytest.approx(expected)
-
-
 @pytest.mark.slow
 def test_mc_oracle_agreement():
     """Monte-Carlo arm values through the *implemented* SEMs match the

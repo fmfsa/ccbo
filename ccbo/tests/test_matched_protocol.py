@@ -1,7 +1,7 @@
 """Pure protocol contracts; optional real-backend tests are explicitly opt-in.
 
 Run: python -m unittest ccbo.tests.test_matched_protocol -v
-Real pilot integration (requires GPy/Emukit/CEO): MATCHED_INTEGRATION=1 ...
+Real pilot integration (requires GPy/Emukit): MATCHED_INTEGRATION=1 ...
 """
 import copy
 import importlib.util
@@ -130,33 +130,4 @@ class ExistingBackendIntegrationTests(unittest.TestCase):
         b,_=run_scalar(mb.PP_NAME,"A1","QCBO",1000,max_purchases=2)
         self.assertEqual(a.events,b.events)
 
-    def test_real_ceo_replays_purchased_rows(self):
-        import sys
-        sys.path.insert(0,str(Path(__file__).resolve().parents[2]/"scripts"))
-        from matched_ceo_runtime import run_ceo
-        with patch.object(mb, "population_evaluator", side_effect=AssertionError("oracle reached CEO")), patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached CEO")):
-            e,meta=run_ceo(mb.MC_NAME,"C0",1000,max_purchases=3,ceo_root=os.environ.get("CEO_ROOT"))
-        self.assertEqual(e.sequential_index,3)
-        self.assertEqual(meta["feedback_audit"],dict(measurement_calls=3,bookkeeping_replays=3))
-        self.assertEqual(meta["new_observation_rows"],0)
-
 if __name__=="__main__": unittest.main()
-
-
-def test_ceo_graphs_keep_correct_chain_and_declared_graph_edits():
-    from ccbo.baselines.ceo import observable_edges, variant_graph
-    assert set(observable_edges(mb.MC_NAME, 'C0')) == {('X1', 'X2'), ('X2', 'Y')}
-    for condition in mb.PERTURBATIONS:
-        scm, cond = condition['scm'], condition['id']
-        expected = set(mb.variant_edges(cond))
-        graph = variant_graph(scm, cond)
-        assert set(observable_edges(scm, cond)) == expected
-        assert set(graph.edges()) == {(u + '_0', v + '_0') for u, v in expected}
-
-
-def test_ceo_hidden_confounding_does_not_create_observed_parent_nodes():
-    from ccbo.baselines.ceo import SCMS, variant_graph
-    for scm, cond in [(mb.PP_NAME, 'A0'), (mb.FD_NAME, 'B0')]:
-        graph = variant_graph(scm, cond)
-        assert set(graph.nodes()) == {v + '_0' for v in SCMS[scm]['nodes']}
-        assert all(not v.startswith('U') for v in graph.nodes())

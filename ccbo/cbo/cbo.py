@@ -9,6 +9,9 @@ import itertools
 import time
 
 from ccbo.cbo.utils import *
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -206,7 +209,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 	############################# LOOP
 	start_time = time.perf_counter()
 	for i in range(num_trials):
-		print('Optimization step', i)
+		logger.debug('Optimization step %s', i)
 		## Decide to observe or intervene and then recompute the obs coverage.
 		## The budget guard sits OUTSIDE the probabilistic decision: an
 		## exhausted pool always means intervene.
@@ -370,9 +373,9 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## Evaluate the target function at the new point
 			y_new = target_function_list[index](x_new_list[index])
 
-			print('Selected intervention: ', var_to_intervene)
-			print('Selected point: ', x_new_list[index])
-			print('Target function at selected point: ', y_new)
+			logger.debug('Selected intervention: %s', var_to_intervene)
+			logger.debug('Selected point: %s', x_new_list[index])
+			logger.debug('Target function at selected point: %s', y_new)
 
 			## Callback for RCCBO: record full-variable sample
 			if intervention_callback is not None:
@@ -410,7 +413,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			current_global = find_current_global(current_best_y, dict_interventions, task)
 			global_opt.append(current_global)
 
-			print('####### Current_global #########', current_global)
+			logger.debug('Current global optimum: %s', current_global)
 
 			## Optimise BO model given the new data
 			model_list[index].optimize()

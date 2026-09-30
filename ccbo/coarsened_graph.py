@@ -31,11 +31,11 @@ class CoarsenedGraph(GraphStructure):
     Parameters
     ----------
     original_graph : GraphStructure
-        The fine-grained graph instance (e.g., ToyGraph, CompleteGraph).
+        The fine-grained graph instance (e.g., ToyGraph, ParallelParent).
     partition : list of frozenset
         The partition of observable nodes (including {Y} as a singleton).
     graph_name : str
-        Name of the graph ('ToyGraph' or 'CompleteGraph').
+        Name of the graph (e.g. 'ToyGraph', 'ParallelParent').
     observational_samples : pd.DataFrame
         Observational data.
     num_mc_samples : int, optional
@@ -43,7 +43,7 @@ class CoarsenedGraph(GraphStructure):
     assumed_graph_name : str, optional
         Name of the assumed graph structure for adjustment formulas.
         If None, uses graph_name (correct graph). Set to a different
-        name (e.g., 'CompleteGraph_NoCD') to simulate graph misspecification.
+        name (e.g., 'ParallelParent_NoX1Y') to simulate graph misspecification.
 
     Notes
     -----

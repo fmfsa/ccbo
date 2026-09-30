@@ -1,6 +1,6 @@
 """Cost functions for the ToyGraph benchmark (CBO-2020 toy).
 
-Same layout as Tier1Graph_CostFunctions.py: one cost function per manipulable
+One cost function per manipulable
 variable (X, Z), four cost types selectable via ``type_cost``.  The family
 comparison runs use ``type_cost=1`` (unit cost for every intervention).  The
 ``fix_different`` types mirror the CBO-2020 repository's ToyGraph costs

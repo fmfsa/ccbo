@@ -14,7 +14,7 @@ where the implementation deviates from the definitions.
 
 import pytest
 
-from ccbo.coarsening import _admg, compute_POMIS, project_out_hidden
+from ccbo.coarsening import _admg, compute_POMIS
 
 
 def _pomis_set(admg, M, target='Y'):
@@ -67,8 +67,8 @@ def test_descendant_closure_required():
     assert _pomis_set(g, ['A', 'B']) == {frozenset(), frozenset({'B'})}
 
 
-def test_completegraph_pomis():
-    """CompleteGraph projected ADMG (Aglietti 2020), M = {B, D, E}.
+def test_cbo_complete_graph_pomis():
+    """Projected ADMG of the CBO complete graph (Aglietti 2020), M = {B, D, E}.
 
     Graph: B->C, C->D, A->E, C->E, D->Y, E->Y; bidirected A<->Y, B<->Y
     (from projecting out U1, U2). Hand derivation with M-restricted POMIS
@@ -90,7 +90,10 @@ def test_completegraph_pomis():
                IB = {D,E} = X                                      -> POMIS
     - {B,D,E}: cc(Y)={A,Y}; desc(A)={A}; IB = {D,E} != X           -> no
     """
-    projected = project_out_hidden('CompleteGraph')
+    projected = _admg('ABCDEY',
+                      di=[('B', 'C'), ('C', 'D'), ('A', 'E'), ('C', 'E'),
+                          ('D', 'Y'), ('E', 'Y')],
+                      bi=[('A', 'Y'), ('B', 'Y')])
     got = _pomis_set(projected, ['B', 'D', 'E'])
     expected = {frozenset(), frozenset({'D'}), frozenset({'E'}),
                 frozenset({'D', 'E'})}
