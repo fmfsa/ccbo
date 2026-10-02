@@ -1,6 +1,6 @@
 """Fine-graph objects for the benchmark SCMs used by the static experiments."""
 
-from ccbo.cbo.graphs import FrontDoor, MediatedChain, ParallelParent, ToyGraph
+from ccbo.cbo.graphs import ClusterChain, FrontDoor, MediatedChain, ParallelParent, ToyGraph
 
 
 def get_original_graph(experiment, observational_samples):
@@ -17,4 +17,6 @@ def get_original_graph(experiment, observational_samples):
         return FrontDoor(observational_samples)
     if experiment.startswith('MediatedChain'):
         return MediatedChain(observational_samples)
+    if experiment.startswith('ClusterChain'):
+        return ClusterChain(observational_samples)
     raise ValueError(f"Unknown experiment: {experiment}")

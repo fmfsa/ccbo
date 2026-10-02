@@ -15,10 +15,16 @@ from pathlib import Path
 import numpy as np
 from ccbo import minibench as mb
 
-PROTOCOL_ID = "matched-controlled-noisy-v2"
-DEFAULT_BUDGET = {mb.PP_NAME: 100, mb.FD_NAME: 100, mb.MC_NAME: 120}
-NODES = {mb.PP_NAME: ("X1", "X2", "Y"), mb.FD_NAME: ("X1", "M", "Y"),
-         mb.MC_NAME: ("X1", "X2", "Y")}
+# v3: the null intervention (no intervention, valued by the observational mean
+# of Y at no cost) is an eligible recommendation. Learner-side randomness is
+# keyed by the unchanged v2 namespace, so v3 runs reproduce v2 measurements.
+PROTOCOL_ID = "matched-controlled-noisy-v3"
+SEED_NAMESPACE = "matched-controlled-noisy-v2"
+DEFAULT_BUDGET = {mb.PP_NAME: 100, mb.FD_NAME: 100, mb.MC_NAME: 120,
+                  mb.CC_NAME: mb.CC_BUDGET}
+DEFAULT_N_INIT = {mb.PP_NAME: 3, mb.FD_NAME: 3, mb.MC_NAME: 3, mb.CC_NAME: mb.CC_N_INIT}
+NODES = {scm: tuple(mb.NODES[scm]) for scm in DEFAULT_BUDGET}
+SCALAR_METHODS = ("CBO", "QCBO", "BO-S", "BO", "CBO-NP", "QCBO-NP", "CBO-matched")
 
 
 class PilotComplete(Exception):
@@ -30,7 +36,7 @@ class BudgetExhausted(Exception):
 
 
 def keyed_seed(*parts):
-    encoded = json.dumps([PROTOCOL_ID, *parts], separators=(",", ":"))
+    encoded = json.dumps([SEED_NAMESPACE, *parts], separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(encoded.encode()).digest()[:4], "little")
 
 
@@ -39,8 +45,7 @@ def canonical_arm(arm):
 
 
 def domains(scm):
-    return {v: (mb.MC_X2_BOX if scm == mb.MC_NAME and v == "X2" else mb.DOMAIN)
-            for v in NODES[scm] if v != "Y"}
+    return {v: mb.domain(scm, v) for v in NODES[scm] if v != "Y"}
 
 
 def all_arms(scm):
@@ -49,7 +54,7 @@ def all_arms(scm):
 
 
 def sample_true(scm, iv, z):
-    """One true SCM row, driven by four explicitly supplied standard normals."""
+    """One true SCM row, driven by ``mb.NOISE_DIM[scm]`` supplied standard normals."""
     if scm == mb.PP_NAME:
         u = mb.PP_SIGMA_U * z[0]
         a = iv.get("X1", u + mb.PP_SIGMA_IN*z[1])
@@ -66,6 +71,18 @@ def sample_true(scm, iv, z):
         a = iv.get("X1", mb.MC_SIGMA_1*z[1])
         b = iv.get("X2", mb.MC_BETA*a + mb.MC_SIGMA_2*z[2])
         return dict(X1=float(a), X2=float(b), Y=float((b-mb.MC_C)**2 + mb.SIGMA_Y*z[3]))
+    if scm == mb.CC_NAME:
+        ua, ud = mb.CC_SIGMA_U*z[0], mb.CC_SIGMA_U*z[1]
+        row = {}
+        row["A1"] = iv.get("A1", ua + mb.CC_SIGMA_IN*z[2])
+        row["A2"] = iv.get("A2", ua + mb.CC_SIGMA_IN*z[3])
+        row["B1"] = iv.get("B1", mb.CC_BETA*row["A1"] + mb.CC_SIGMA_B1*z[4])
+        row["B2"] = iv.get("B2", mb.CC_SIGMA_B2*z[5])
+        row["D1"] = iv.get("D1", ud + mb.CC_SIGMA_IN*z[6])
+        row["D2"] = iv.get("D2", ud + mb.CC_SIGMA_IN*z[7])
+        c = mb.CC_CENTRES
+        row["Y"] = sum((row[v]-c[v])**2 for v in ("A2", "B1", "B2", "D1", "D2")) + mb.SIGMA_Y*z[8]
+        return {k: float(row[k]) for k in NODES[scm]}
     raise ValueError(scm)
 
 
@@ -73,15 +90,20 @@ def observational_data(scm, seed):
     """A replicate-specific shared 100-row true-SCM observational dataset."""
     import pandas as pd
     rng = np.random.RandomState(keyed_seed(scm, seed, "observational"))
-    return pd.DataFrame([sample_true(scm, {}, rng.randn(4)) for _ in range(100)],
+    return pd.DataFrame([sample_true(scm, {}, rng.randn(mb.NOISE_DIM[scm])) for _ in range(100)],
                         columns=NODES[scm])
 
 
 class Experiment:
     """Measurement-only learner interface; every purchased row is an event."""
-    def __init__(self, scm, seed, arms, budget=None, n_init=3, max_purchases=None):
+    def __init__(self, scm, seed, arms, budget=None, n_init=None, max_purchases=None,
+                 null_estimate=None):
         self.scm, self.seed = scm, int(seed)
         self.max_purchases = max_purchases
+        n_init = DEFAULT_N_INIT[scm] if n_init is None else n_init
+        # Observational mean of Y: the zero-cost value of recommending no
+        # intervention. ``None`` keeps the v2 rule (executed interventions only).
+        self.null_estimate = None if null_estimate is None else float(null_estimate)
         self.arms = sorted({canonical_arm(a) for a in arms}, key=lambda a: (len(a), a))
         self.budget = int(DEFAULT_BUDGET[scm] if budget is None else budget)
         self.n_init, self.cost, self.sequential_index = int(n_init), 0, 0
@@ -125,15 +147,14 @@ class Experiment:
             raise BudgetExhausted()
         if any(not np.isfinite(v) or not domains(self.scm)[k][0]-1e-9 <= v <= domains(self.scm)[k][1]+1e-9 for k,v in iv.items()):
             raise ValueError("intervention outside declared domain")
-        z = np.random.RandomState(noise_seed).randn(4)
+        z = np.random.RandomState(noise_seed).randn(mb.NOISE_DIM[self.scm])
         row = sample_true(self.scm, iv, z)
         self.cost += len(arm)
         event = dict(event_id=len(self.events), phase=phase, arm=list(arm),
                      x=[iv[v] for v in arm], measured=row, noise_seed=noise_seed,
                      cost=len(arm), cum_cost=self.cost)
         self.events.append(event)
-        recommendation = min(self.events, key=lambda e: (e["measured"]["Y"], tuple(e["arm"]), e["event_id"]))
-        event["recommendation_event_id"] = recommendation["event_id"]
+        event["recommendation_event_id"] = recommend(self.events, self.null_estimate)
         return deepcopy(row)
 
     def purchase(self, arm, values):
@@ -159,26 +180,59 @@ class Experiment:
         return xs, ys, np.array([iv[v] for v in backend_arm]), best["measured"]["Y"], "".join(backend_arm)
 
 
-def score_events(scm, events, budget):
+def recommend(events, null_estimate=None):
+    """Recommendation after ``events``: the executed intervention with the
+    smallest measured Y (ties: canonical arm, then execution index), or the
+    null intervention (``None``) when its observational value is strictly
+    smaller. The rule uses measurements only, never population values."""
+    best = min(events, key=lambda e: (e["measured"]["Y"], tuple(e["arm"]), e["event_id"]))
+    if null_estimate is not None and null_estimate < best["measured"]["Y"]:
+        return None
+    return best["event_id"]
+
+
+OPTIMUM = {mb.PP_NAME: 0., mb.FD_NAME: 0., mb.MC_NAME: mb.MC_SIGMA_2**2,
+           mb.CC_NAME: mb.ORACLE[mb.CC_NAME]["y_star"]}
+
+
+def regret_start(scm):
+    """First cost of the common cost grid: the largest initialization cost of
+    any method on ``scm`` (BO-S/CBO on the old SCMs; fine CBO on ClusterChain),
+    so every method has a recommendation at every summed cost."""
+    if scm == mb.CC_NAME:
+        return mb.CC_N_INIT*sum(len(a) for a in fine_mis_arms(scm))
+    return 3*sum(len(a) for a in all_arms(scm))
+
+
+def fine_mis_arms(scm):
+    """Fine MIS of the true graph (ClusterChain only; used for the cost grid)."""
+    if scm != mb.CC_NAME:
+        raise ValueError(scm)
+    # A1 reaches Y only through B1, so a fine set holding both is not minimal.
+    return [a for a in all_arms(scm) if not {"A1", "B1"} <= set(a)]
+
+
+def score_events(scm, events, budget, null_estimate=None):
     """Post-run oracle evaluation of data-selected recommendations; never cummin μ."""
     oracle = mb.population_evaluator(scm)
-    optimum = {mb.PP_NAME: 0., mb.FD_NAME: 0., mb.MC_NAME: mb.MC_SIGMA_2**2}[scm]
-    result, best, oracle_best = [], None, float("inf")
-    for event in events:
-        key = lambda e: (e["measured"]["Y"], tuple(e["arm"]), e["event_id"])
-        if best is None or key(event) < key(best):
-            best = event
-        if "recommendation_event_id" in event and event["recommendation_event_id"] != best["event_id"]:
+    optimum = OPTIMUM[scm]
+    result, oracle_best = [], float("inf")
+    for index, event in enumerate(events):
+        chosen = recommend(events[:index+1], null_estimate)
+        if "recommendation_event_id" in event and event["recommendation_event_id"] != chosen:
             raise ValueError("logged recommendation disagrees with declared measured-data rule")
-        value = float(oracle(best["arm"], best["x"]))
+        if chosen is None:
+            value = float(mb.null_value(scm))
+        else:
+            value = float(oracle(events[chosen]["arm"], events[chosen]["x"]))
         oracle_best = min(oracle_best, float(oracle(event["arm"], event["x"])))
         result.append(dict(event_id=event["event_id"], cum_cost=event["cum_cost"],
-                           recommendation_event_id=best["event_id"], recommendation_population=value,
+                           recommendation_event_id=chosen, recommendation_population=value,
                            recommendation_regret=value-optimum, oracle_best_visited=oracle_best))
     if not result:
         raise ValueError("empty experiment")
     checkpoints = []
-    for c in range(12, int(budget)+1):
+    for c in range(regret_start(scm), int(budget)+1):
         eligible = [r for r in result if r["cum_cost"] <= c]
         if eligible:
             checkpoints.append(dict(cost=c, **{k:v for k,v in eligible[-1].items() if k != "cum_cost"}))
@@ -245,32 +299,67 @@ def noisy_scalar_runtime(experiment):
         cbo.update_BO_models, cbo.find_next_y_point, bo.fix_noise = old_build, old_next, old_fix
 
 
-def run_scalar(scm, cond, method, seed, budget=None, n_init=3, max_purchases=None):
-    """Run the existing CBO or joint BO backend on the matched environment."""
+def method_partition(scm, method, partition_id=None):
+    """Partition used to build a method's arms (``fine`` for graph-only CBO)."""
+    if method in ("CBO", "CBO-NP", "BO-S", "BO"):
+        if partition_id not in (None, "fine"):
+            raise ValueError(f"{method} uses the fine partition")
+        return "fine"
+    pid = partition_id or "coarse"
+    if pid not in mb.partition_ids(scm) or pid == "fine":
+        raise ValueError(f"{method} needs a coarse partition of {scm}, got {pid!r}")
+    return pid
+
+
+def build_graph(scm, cond, method, obs, partition_id=None):
+    """Arms, manipulables and the CoarsenedGraph supplying priors for ``method``.
+
+    CBO-matched keeps the fine supplied graph for every prior but restricts its
+    arms to the quotient arms of ``partition_id``: it separates the effect of
+    the smaller action family from the effect of quotient-level priors.
+    """
     from ccbo.scm_graphs import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
+    graph = get_original_graph(scm, obs)
+    pid = method_partition(scm, method, partition_id)
+    assumed = mb.variant_name(cond)
+    if method == "CBO-matched":
+        coarse = CoarsenedGraph(graph, mb.partition(scm, pid), scm, obs,
+                                num_mc_samples=2000, assumed_graph_name=assumed)
+        cg = CoarsenedGraph(graph, mb.fine_partition(scm), scm, obs,
+                            num_mc_samples=2000, assumed_graph_name=assumed)
+        cg._exploration_set = [list(a) for a in coarse._exploration_set]
+        cg._do_cache = None
+    else:
+        cg = CoarsenedGraph(graph, mb.partition(scm, pid), scm, obs,
+                            num_mc_samples=2000, assumed_graph_name=assumed)
+    arms, _, manip = cg.get_sets()
+    arms = [list(a) for a in arms]
+    if method == "BO-S":
+        arms = [list(a) for a in all_arms(scm)]
+    if method == "BO":
+        arms = [sorted(manip)]
+    return cg, arms, manip, pid
+
+
+def run_scalar(scm, cond, method, seed, budget=None, n_init=None, max_purchases=None,
+               partition_id=None):
+    """Run the existing CBO or joint BO backend on the matched environment."""
     from ccbo.cbo.utils import compute_coverage
     from ccbo.cbo.cbo import CBO
     from ccbo.cbo.bo import NonCausal_BO
-    if method not in ("CBO", "QCBO", "BO-S", "BO", "CBO-NP"):
+    if method not in SCALAR_METHODS:
         raise ValueError(method)
     mb.register_variants()
     algorithm_seed = keyed_seed(scm, seed, "algorithm")
     np.random.seed(algorithm_seed)
     obs = observational_data(scm, seed)
-    graph = get_original_graph(scm, obs)
-    partition = mb.fine_partition(scm) if method in ("CBO", "CBO-NP") else mb.coarse_partition(scm)
-    cg = CoarsenedGraph(graph, partition, scm, obs, num_mc_samples=2000,
-                        assumed_graph_name=mb.variant_name(cond))
-    arms, _, manip = cg.get_sets()
-    if method == "BO-S":
-        arms = [list(a) for a in all_arms(scm)]
-    if method == "BO":
-        arms = [sorted(manip)]
+    cg, arms, manip, pid = build_graph(scm, cond, method, obs, partition_id)
     functions = cg.fit_all_models()
     ranges, costs = cg.get_interventional_ranges(), cg.get_cost_structure(1)
     _, _, coverage = compute_coverage(obs, manip, ranges)
-    experiment = Experiment(scm, seed, arms, budget, n_init, max_purchases)
+    experiment = Experiment(scm, seed, arms, budget, n_init, max_purchases,
+                            null_estimate=float(obs["Y"].mean()))
     xs, ys, bestx, besty, bestarm = experiment.scalar_initial(arms)
     with noisy_scalar_runtime(experiment):
         try:
@@ -281,7 +370,8 @@ def run_scalar(scm, cond, method, seed, budget=None, n_init=3, max_purchases=Non
             else:
                 CBO(experiment.budget, arms, manip, xs, ys, bestx, besty, bestarm,
                     ranges, functions, obs, coverage, cg, 20, costs, obs,
-                    "min", 100, 100, n_init, Causal_prior=method in ("CBO", "QCBO"),
+                    "min", 100, 100, experiment.n_init,
+                    Causal_prior=method in ("CBO", "QCBO", "CBO-matched"),
                     target_evaluator=experiment.target, force_observe_on_entry=False)
         except (BudgetExhausted, PilotComplete):
             pass
@@ -295,5 +385,6 @@ def run_scalar(scm, cond, method, seed, budget=None, n_init=3, max_purchases=Non
         raise RuntimeError("backend stopped with affordable actions remaining")
     return experiment, dict(backend="vendored-CBO" if method != "BO" else "vendored-BO",
                             algorithm_seed=algorithm_seed, new_observation_rows=0,
+                            partition=pid, arms=[list(a) for a in experiment.arms],
                             gp_noise_audit=getattr(experiment, "gp_noise_audit", []),
                             noise_policy="learned raw-target homoscedastic variance; init=max(.01,.1*VarY), bounds=[1e-6,1e6]")

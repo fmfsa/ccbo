@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the paper's static, model-based and dynamic experimental matrices."""
+"""Run the paper's static, ClusterChain, model-based and dynamic experimental matrices."""
 import argparse
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import hashlib
@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIGS = Path(__file__).resolve().parent / 'configs'
 COMMANDS = {
     'static': ['scripts/run_matched_controlled.py'],
+    'clusterchain': ['scripts/run_matched_controlled.py'],
     'mcbo': ['scripts/run_mcbo.py'],
     'dynamic': ['-m', 'ccbo.qdcbo.runner'],
 }
@@ -36,7 +37,7 @@ def units(suite, seeds=None, smoke=False):
             options = dict(config['defaults'], **case['options'])
             options['--seed'] = str(seed)
             if smoke:
-                if suite == 'static':
+                if suite in ('static', 'clusterchain'):
                     options.update({'--stage': 'pilot', '--max-purchases': '3'})
                 elif suite == 'mcbo':
                     options['--num-trials'] = '2'
@@ -84,7 +85,7 @@ def save(path, value):
 
 def output_hashes(folder, suite):
     result = folder / 'result'
-    if suite == 'static':
+    if suite in ('static', 'clusterchain'):
         expected = [result / (name + '.json') for name in ('config', 'observations', 'events', 'scores', 'summary')]
         summary = json.loads((result / 'summary.json').read_text())
         if summary.get('status') not in ('pilot_complete', 'budget_complete'):

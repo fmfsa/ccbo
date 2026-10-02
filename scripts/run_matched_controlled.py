@@ -20,7 +20,8 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ccbo import minibench as mb
-from ccbo.matched_protocol import (PROTOCOL_ID, DEFAULT_BUDGET, observational_data,
+from ccbo.matched_protocol import (PROTOCOL_ID, SEED_NAMESPACE, DEFAULT_BUDGET, DEFAULT_N_INIT,
+                                    SCALAR_METHODS, method_partition, observational_data,
                                     run_scalar, score_events)
 
 
@@ -32,11 +33,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--scm", required=True, choices=list(DEFAULT_BUDGET))
     p.add_argument("--cond", required=True)
-    p.add_argument("--method", required=True, choices=["CBO", "QCBO", "BO-S", "BO", "CBO-NP", "HQCBO", "CBO-FALLBACK"])
+    p.add_argument("--method", required=True, choices=list(SCALAR_METHODS) + ["HQCBO", "CBO-FALLBACK"])
+    p.add_argument("--partition", help="named partition for quotient methods (default: coarse)")
     p.add_argument("--seed", required=True, type=int)
     p.add_argument("--stage", required=True, choices=["pilot", "replication"])
     p.add_argument("--max-purchases", type=int, help="pilot only: sequential purchases after initialization")
-    p.add_argument("--budget", type=int, help="pilot override only; primary defaults100/120")
+    p.add_argument("--budget", type=int, help="pilot override only; primary defaults 100/120/400")
     p.add_argument("--outdir", required=True)
     args = p.parse_args()
     if args.stage == "replication" and (args.seed not in range(2000,2030) or args.max_purchases is not None or args.budget is not None):
@@ -50,16 +52,25 @@ def main():
     out = Path(args.outdir)
     if out.exists() and any(out.iterdir()):
         p.error("outdir must be empty; stale results cannot be resumed implicitly")
+    try:
+        partition = method_partition(args.scm, "QCBO" if args.method == "HQCBO" else
+                                     "CBO" if args.method == "CBO-FALLBACK" else args.method,
+                                     args.partition)
+    except ValueError as exc:
+        p.error(str(exc))
     out.mkdir(parents=True, exist_ok=True)
     obs = observational_data(args.scm, args.seed)
     observations = {"columns":list(obs.columns), "rows":obs.to_numpy().tolist()}
     obs_bytes = json.dumps(observations, sort_keys=True, separators=(",", ":")).encode()
     (out/"observations.json").write_bytes(obs_bytes)
-    config = dict(vars(args), protocol_id=PROTOCOL_ID, n_obs=100, n_init=3,
-                  feedback_mode="single_true_SCM_draw", recommendation_rule="minimum_measured_Y;ties_canonical_arm_then_execution_index",
+    config = dict(vars(args), partition=partition, protocol_id=PROTOCOL_ID, seed_namespace=SEED_NAMESPACE,
+                  n_obs=100, n_init=DEFAULT_N_INIT[args.scm],
+                  feedback_mode="single_true_SCM_draw",
+                  recommendation_rule="minimum_measured_Y_or_null_if_observational_mean_strictly_smaller;ties_canonical_arm_then_execution_index",
+                  null_estimate=float(obs["Y"].mean()),
                   budget=DEFAULT_BUDGET[args.scm] if args.budget is None else args.budget,
                   observational_sha256=hashlib.sha256(obs_bytes).hexdigest())
-    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py"]
+    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py", "ccbo/coarsened_graph.py", "ccbo/cbo/graphs/ClusterChain.py"]
     config["source_sha256"] = {f:digest(ROOT/f) for f in source_files}
     (out/"config.json").write_text(json.dumps(config, indent=2))
     started = time.time()
@@ -69,14 +80,17 @@ def main():
             experiment, meta = run_fallback(args.scm, args.cond, args.seed, args.budget, max_purchases=args.max_purchases)
         elif args.method == "HQCBO":
             from matched_refinement import run_hqcbo
-            experiment, meta = run_hqcbo(args.scm, args.cond, args.seed, args.budget, max_purchases=args.max_purchases)
+            experiment, meta = run_hqcbo(args.scm, args.cond, args.seed, args.budget,
+                                         max_purchases=args.max_purchases, partition_id=partition)
         else:
             experiment, meta = run_scalar(args.scm, args.cond, args.method, args.seed,
-                                         args.budget, max_purchases=args.max_purchases)
+                                         args.budget, max_purchases=args.max_purchases,
+                                         partition_id=partition)
         # Write measurement-only events BEFORE population scoring begins.
         events_path = out/"events.json"
         events_path.write_text(json.dumps(experiment.events, indent=2))
-        scored = score_events(args.scm, json.loads(events_path.read_text()), experiment.cost)
+        scored = score_events(args.scm, json.loads(events_path.read_text()), experiment.budget,
+                              null_estimate=config["null_estimate"])
         (out/"scores.json").write_text(json.dumps(scored, indent=2))
         status = "pilot_complete" if args.max_purchases is not None else "budget_complete"
         summary = dict(config, status=status, backend=meta, wall_seconds=time.time()-started,

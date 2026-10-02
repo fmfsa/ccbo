@@ -39,8 +39,22 @@ def close(a,b):
 def finite(value, nonnegative=False):
     return isinstance(value,(int,float)) and math.isfinite(value) and (not nonnegative or value>=0)
 
+CC_VARS=("A1","A2","B1","B2","D1","D2")
+NODES={"ParallelParent":("X1","X2"),"FrontDoor":("X1","M"),"MediatedChain":("X1","X2"),"ClusterChain":CC_VARS}
+OPTIMUM={"ParallelParent":0.,"FrontDoor":0.,"MediatedChain":.04,"ClusterChain":.04}
+BUDGET={"ParallelParent":100,"FrontDoor":100,"MediatedChain":120,"ClusterChain":800}
+N_INIT={"ParallelParent":3,"FrontDoor":3,"MediatedChain":3,"ClusterChain":2}
+# First cost of the common regret grid: the largest initialization cost of any method.
+REGRET_START={"ParallelParent":12,"FrontDoor":12,"MediatedChain":12,"ClusterChain":256}
+
+
+def bound(scm,v):
+    return 2 if (scm,v) in {("MediatedChain","X2"),("ClusterChain","B1"),("ClusterChain","B2")} else 3
+
+
 def population(scm, arm, x):
-    """Independent closed forms for the frozen three SCMs, including natural variance."""
+    """Independent closed forms for the frozen SCMs, including natural variance.
+    The empty arm is the null intervention, E[Y]."""
     iv = dict(zip(arm,x))
     if scm == "ParallelParent":
         return ((iv["X1"]-2)**2 if "X1" in iv else 4.25) + ((iv["X2"]+2)**2 if "X2" in iv else 4.25)
@@ -50,23 +64,35 @@ def population(scm, arm, x):
         return 2*(1-.3/math.sqrt(.09+variance)*math.exp(-(mu-1)**2/(2*(.09+variance))))
     if scm == "MediatedChain":
         return (iv["X2"]-4)**2 if "X2" in iv else (2*iv.get("X1",0.)-4)**2 + (.04 if "X1" in iv else 1.04)
+    if scm == "ClusterChain":
+        # Natural variances: A_i, D_i 0.08; B2 0.09; B1 | A1 0.04; B1 2^2*0.08+0.04.
+        a2 = (iv["A2"]+2)**2 if "A2" in iv else 4.08
+        b1 = (iv["B1"]-4)**2 if "B1" in iv else (2*iv["A1"]-4)**2+.04 if "A1" in iv else 16.36
+        b2 = (iv["B2"]-1)**2 if "B2" in iv else 1.09
+        d1 = (iv["D1"]-1)**2 if "D1" in iv else 1.08
+        d2 = (iv["D2"]+1)**2 if "D2" in iv else 1.08
+        return a2+b1+b2+d1+d2
     raise ValueError("unsupported SCM "+scm)
 
-def static_events(unit, config, events, scores, summary, replication, nominal_budget=False):
-    scm=unit["scm"]; budget=config["budget"]
+
+def same_value(a,b):
+    return a is None and b is None or close(a,b)
+
+
+def static_events(unit, config, events, scores, summary, replication, nominal_budget=False, null_estimate=None):
+    scm=unit["scm"]; budget=config["budget"]; n_init=config["n_init"]
     require(events and isinstance(events,list), "empty event log")
-    cost=0; best=None; init_cost=0; split_cost=0; sequential=0; scored=[]; oracle_best=math.inf
+    cost=0; init_cost=0; split_cost=0; sequential=0; scored=[]; oracle_best=math.inf
     initial_counts={}; split_counts={}; split_ids=[]; sequential_started=False
-    nodes = {"X1","M"} if scm == "FrontDoor" else {"X1","X2"}
-    optimum=.04 if scm == "MediatedChain" else 0.
+    nodes=set(NODES[scm]); optimum=OPTIMUM[scm]
+    best=None
     for index,e in enumerate(events):
         arm=e["arm"]; x=e["x"]
         require(e["event_id"] == index, "event IDs must be consecutive")
         require(arm == sorted(set(arm)) and set(arm) <= nodes and 0 < len(arm)==len(x), "invalid canonical arm")
         require(e["phase"] in ("init","split_init","sequential"), "invalid event phase")
         for v,z in zip(arm,x):
-            bound=2 if scm=="MediatedChain" and v=="X2" else 3
-            require(math.isfinite(z) and -bound-1e-9 <= z <= bound+1e-9, "invalid intervention domain")
+            require(math.isfinite(z) and -bound(scm,v)-1e-9 <= z <= bound(scm,v)+1e-9, "invalid intervention domain")
             require(close(e["measured"][v],z), "measured clamped coordinate mismatch")
         require(set(e["measured"]) == nodes|{"Y"} and all(math.isfinite(v) for v in e["measured"].values()), "invalid measured row")
         require(e["cost"] == len(arm), "purchase cost != arm size")
@@ -76,59 +102,65 @@ def static_events(unit, config, events, scores, summary, replication, nominal_bu
             require(not sequential_started, "initialization after sequential purchase")
             init_cost+=len(arm); initial_counts[tuple(arm)]=initial_counts.get(tuple(arm),0)+1
         elif e["phase"]=="split_init":
-            require(unit["method"]=="HQCBO" and scm=="MediatedChain" and unit["cond"]=="C0",
-                    "split initialization outside declared refinement method")
+            require(unit["method"]=="HQCBO", "split initialization outside declared refinement method")
             require(sequential_started and tuple(arm) not in initial_counts,"split arm was already initialized")
-            require(len(arm)==1,"refinement exposes singleton arms only")
             split_cost+=len(arm); split_counts[tuple(arm)]=split_counts.get(tuple(arm),0)+1; split_ids.append(index)
         else:
             sequential_started=True; sequential+=1
-            require(initial_counts.get(tuple(arm),split_counts.get(tuple(arm),0))==config["n_init"],
+            require(initial_counts.get(tuple(arm),split_counts.get(tuple(arm),0))==n_init,
                     "sequential arm lacks complete purchased initial design")
         key=lambda r:(r["measured"]["Y"],tuple(r["arm"]),r["event_id"])
         if best is None or key(e)<key(best): best=e
-        require(e.get("recommendation_event_id") == best["event_id"], "recommendation is not measured-data winner")
-        value=population(scm,best["arm"],best["x"])
+        chosen=None if null_estimate is not None and null_estimate<best["measured"]["Y"] else best["event_id"]
+        require(e.get("recommendation_event_id","missing") == chosen, "recommendation is not the declared measured-data winner")
+        value=population(scm,[],[]) if chosen is None else population(scm,best["arm"],best["x"])
         oracle_best=min(oracle_best,population(scm,arm,x))
-        scored.append(dict(event_id=index,cum_cost=cost,recommendation_event_id=best["event_id"],
+        scored.append(dict(event_id=index,cum_cost=cost,recommendation_event_id=chosen,
                            recommendation_population=value,recommendation_regret=value-optimum,
                            oracle_best_visited=oracle_best))
-    require(all(n==config["n_init"] for n in initial_counts.values()), "initial count does not match protocol")
+    require(all(n==n_init for n in initial_counts.values()), "initial count does not match protocol")
+    require(all(n==n_init for n in split_counts.values()), "split initialization count does not match protocol")
     require(summary.get("split_init_cost",0)==split_cost,"split initialization cost mismatch")
-    if split_ids:
-        require(split_ids==list(range(split_ids[0],split_ids[-1]+1)) and split_cost==6 and
-                split_counts=={("X1",):3,("X2",):3},"split design is not the complete contiguous atomic design")
-    refinement=summary.get("backend",{}).get("refinement")
-    if unit["method"]=="HQCBO" and refinement is not None:
-        trigger=refinement["trigger_event_id"]
-        require(0<=trigger<len(events) and events[trigger]["phase"]=="sequential","invalid split trigger")
-        require(refinement["trigger_sequential_index"]==sum(e["phase"]=="sequential" for e in events[:trigger+1]),"split trigger index mismatch")
-        if refinement["accepted"]:
-            require(bool(split_ids) and split_ids[0]==trigger+1 and refinement["split_event_ids"]==split_ids and
-                    refinement["split_cost"]==6 and sorted(refinement["split_arms"])==[["X1"],["X2"]],"accepted split metadata mismatch")
-            require(refinement["recommendation_after_split"]==events[split_ids[-1]]["recommendation_event_id"],"post-split recommendation mismatch")
-        else:
-            require(not split_ids and refinement["split_cost"]==0 and budget-events[trigger]["cum_cost"]<6,
-                    "declined split must be unaffordable and uncharged")
+    refinements=summary.get("backend",{}).get("refinements")
+    if refinements is None:
+        single=summary.get("backend",{}).get("refinement")
+        refinements=[single] if single else []
+    if unit["method"]=="HQCBO":
+        accounted=[]
+        for k,ref in enumerate(refinements):
+            trigger=ref["trigger_event_id"]
+            require(0<=trigger<len(events) and events[trigger]["phase"]=="sequential","invalid split trigger")
+            require(ref["trigger_sequential_index"]==sum(e["phase"]=="sequential" for e in events[:trigger+1]),"split trigger index mismatch")
+            if ref["accepted"]:
+                ids=ref["split_event_ids"]
+                require(ids==list(range(trigger+1,trigger+1+len(ids))) and ids,"split design is not contiguous after its trigger")
+                arms={tuple(events[i]["arm"]) for i in ids}
+                require(sorted(map(list,arms))==sorted(ref["split_arms"]) and
+                        ref["split_cost"]==sum(events[i]["cost"] for i in ids),"accepted split metadata mismatch")
+                require(ref["recommendation_after_split"]==events[ids[-1]]["recommendation_event_id"],"post-split recommendation mismatch")
+                accounted+=ids
+            else:
+                require(ref["split_cost"]==0 and k==len(refinements)-1,"declined split must be uncharged and final")
+        require(sorted(accounted)==split_ids,"split events missing refinement metadata")
     else:
-        require(not split_ids,"split events missing refinement metadata")
+        require(not split_ids and not refinements,"split events outside HQCBO")
     require(summary["actual_cost"]==cost and summary["init_cost"]==init_cost and summary["n_purchases"]==len(events)
             and summary["sequential_purchases"]==sequential, "summary ledger counts mismatch")
-    if replication: require(cost==budget, "replication has not reached common budget B")
-    elif nominal_budget:
-        cheapest=min(len(arm) for arm in set(initial_counts)|set(split_counts))
-        require(0 <= budget-cost < cheapest, "nominal-budget pilot still has affordable actions")
+    cheapest=min(len(arm) for arm in set(initial_counts)|set(split_counts))
+    if replication or nominal_budget:
+        require(0 <= budget-cost < cheapest, "run stopped with affordable actions remaining")
     else: require(sequential==config["max_purchases"], "pilot purchase count mismatch")
     def same_row(a,b):
         require(set(a)==set(b), "score row schema mismatch")
-        for k,v in b.items(): require(close(a[k],v), "score/recommendation mismatch: "+k)
+        for k,v in b.items(): require(same_value(a[k],v), "score/recommendation mismatch: "+k)
     require(len(scores["scored_events"])==len(scored), "score event count mismatch")
     for a,b in zip(scores["scored_events"],scored): same_row(a,b)
     same_row(scores["final"],scored[-1]); same_row(summary["final"],scored[-1])
     checkpoints=[]
-    for c in range(12,cost+1):
-        row=next(r for r in reversed(scored) if r["cum_cost"]<=c)
-        checkpoints.append(dict(cost=c,**{k:v for k,v in row.items() if k!="cum_cost"}))
+    for c in range(REGRET_START[scm],budget+1):
+        row=next((r for r in reversed(scored) if r["cum_cost"]<=c),None)
+        if row is not None:
+            checkpoints.append(dict(cost=c,**{k:v for k,v in row.items() if k!="cum_cost"}))
     require(len(scores["checkpoints"])==len(checkpoints), "cost checkpoints mismatch")
     for a,b in zip(scores["checkpoints"],checkpoints): same_row(a,b)
     area=sum(r["recommendation_regret"] for r in checkpoints)
@@ -136,7 +168,10 @@ def static_events(unit, config, events, scores, summary, replication, nominal_bu
             close(summary["cost_integrated_recommendation_regret"],area), "cost area mismatch")
     return dict(final_recommendation_regret=scored[-1]["recommendation_regret"],
                 cost_integrated_recommendation_regret=area, actual_cost=cost,
-                purchases=len(events), sequential_purchases=sequential)
+                purchases=len(events), sequential_purchases=sequential,
+                null_recommended_final=scored[-1]["recommendation_event_id"] is None,
+                split_cost=split_cost, unspent=budget-cost)
+
 
 def targets(env,menu):
     if env=='ToyGraph':
@@ -308,7 +343,37 @@ def typed_files(folder):
     return paths
 
 
-def static_arms(scm,cond,method):
+CC_PARTITIONS={'fine':[[v] for v in CC_VARS],'alt':[['A1','A2'],['B1'],['B2'],['D1','D2']],
+               'pairs':[['A1','A2'],['B1','B2'],['D1','D2']],'coarse':[['A1','A2','B1','B2'],['D1','D2']]}
+
+
+def cc_arms(cond,partition):
+    """Independent MIS of the supplied ClusterChain graph at a partition.
+
+    A union of clusters is excluded when one of its clusters has no directed
+    path to Y once the union is intervened on: A1's only path runs through
+    B1, D1->Y is absent under K1/K2 and D2->Y under K2.
+    """
+    from itertools import combinations
+    to_y={'A1':{'B1'},'A2':{'Y'},'B1':{'Y'},'B2':{'Y'},'D1':{'Y'},'D2':{'Y'}}
+    if cond in ('K1','K2'):to_y['D1']=set()
+    if cond=='K2':to_y['D2']=set()
+    clusters=[tuple(c) for c in CC_PARTITIONS[partition]]
+    arms=set()
+    for k in range(1,len(clusters)+1):
+        for combo in combinations(clusters,k):
+            members={v for c in combo for v in c}
+            def reaches(v):
+                return any(t=='Y' or (t not in members and reaches(t)) for t in to_y[v])
+            if all(any(reaches(v) for v in c) for c in combo):
+                arms.add(tuple(sorted(members)))
+    return arms
+
+
+def static_arms(scm,cond,method,partition=None):
+    if scm=='ClusterChain':
+        if method=='BO':return {CC_VARS}
+        return cc_arms(cond,'fine' if method in ('CBO','CBO-NP') else partition)
     joint=('M','X1') if scm=='FrontDoor' else ('X1','X2')
     singles=[(v,) for v in joint]
     if method in ('QCBO','HQCBO','BO'):return {joint}
@@ -326,24 +391,32 @@ def parse_unit(folder,unit):
     expected=runner().output_hashes(folder,suite)
     require(status.get('output_sha256')==expected,'Output hashes do not match unit record')
     record=dict(unit_id=unit['id'],seed=unit['seed'],code_identity=identity)
-    if suite=='static':
+    if suite in ('static','clusterchain'):
         result=folder/'result';config=load(result/'config.json');summary=load(result/'summary.json')
         native={k:options['--'+k] for k in ('scm','cond','method')};native['seed']=unit['seed']
         for k,v in native.items():require(config[k]==summary[k]==v,'Static config identity mismatch: '+k)
         for k,v in config.items():require(summary.get(k)==v,'Summary/config mismatch: '+k)
-        require(config['protocol_id']=='matched-controlled-noisy-v2' and config['n_obs']==100 and config['n_init']==3,'Unsupported static protocol')
-        require(config['feedback_mode']=='single_true_SCM_draw' and config['recommendation_rule']=='minimum_measured_Y;ties_canonical_arm_then_execution_index','Wrong feedback/recommendation protocol')
+        scm=native['scm']
+        default_partition='fine' if native['method'] in ('CBO','CBO-NP','BO-S','BO','CBO-FALLBACK') else 'coarse'
+        native['partition']=options.get('--partition',default_partition)
+        require(config['partition']==native['partition'],'Wrong partition')
+        require((scm=='ClusterChain')==(suite=='clusterchain'),'SCM outside its suite')
+        require(config['protocol_id']=='matched-controlled-noisy-v3' and config['seed_namespace']=='matched-controlled-noisy-v2'
+                and config['n_obs']==100 and config['n_init']==N_INIT[scm],'Unsupported static protocol')
+        require(config['feedback_mode']=='single_true_SCM_draw' and config['recommendation_rule']=='minimum_measured_Y_or_null_if_observational_mean_strictly_smaller;ties_canonical_arm_then_execution_index','Wrong feedback/recommendation protocol')
         require(config['stage']==options['--stage'],'Wrong stage')
-        require(config['budget']==(120 if native['scm']=='MediatedChain' else 100),'Wrong budget')
+        require(config['budget']==BUDGET[scm],'Wrong budget')
         require(config.get('max_purchases')==(int(options['--max-purchases']) if '--max-purchases' in options else None),'Wrong purchase cap')
         require(summary['status']==('budget_complete' if unit['mode']=='paper' else 'pilot_complete'),'Backend incomplete')
         events=load(result/'events.json');scores=load(result/'scores.json')
         require(digest(result/'events.json')==summary['events_sha256'],'Backend event hash mismatch')
         require(digest(result/'observations.json')==config['observational_sha256'],'Observational hash mismatch')
-        obs=load(result/'observations.json');columns=['X1','M','Y'] if native['scm']=='FrontDoor' else ['X1','X2','Y']
-        require(obs['columns']==columns and len(obs['rows'])==100 and all(len(row)==3 and all(finite(v) for v in row) for row in obs['rows']),'Invalid observations')
-        require({tuple(e['arm']) for e in events if e['phase']=='init'}==static_arms(native['scm'],native['cond'],native['method']),'Wrong initial action menu')
-        metrics=static_events(native,config,events,scores,summary,unit['mode']=='paper')
+        obs=load(result/'observations.json');columns=list(NODES[scm])+['Y']
+        require(obs['columns']==columns and len(obs['rows'])==100 and all(len(row)==len(columns) and all(finite(v) for v in row) for row in obs['rows']),'Invalid observations')
+        null_estimate=statistics.mean(row[-1] for row in obs['rows'])
+        require(close(config['null_estimate'],null_estimate),'Null estimate is not the observational mean of Y')
+        require({tuple(e['arm']) for e in events if e['phase']=='init'}==static_arms(scm,native['cond'],native['method'],native['partition']),'Wrong initial action menu')
+        metrics=static_events(native,config,events,scores,summary,unit['mode']=='paper',null_estimate=config['null_estimate'])
         record.update(native,**metrics,observational_sha256=config['observational_sha256'],wall_seconds=summary['wall_seconds'],
                       _events=events,_initial=[{k:e[k] for k in ('arm','x','measured','noise_seed')} for e in events if e['phase']=='init'])
         return record
@@ -397,6 +470,11 @@ def compare_protected(suite,rows):
             if base is None:continue
             clean=lambda r:[{k:v for k,v in e.items() if k!='acquisition_diagnostics'} for e in r['_events']]
             checks.append(dict(unit_id=row['unit_id'],required=row['algo']=='QMCBO',exact_equal=clean(row)==clean(base)))
+    elif suite=='clusterchain':
+        for row in rows:
+            if row['method'] not in ('QCBO','HQCBO','QCBO-NP') or row['cond'] not in ('K1','K3'):continue
+            base=next((r for r in rows if (r['method'],r['partition'],r['cond'],r['seed'])==(row['method'],row['partition'],'K0',row['seed'])),None)
+            if base is not None:checks.append(dict(unit_id=row['unit_id'],required=True,exact_equal=row['_events']==base['_events']))
     else:
         for row in rows:
             if row['method']!='QCBO' or row['cond'] not in ('A1','B1'):continue
@@ -409,9 +487,9 @@ def compare_protected(suite,rows):
 def summarize(results,suite,smoke=False):
     api=runner();expected=api.units(suite,smoke=smoke)
     if not smoke:
-        require(len(expected)=={'static':630,'mcbo':200,'dynamic':180}[suite],
+        require(len(expected)=={'static':630,'clusterchain':840,'mcbo':200,'dynamic':180}[suite],
                 'Paper configuration matrix size changed')
-        require({u['seed'] for u in expected}==set(range(2000,2030 if suite=='static' else 2020)),
+        require({u['seed'] for u in expected}==set(range(2000,2030 if suite in ('static','clusterchain') else 2020)),
                 'Paper replication seed set changed')
         if suite=='mcbo':
             require(all(u['options']['--num-trials']=='100' and u['options']['--score-samples']=='100000' for u in expected),
@@ -419,6 +497,7 @@ def summarize(results,suite,smoke=False):
         if suite=='dynamic':
             require(all(u['options']['--trials']=='10' for u in expected),'Paper dynamic horizon changed')
         case_fields={'static':('--scm','--cond','--method'),
+                     'clusterchain':('--scm','--cond','--method','--partition'),
                      'mcbo':('--env','--algo','--menu','--misspec'),
                      'dynamic':('--setup','--algo','--action-menu')}[suite]
         keys=[tuple(u['options'].get(k,'') for k in case_fields)+(u['seed'],) for u in expected]
@@ -428,6 +507,13 @@ def summarize(results,suite,smoke=False):
             cases.update([('MediatedChain','C0','HQCBO'),('ParallelParent','A1','CBO-NP'),('FrontDoor','B0','CBO-FALLBACK')])
             cases.update((s,c,m) for s,c in [('ParallelParent','A0'),('FrontDoor','B0')] for m in ('CBO-NP','BO-S','BO'))
             cases.update(('MediatedChain','C0',m) for m in ('BO-S','BO'))
+        elif suite=='clusterchain':
+            P=('alt','pairs','coarse');cc='ClusterChain'
+            cases={(cc,c,'CBO','') for c in ('K0','K1','K2','K3')}
+            cases.update((cc,c,'QCBO',p) for c in ('K0','K1','K2','K3') for p in P)
+            cases.update((cc,'K0','QCBO-NP',p) for p in P)
+            cases.update((cc,c,'CBO-matched',p) for c in ('K0','K1') for p in P)
+            cases.update([(cc,'K0','BO',''),(cc,'K0','HQCBO','pairs'),(cc,'K1','HQCBO','pairs')])
         elif suite=='mcbo':
             cases={(s,a,m,'') for s in ('ToyGraph','PSAGraph') for a,m in [('MCBO','full'),('MCBO','coarse'),('QMCBO','coarse')]}
             cases.update((s,a,m,edit) for s,edit in [('ToyGraph','del:0:1'),('PSAGraph','add:2:3')] for a,m in [('MCBO','full'),('QMCBO','coarse')])
@@ -453,7 +539,7 @@ def summarize(results,suite,smoke=False):
     for r in rows:
         if suite=='dynamic':continue
         key=(r.get('scm',r.get('env_name')),r['seed'])
-        if suite=='static':
+        if suite in ('static','clusterchain'):
             if key in obs and obs[key]!=r['observational_sha256']:failures.append(dict(unit_id=r['unit_id'],error='Unpaired observational data'))
             obs[key]=r['observational_sha256'];initial={}
             for event in r['_initial']:initial.setdefault(tuple(event['arm']),[]).append(event)
@@ -473,9 +559,11 @@ def summarize(results,suite,smoke=False):
     output['failure_count']=len(failures)
     output['missing_count']=len(missing)
     group_fields={'static':('scm','cond','method'),
+                  'clusterchain':('scm','cond','method','partition'),
                   'mcbo':('env_name','algo','menu','misspec'),
                   'dynamic':('setup','algo','action_menu')}[suite]
     metric_fields={'static':('final_recommendation_regret','cost_integrated_recommendation_regret'),
+                   'clusterchain':('final_recommendation_regret','cost_integrated_recommendation_regret'),
                    'mcbo':('endpoint','equal_round_sum'),
                    'dynamic':('slice0','slice1','slice2','committed_slice_sum')}[suite]
     output['descriptive_summaries']=[]
@@ -496,6 +584,11 @@ def summarize(results,suite,smoke=False):
         for scm,cond in sorted({(r['scm'],r['cond']) for r in rows if r['method']=='QCBO'}):
             group=[r for r in rows if (r['scm'],r['cond'])==(scm,cond)]
             output['paired_effects'].append(dict(scm=scm,cond=cond,contrast='QCBO minus CBO; minimization',metrics=[paired(group,lambda r:r['method']=='QCBO',lambda r:r['method']=='CBO',metric,list(range(2000,2030))) for metric in ('final_recommendation_regret','cost_integrated_recommendation_regret')]))
+    elif suite=='clusterchain':
+        for cond in ('K0','K1','K2','K3'):
+            group=[r for r in rows if r['cond']==cond]
+            for pid in ('alt','pairs','coarse'):
+                output['paired_effects'].append(dict(scm='ClusterChain',cond=cond,partition=pid,contrast='QCBO minus CBO; minimization',metrics=[paired(group,lambda r,p=pid:r['method']=='QCBO' and r['partition']==p,lambda r:r['method']=='CBO',metric,list(range(2000,2030))) for metric in ('final_recommendation_regret','cost_integrated_recommendation_regret')]))
     elif suite=='mcbo':
         for env in ('ToyGraph','PSAGraph'):
             group=[r for r in rows if r['env_name']==env and not r['misspec']]
@@ -511,7 +604,7 @@ def summarize(results,suite,smoke=False):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--suite',choices=['static','mcbo','dynamic'],required=True)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--suite',choices=['static','clusterchain','mcbo','dynamic'],required=True)
     p.add_argument('--results',type=Path,default=Path('results/paper'));p.add_argument('--smoke',action='store_true')
     p.add_argument('--out',type=Path,required=True,help='Summary JSON; sibling CSV contains seed-level outcomes')
     a=p.parse_args();summary=summarize(a.results,a.suite,a.smoke)

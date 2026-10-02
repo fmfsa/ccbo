@@ -1,4 +1,4 @@
-"""Graph-free noisy HQCBO for MediatedChain, using resumed vendored CBO.
+"""Graph-free noisy HQCBO (staged hierarchy, mixed unions), using resumed vendored CBO.
 
 The original quotient's cached priors survive; newly exposed singleton arms use
 plain GPs. After exposure the backend receives a graph-access guard. Refinement
@@ -67,29 +67,55 @@ def extend_state(state, arms, experiment, new_rows, ranges):
     return old_arms
 
 
-def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
-    if scm != mb.MC_NAME or cond != "C0":
-        raise ValueError("matched HQCBO currently supports only MediatedChain/C0")
-    from ccbo.scm_graphs import get_original_graph
-    from ccbo.coarsened_graph import CoarsenedGraph
+def apply_stage(clusters, stage):
+    """Split every current cluster named in ``stage`` into its children."""
+    out=[]
+    for c in clusters:
+        out.extend(stage[c] if c in stage else [c])
+    return out
+
+
+def mixed_unions(clusters):
+    """All nonempty unions of the given (disjoint) manipulable clusters, as
+    canonical arms; mixed unions across different split clusters included."""
+    from itertools import combinations
+    return [canonical_arm(set().union(*combo)) for k in range(1,len(clusters)+1)
+            for combo in combinations(clusters,k)]
+
+
+def run_hqcbo(scm, cond, seed, budget=None, n_init=None, max_purchases=None, partition_id="coarse",
+              plateau_k=5, plateau_delta=1e-3):
+    """Graph-free staged refinement from ``partition_id`` along ``mb.REFINE_STAGES``.
+
+    A stage fires when the measured incumbent improves by less than
+    ``plateau_delta`` over the last ``plateau_k`` sequential measurements since
+    the previous stage. It splits the stage's clusters and exposes every
+    previously unavailable nonempty union of the *current* clusters (mixed
+    unions included), each with a plain GP prior and a paid initial design.
+    An unaffordable stage is declined and recorded; no later stage runs.
+    """
+    if scm not in mb.REFINE_STAGES:
+        raise ValueError(f"no refinement hierarchy declared for {scm}")
     from ccbo.cbo.utils import compute_coverage
     from ccbo.cbo.cbo import CBO
+    from ccbo.matched_protocol import build_graph
     mb.register_variants()
     algorithm_seed=keyed_seed(scm,seed,"algorithm")
     np.random.seed(algorithm_seed)
     obs=observational_data(scm,seed)
-    graph=get_original_graph(scm,obs)
-    cg=CoarsenedGraph(graph,mb.coarse_partition(scm),scm,obs,num_mc_samples=2000,assumed_graph_name=mb.variant_name(cond))
-    arms,_,manip=cg.get_sets()
-    arms=[list(a) for a in arms]
+    cg,arms,manip,pid=build_graph(scm,cond,"QCBO",obs,partition_id)
     functions=cg.fit_all_models()
     ranges,costs=cg.get_interventional_ranges(),cg.get_cost_structure(1)
     _,_,coverage=compute_coverage(obs,manip,ranges)
-    experiment=RefinementExperiment(scm,seed,arms,budget,n_init,max_purchases)
+    experiment=RefinementExperiment(scm,seed,arms,budget,n_init,max_purchases,
+                                    null_estimate=float(obs["Y"].mean()))
     xs,ys,bestx,besty,bestarm=experiment.scalar_initial(arms)
+    clusters=[c for c in mb.partition(scm,pid) if c!=frozenset({"Y"})]
+    stages=list(mb.REFINE_STAGES[scm])
     history=[besty]
+    since=0                       # history index where the current stage began
+    refinements=[]
     state=None
-    split=None
     prior_mask=[True]*len(arms)
     backend_graph=cg
     with noisy_scalar_runtime(experiment):
@@ -97,31 +123,36 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
             while True:
                 experiment.check_available()
                 _,state=CBO(1,arms,manip,xs,ys,bestx,besty,bestarm,ranges,functions,
-                    obs,coverage,backend_graph,20,costs,obs,"min",100,100,n_init,
+                    obs,coverage,backend_graph,20,costs,obs,"min",100,100,experiment.n_init,
                     Causal_prior=prior_mask,target_evaluator=experiment.target,
                     force_observe_on_entry=False,state=state,return_state=True)
                 history.append(min(e["measured"]["Y"] for e in experiment.events))
                 experiment.check_available()  # do not expand after an explicit pilot cap
-                if split is None and _plateau(history,5,1e-3,"min"):
-                    # Supplied hierarchy alone defines children; no graph MIS query.
-                    hierarchy=mb.MC_REFINE_MAP[frozenset({"X1","X2"})]
-                    from itertools import combinations
-                    new_arms=[tuple(sorted(set().union(*combo))) for k in range(1,len(hierarchy)+1) for combo in combinations(hierarchy,k)]
+                declined=refinements and not refinements[-1]["accepted"]
+                if stages and not declined and _plateau(history[since:],plateau_k,plateau_delta,"min"):
+                    # Supplied hierarchy alone defines children; no graph query.
+                    stage=stages.pop(0)
+                    clusters=apply_stage(clusters,stage)
+                    new_arms=[a for a in mixed_unions(clusters) if a not in experiment.arms]
                     before=len(experiment.events)
-                    new_rows=experiment.expose(new_arms)
-                    split=dict(trigger_sequential_index=experiment.sequential_index,
-                               trigger_event_id=before-1, plateau_k=5,plateau_delta=1e-3,
-                               trigger_measurements=list(history[-6:]),
-                               accepted=new_rows is not None,split_cost=0,split_arms=[])
-                    if new_rows is not None:
+                    new_rows=experiment.expose(new_arms) if new_arms else {}
+                    record=dict(stage=len(refinements),trigger_sequential_index=experiment.sequential_index,
+                                trigger_event_id=before-1,plateau_k=plateau_k,plateau_delta=plateau_delta,
+                                trigger_measurements=list(history[-(plateau_k+1):]),
+                                split_clusters=[sorted(c) for c in stage],
+                                partition_after=[sorted(c) for c in clusters],
+                                accepted=new_rows is not None,split_cost=0,split_arms=[])
+                    if new_rows:
                         extend_state(state,arms,experiment,new_rows,ranges)
                         prior_mask=list(state["prior_mask"])
-                        split.update(split_cost=sum(e["cost"] for e in experiment.events[before:]),
-                                     split_arms=[list(a) for a in new_rows],
-                                     split_event_ids=list(range(before,len(experiment.events))),
-                                     recommendation_after_split=experiment.events[-1]["recommendation_event_id"])
+                        record.update(split_cost=sum(e["cost"] for e in experiment.events[before:]),
+                                      split_arms=[list(a) for a in new_rows],
+                                      split_event_ids=list(range(before,len(experiment.events))),
+                                      recommendation_after_split=experiment.events[-1]["recommendation_event_id"])
                         backend_graph=NoGraphAccess()
                         # The graph object is not consulted again, even to rebuild priors.
+                    refinements.append(record)
+                    since=len(history)-1
         except (BudgetExhausted,PilotComplete):
             pass
     for model,audit in zip(getattr(experiment,"_noise_models",[]),getattr(experiment,"gp_noise_audit",[])):
@@ -131,7 +162,8 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=3, max_purchases=None):
     if any(experiment.affordable(a) for a in experiment.arms) and not (max_purchases is not None and experiment.sequential_index==max_purchases):
         raise RuntimeError("HQCBO stopped with affordable actions remaining")
     return experiment,dict(backend="vendored-CBO-resumed-graphfree-refinement",
-        algorithm_seed=algorithm_seed,new_observation_rows=0,refinement=split,
+        algorithm_seed=algorithm_seed,new_observation_rows=0,partition=pid,
+        refinement=refinements[0] if refinements else None,refinements=refinements,
         prior_mask=prior_mask,final_arms=arms,gp_noise_audit=getattr(experiment,"gp_noise_audit",[]),
         noise_policy="learned raw-target homoscedastic variance; init=max(.01,.1*VarY), bounds=[1e-6,1e6]",
         post_split_graph_access="guarded; cached original-quotient priors only")
