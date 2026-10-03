@@ -115,7 +115,13 @@ def static_units(results, smoke, summary, suite='static'):
         if refinements is None:
             refinements = [backend['refinement']] if backend.get('refinement') else []
         accepted = [r for r in refinements if r.get('accepted')]
-        refined_at = events[accepted[-1]['split_event_ids'][-1]]['cum_cost'] if accepted else None
+        # Refinement completes after its split design; without one (v4: new arms
+        # get no data) it completes at the trigger event itself.
+        refined_at = None
+        if accepted:
+            last = accepted[-1]
+            ids = last.get('split_event_ids') or [last['trigger_event_id']]
+            refined_at = events[ids[-1]]['cum_cost']
         trial_of = {e['event_id']: e.get('trial', 0) for e in events}
         units.append(dict(row, checkpoints=scores['checkpoints'], scored_events=scores['scored_events'],
                           trials=run.get('trials', 0),
