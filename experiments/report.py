@@ -189,13 +189,24 @@ def save(fig, path):
     plt.close(fig)
 
 
+# Horizontal extent shown in the controlled-suite figures. Runs use the full
+# budget (Tables 3-4 report it); every method has settled well before this.
+PLOT_MAX_COST = 50
+PLOT_MAX_TRIAL = 50
+
+
+def clip(x, matrix, limit):
+    keep = np.asarray(x) <= limit
+    return np.asarray(x)[keep], np.asarray(matrix)[:, keep]
+
+
 # Drawing order: baselines first (underneath), the key comparison last (on top).
 FIG2_ORDER = ['BO', 'BO-S', 'CBO-NP', 'CBO (misspecified)', 'CBO', 'QCBO']
 FIG2_LEGEND = ['CBO', 'QCBO', 'CBO (misspecified)', 'CBO-NP', 'BO', 'BO-S']
 FIG2_PANELS = [('a', 'ParallelParent', 'A0', 'A1'), ('b', 'FrontDoor', 'B0', 'B1')]
 
 
-def figure2_like(units, path, curves, xlabel):
+def figure2_like(units, path, curves, xlabel, limit):
     """ParallelParent and FrontDoor side by side (column width), shared legend."""
     fig, axes = plt.subplots(1, 2, figsize=plotstyle.size('column', 0.62))
     for ax, (letter, scm, correct, edited) in zip(axes, FIG2_PANELS):
@@ -203,8 +214,9 @@ def figure2_like(units, path, curves, xlabel):
             cond, method = (edited, 'CBO') if label == 'CBO (misspecified)' else (correct, label)
             group = select(units, scm=scm, cond=cond, method=method)
             require(group, f'missing {scm} {label} results')
-            draw(ax, *curves(group), label)
+            draw(ax, *clip(*curves(group), limit), label)
         plotstyle.panel_title(ax, letter, scm)
+        ax.set_xlim(0, limit)
         ax.set_xlabel(xlabel)
         ax.set_ylim(bottom=-0.03 * ax.get_ylim()[1])
     axes[0].set_ylabel('Incumbent objective')
@@ -214,12 +226,13 @@ def figure2_like(units, path, curves, xlabel):
 
 
 def figure_cost_indexed(units, path):
-    figure2_like(units, path, lambda g: cost_curves(g, 'recommendation_population'), 'Intervention cost')
+    figure2_like(units, path, lambda g: cost_curves(g, 'recommendation_population'), 'Intervention cost',
+                 PLOT_MAX_COST)
 
 
 def figure_trial_indexed(units, path):
     figure2_like(units, path, lambda g: trial_curves(g, 'recommendation_population'),
-                 'Optimizer trial (observe or intervene)')
+                 'Optimizer trial', PLOT_MAX_TRIAL)
 
 
 def figure_minimal_refine(units, path):
@@ -232,8 +245,9 @@ def figure_minimal_refine(units, path):
         for method in methods:
             group = select(units, scm='MediatedChain', cond='C0', method=method)
             require(group, f'missing MediatedChain {method} results')
-            draw(ax, *cost_curves(group, key, cumulative), method)
+            draw(ax, *clip(*cost_curves(group, key, cumulative), PLOT_MAX_COST), method)
         plotstyle.panel_title(ax, letter, title)
+        ax.set_xlim(0, PLOT_MAX_COST)
         ax.set_xlabel('Intervention cost')
         ax.set_ylabel(ylabel)
         ax.set_ylim(bottom=0)
