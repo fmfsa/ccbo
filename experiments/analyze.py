@@ -39,13 +39,12 @@ def close(a,b):
 def finite(value, nonnegative=False):
     return isinstance(value,(int,float)) and math.isfinite(value) and (not nonnegative or value>=0)
 
-CC_VARS=("A1","A2","B1","B2","D1","D2")
-NODES={"ParallelParent":("X1","X2"),"FrontDoor":("X1","M"),"MediatedChain":("X1","X2"),"ClusterChain":CC_VARS}
-OPTIMUM={"ParallelParent":0.,"FrontDoor":0.,"MediatedChain":.04,"ClusterChain":.04}
-BUDGET={"ParallelParent":100,"FrontDoor":100,"MediatedChain":120,"ClusterChain":800}
-N_INIT={"ParallelParent":3,"FrontDoor":3,"MediatedChain":3,"ClusterChain":3}
+NODES={"ParallelParent":("X1","X2"),"FrontDoor":("X1","M"),"MediatedChain":("X1","X2")}
+OPTIMUM={"ParallelParent":0.,"FrontDoor":0.,"MediatedChain":.04}
+BUDGET={"ParallelParent":100,"FrontDoor":100,"MediatedChain":120}
+N_INIT={"ParallelParent":3,"FrontDoor":3,"MediatedChain":3}
 # Initial points are given (not charged), so every method has a recommendation from cost 0.
-REGRET_START={"ParallelParent":0,"FrontDoor":0,"MediatedChain":0,"ClusterChain":0}
+REGRET_START={"ParallelParent":0,"FrontDoor":0,"MediatedChain":0}
 PROTOCOL={'protocol_id':'matched-controlled-cbo-v4','seed_namespace':'matched-controlled-noisy-v2',
           'n_obs':100,'n_obs_pool':150,'n_obs_batch':20,'initial_design':'given_not_charged',
           'observation_policy':'cbo_coverage_epsilon_greedy','feedback_mode':'population_expectation',
@@ -53,7 +52,7 @@ PROTOCOL={'protocol_id':'matched-controlled-cbo-v4','seed_namespace':'matched-co
 
 
 def bound(scm,v):
-    return 2 if (scm,v) in {("MediatedChain","X2"),("ClusterChain","B1"),("ClusterChain","B2")} else 3
+    return 2 if (scm,v)==("MediatedChain","X2") else 3
 
 
 def population(scm, arm, x):
@@ -68,14 +67,6 @@ def population(scm, arm, x):
         return 2*(1-.3/math.sqrt(.09+variance)*math.exp(-(mu-1)**2/(2*(.09+variance))))
     if scm == "MediatedChain":
         return (iv["X2"]-4)**2 if "X2" in iv else (2*iv.get("X1",0.)-4)**2 + (.04 if "X1" in iv else 1.04)
-    if scm == "ClusterChain":
-        # Natural variances: A_i, D_i 0.5; B2 0.25; B1 | A1 0.04; B1 2^2*0.5+0.04.
-        a2 = (iv["A2"]+2)**2 if "A2" in iv else 4.5
-        b1 = (iv["B1"]-4)**2 if "B1" in iv else (2*iv["A1"]-4)**2+.04 if "A1" in iv else 18.04
-        b2 = (iv["B2"]-1)**2 if "B2" in iv else 1.25
-        d1 = (iv["D1"]-1)**2 if "D1" in iv else 1.5
-        d2 = (iv["D2"]+1)**2 if "D2" in iv else 1.5
-        return a2+b1+b2+d1+d2
     raise ValueError("unsupported SCM "+scm)
 
 
@@ -357,37 +348,7 @@ def typed_files(folder):
     return paths
 
 
-CC_PARTITIONS={'fine':[[v] for v in CC_VARS],'alt':[['A1','A2'],['B1'],['B2'],['D1','D2']],
-               'pairs':[['A1','A2'],['B1','B2'],['D1','D2']],'coarse':[['A1','A2','B1','B2'],['D1','D2']]}
-
-
-def cc_arms(cond,partition):
-    """Independent MIS of the supplied ClusterChain graph at a partition.
-
-    A union of clusters is excluded when one of its clusters has no directed
-    path to Y once the union is intervened on: A1's only path runs through
-    B1, D1->Y is absent under K1/K2 and D2->Y under K2.
-    """
-    from itertools import combinations
-    to_y={'A1':{'B1'},'A2':{'Y'},'B1':{'Y'},'B2':{'Y'},'D1':{'Y'},'D2':{'Y'}}
-    if cond in ('K1','K2'):to_y['D1']=set()
-    if cond=='K2':to_y['D2']=set()
-    clusters=[tuple(c) for c in CC_PARTITIONS[partition]]
-    arms=set()
-    for k in range(1,len(clusters)+1):
-        for combo in combinations(clusters,k):
-            members={v for c in combo for v in c}
-            def reaches(v):
-                return any(t=='Y' or (t not in members and reaches(t)) for t in to_y[v])
-            if all(any(reaches(v) for v in c) for c in combo):
-                arms.add(tuple(sorted(members)))
-    return arms
-
-
 def static_arms(scm,cond,method,partition=None):
-    if scm=='ClusterChain':
-        if method=='BO':return {CC_VARS}
-        return cc_arms(cond,'fine' if method in ('CBO','CBO-NP') else partition)
     joint=('M','X1') if scm=='FrontDoor' else ('X1','X2')
     singles=[(v,) for v in joint]
     if method in ('QCBO','HQCBO','BO'):return {joint}
@@ -405,7 +366,7 @@ def parse_unit(folder,unit):
     expected=runner().output_hashes(folder,suite)
     require(status.get('output_sha256')==expected,'Output hashes do not match unit record')
     record=dict(unit_id=unit['id'],seed=unit['seed'],code_identity=identity)
-    if suite in ('static','clusterchain'):
+    if suite=='static':
         result=folder/'result';config=load(result/'config.json');summary=load(result/'summary.json')
         native={k:options['--'+k] for k in ('scm','cond','method')};native['seed']=unit['seed']
         for k,v in native.items():require(config[k]==summary[k]==v,'Static config identity mismatch: '+k)
@@ -414,7 +375,6 @@ def parse_unit(folder,unit):
         default_partition='fine' if native['method'] in ('CBO','CBO-NP','BO-S','BO','CBO-FALLBACK') else 'coarse'
         native['partition']=options.get('--partition',default_partition)
         require(config['partition']==native['partition'],'Wrong partition')
-        require((scm=='ClusterChain')==(suite=='clusterchain'),'SCM outside its suite')
         for key,value in PROTOCOL.items():require(config.get(key)==value,'Unsupported static protocol: '+key)
         require(config['n_init']==N_INIT[scm],'Wrong initial design size')
         require(config['stage']==options['--stage'],'Wrong stage')
@@ -483,11 +443,6 @@ def compare_protected(suite,rows):
             if base is None:continue
             clean=lambda r:[{k:v for k,v in e.items() if k!='acquisition_diagnostics'} for e in r['_events']]
             checks.append(dict(unit_id=row['unit_id'],required=row['algo']=='QMCBO',exact_equal=clean(row)==clean(base)))
-    elif suite=='clusterchain':
-        for row in rows:
-            if row['method'] not in ('QCBO','HQCBO','QCBO-NP') or row['cond'] not in ('K1','K3'):continue
-            base=next((r for r in rows if (r['method'],r['partition'],r['cond'],r['seed'])==(row['method'],row['partition'],'K0',row['seed'])),None)
-            if base is not None:checks.append(dict(unit_id=row['unit_id'],required=True,exact_equal=row['_events']==base['_events']))
     else:
         for row in rows:
             if row['method']!='QCBO' or row['cond'] not in ('A1','B1'):continue
@@ -500,9 +455,9 @@ def compare_protected(suite,rows):
 def summarize(results,suite,smoke=False):
     api=runner();expected=api.units(suite,smoke=smoke)
     if not smoke:
-        require(len(expected)=={'static':630,'clusterchain':840,'mcbo':200,'dynamic':180}[suite],
+        require(len(expected)=={'static':630,'mcbo':200,'dynamic':180}[suite],
                 'Paper configuration matrix size changed')
-        require({u['seed'] for u in expected}==set(range(2000,2030 if suite in ('static','clusterchain') else 2020)),
+        require({u['seed'] for u in expected}==set(range(2000,2030 if suite=='static' else 2020)),
                 'Paper replication seed set changed')
         if suite=='mcbo':
             require(all(u['options']['--num-trials']=='100' and u['options']['--score-samples']=='100000' for u in expected),
@@ -510,7 +465,6 @@ def summarize(results,suite,smoke=False):
         if suite=='dynamic':
             require(all(u['options']['--trials']=='10' for u in expected),'Paper dynamic horizon changed')
         case_fields={'static':('--scm','--cond','--method'),
-                     'clusterchain':('--scm','--cond','--method','--partition'),
                      'mcbo':('--env','--algo','--menu','--misspec'),
                      'dynamic':('--setup','--algo','--action-menu')}[suite]
         keys=[tuple(u['options'].get(k,'') for k in case_fields)+(u['seed'],) for u in expected]
@@ -520,13 +474,6 @@ def summarize(results,suite,smoke=False):
             cases.update([('MediatedChain','C0','HQCBO'),('ParallelParent','A1','CBO-NP'),('FrontDoor','B0','CBO-FALLBACK')])
             cases.update((s,c,m) for s,c in [('ParallelParent','A0'),('FrontDoor','B0')] for m in ('CBO-NP','BO-S','BO'))
             cases.update(('MediatedChain','C0',m) for m in ('BO-S','BO'))
-        elif suite=='clusterchain':
-            P=('alt','pairs','coarse');cc='ClusterChain'
-            cases={(cc,c,'CBO','') for c in ('K0','K1','K2','K3')}
-            cases.update((cc,c,'QCBO',p) for c in ('K0','K1','K2','K3') for p in P)
-            cases.update((cc,'K0','QCBO-NP',p) for p in P)
-            cases.update((cc,c,'CBO-matched',p) for c in ('K0','K1') for p in P)
-            cases.update([(cc,'K0','BO',''),(cc,'K0','HQCBO','pairs'),(cc,'K1','HQCBO','pairs')])
         elif suite=='mcbo':
             cases={(s,a,m,'') for s in ('ToyGraph','PSAGraph') for a,m in [('MCBO','full'),('MCBO','coarse'),('QMCBO','coarse')]}
             cases.update((s,a,m,edit) for s,edit in [('ToyGraph','del:0:1'),('PSAGraph','add:2:3')] for a,m in [('MCBO','full'),('QMCBO','coarse')])
@@ -552,7 +499,7 @@ def summarize(results,suite,smoke=False):
     for r in rows:
         if suite=='dynamic':continue
         key=(r.get('scm',r.get('env_name')),r['seed'])
-        if suite in ('static','clusterchain'):
+        if suite=='static':
             if key in obs and obs[key]!=r['observational_sha256']:failures.append(dict(unit_id=r['unit_id'],error='Unpaired observational data'))
             obs[key]=r['observational_sha256'];initial={}
             for event in r['_initial']:initial.setdefault(tuple(event['arm']),[]).append(event)
@@ -572,11 +519,9 @@ def summarize(results,suite,smoke=False):
     output['failure_count']=len(failures)
     output['missing_count']=len(missing)
     group_fields={'static':('scm','cond','method'),
-                  'clusterchain':('scm','cond','method','partition'),
                   'mcbo':('env_name','algo','menu','misspec'),
                   'dynamic':('setup','algo','action_menu')}[suite]
     metric_fields={'static':('final_recommendation_regret','cost_integrated_recommendation_regret'),
-                   'clusterchain':('final_recommendation_regret','cost_integrated_recommendation_regret'),
                    'mcbo':('endpoint','equal_round_sum'),
                    'dynamic':('slice0','slice1','slice2','committed_slice_sum')}[suite]
     output['descriptive_summaries']=[]
@@ -597,11 +542,6 @@ def summarize(results,suite,smoke=False):
         for scm,cond in sorted({(r['scm'],r['cond']) for r in rows if r['method']=='QCBO'}):
             group=[r for r in rows if (r['scm'],r['cond'])==(scm,cond)]
             output['paired_effects'].append(dict(scm=scm,cond=cond,contrast='QCBO minus CBO; minimization',metrics=[paired(group,lambda r:r['method']=='QCBO',lambda r:r['method']=='CBO',metric,list(range(2000,2030))) for metric in ('final_recommendation_regret','cost_integrated_recommendation_regret')]))
-    elif suite=='clusterchain':
-        for cond in ('K0','K1','K2','K3'):
-            group=[r for r in rows if r['cond']==cond]
-            for pid in ('alt','pairs','coarse'):
-                output['paired_effects'].append(dict(scm='ClusterChain',cond=cond,partition=pid,contrast='QCBO minus CBO; minimization',metrics=[paired(group,lambda r,p=pid:r['method']=='QCBO' and r['partition']==p,lambda r:r['method']=='CBO',metric,list(range(2000,2030))) for metric in ('final_recommendation_regret','cost_integrated_recommendation_regret')]))
     elif suite=='mcbo':
         for env in ('ToyGraph','PSAGraph'):
             group=[r for r in rows if r['env_name']==env and not r['misspec']]
@@ -617,7 +557,7 @@ def summarize(results,suite,smoke=False):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--suite',choices=['static','clusterchain','mcbo','dynamic'],required=True)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--suite',choices=['static','mcbo','dynamic'],required=True)
     p.add_argument('--results',type=Path,default=Path('results/paper'));p.add_argument('--smoke',action='store_true')
     p.add_argument('--out',type=Path,required=True,help='Summary JSON; sibling CSV contains seed-level outcomes')
     a=p.parse_args();summary=summarize(a.results,a.suite,a.smoke)

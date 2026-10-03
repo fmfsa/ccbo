@@ -45,7 +45,6 @@ command below.
 
 # Full paper experiments; choose --jobs to match available CPUs and memory.
 .venv-static/bin/python experiments/run.py --suite static --jobs 8 --outdir results/reproduction
-.venv-static/bin/python experiments/run.py --suite clusterchain --jobs 8 --outdir results/reproduction
 .venv-mcbo/bin/python experiments/run.py --suite mcbo --jobs 8 --outdir results/reproduction
 .venv-static/bin/python experiments/run.py --suite dynamic --jobs 8 --outdir results/reproduction
 ```
@@ -53,7 +52,6 @@ command below.
 | Suite | Configurations × seeds | Budget |
 |---|---:|---|
 | Static | 21 × 30 = 630 | Paid intervention cost 100 or 120 |
-| ClusterChain | 28 × 30 = 840 | Paid intervention cost 800 |
 | MCBO | 10 × 20 = 200 | 100 optimization rounds |
 | Dynamic | 9 × 20 = 180 | Three slices, 10 trials per slice |
 
@@ -65,28 +63,13 @@ cluster. Dynamic experiments use 1,024 predictive particles, 2,048 feedback
 draws, and 100,000 scoring draws; the regularized nonstationary SCM is
 explicitly named.
 
-The static and ClusterChain suites use protocol `matched-controlled-cbo-v4`, which
+The static suite uses protocol `matched-controlled-cbo-v4`, which
 follows the CBO reference implementation (Aglietti et al., 2020):
 - Every measurement returns the exact population value E[Y | do(x)]. The reference implementation averages 100,000 SCM draws; we use closed forms.
 - Each arm starts with 3 uniformly drawn initial interventions that are given, not charged.
 - Every trial either observes or intervenes, using CBO's coverage-based ε rule: 100 initial observational rows, 20 more per observe trial, capped at 150. Observing is free.
 
 Runs stop at a fixed intervention-cost budget, counted from 0. Trial indices are logged for a trial-indexed view. The recommendation is the executed intervention with the smallest measured target, or no intervention when the observational mean of the target over the initial rows is strictly smaller. Exposed refinement arms start from a plain prior with no data.
-
-ClusterChain has six manipulable variables in three pairs and four named
-partitions (`fine`, `alt`, `pairs`, `coarse`). Its conditions are:
-- K0: correct graph.
-- K1: delete D1→Y (quotient preserved).
-- K2: delete D1→Y and D2→Y (quotient changed).
-- K3: drop the latent A1↔A2 (identified but biased fine prior).
-
-The methods are:
-- CBO;
-- QCBO per partition;
-- QCBO-NP: plain priors on the quotient arms;
-- CBO-matched: fine-graph priors on the quotient arms;
-- BO;
-- HQCBO: starts at `pairs`; staged hierarchy {B1,B2}, then {A1,A2} and {D1,D2}; every new nonempty union of the current clusters is exposed, including mixed unions.
 
 Use `--seed 2000` for one replicate across configurations, or `--index 0` for one
 unit in the listed matrix. Each worker uses one CPU. Completed runs resume only
@@ -98,7 +81,6 @@ seeds and fewer decisions and are not paper evidence.
 
 ```sh
 .venv-static/bin/python experiments/analyze.py --suite static --results results/reproduction --out results/static.json
-.venv-static/bin/python experiments/analyze.py --suite clusterchain --results results/reproduction --out results/clusterchain.json
 .venv-mcbo/bin/python experiments/analyze.py --suite mcbo --results results/reproduction --out results/mcbo.json
 .venv-static/bin/python experiments/analyze.py --suite dynamic --results results/reproduction --out results/dynamic.json
 ```
@@ -131,14 +113,11 @@ sources:
 | Table 2 | `tables/minimal_taxonomy.tex` | static | Controlled conditions; written only if protected QCBO traces match |
 | Table 3 | `tables/minimal_ablations.tex` | static | Final and cumulative incumbent regret |
 | Table 4 | `tables/cost_accounting.tex` | static | Free initial points, observe trials, sequential, refinement and unspent budget |
-| Appendix | `figures/clusterchain.pdf` | clusterchain | Incumbent regret against cost under K0–K3 |
-| Appendix | `tables/clusterchain_results.tex` | clusterchain | Final and cumulative regret, all cells |
-| Appendix | `tables/clusterchain_partitions.tex` | clusterchain | Partitions, arms, free initial points, analytic V(Π) and Δ(Π) |
 
 Cumulative regret sums the recommendation's regret at every integer cost from 0
 to the budget. All intervals are two-sided 95%
-Student-t intervals over paired seeds. Use `--suites static clusterchain` to
-report the controlled suites alone, and `--smoke` to check the
+Student-t intervals over paired seeds. Use `--suites static` to
+report the controlled suite alone, and `--smoke` to check the
 pipeline on pilot results (for example, `--results results/check`); smoke outputs
 are not paper evidence.
 

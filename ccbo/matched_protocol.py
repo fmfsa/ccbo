@@ -35,12 +35,11 @@ from ccbo import minibench as mb
 PROTOCOL_ID = "matched-controlled-cbo-v4"
 SEED_NAMESPACE = "matched-controlled-noisy-v2"
 FEEDBACK_MODE = "population_expectation"
-DEFAULT_BUDGET = {mb.PP_NAME: 100, mb.FD_NAME: 100, mb.MC_NAME: 120,
-                  mb.CC_NAME: mb.CC_BUDGET}
+DEFAULT_BUDGET = {mb.PP_NAME: 100, mb.FD_NAME: 100, mb.MC_NAME: 120}
 DEFAULT_N_INIT = {scm: 3 for scm in DEFAULT_BUDGET}   # free initial points per arm
 N_OBS_INITIAL, N_OBS_POOL, N_OBS_BATCH = 100, 150, 20   # CBO reference: 100, +20, cap 100+50
 NODES = {scm: tuple(mb.NODES[scm]) for scm in DEFAULT_BUDGET}
-SCALAR_METHODS = ("CBO", "QCBO", "BO-S", "BO", "CBO-NP", "QCBO-NP", "CBO-matched")
+SCALAR_METHODS = ("CBO", "QCBO", "BO-S", "BO", "CBO-NP")
 
 
 class PilotComplete(Exception):
@@ -87,18 +86,6 @@ def sample_true(scm, iv, z):
         a = iv.get("X1", mb.MC_SIGMA_1*z[1])
         b = iv.get("X2", mb.MC_BETA*a + mb.MC_SIGMA_2*z[2])
         return dict(X1=float(a), X2=float(b), Y=float((b-mb.MC_C)**2 + mb.SIGMA_Y*z[3]))
-    if scm == mb.CC_NAME:
-        ua, ud = mb.CC_SIGMA_U*z[0], mb.CC_SIGMA_U*z[1]
-        row = {}
-        row["A1"] = iv.get("A1", ua + mb.CC_SIGMA_IN*z[2])
-        row["A2"] = iv.get("A2", ua + mb.CC_SIGMA_IN*z[3])
-        row["B1"] = iv.get("B1", mb.CC_BETA*row["A1"] + mb.CC_SIGMA_B1*z[4])
-        row["B2"] = iv.get("B2", mb.CC_SIGMA_B2*z[5])
-        row["D1"] = iv.get("D1", ud + mb.CC_SIGMA_IN*z[6])
-        row["D2"] = iv.get("D2", ud + mb.CC_SIGMA_IN*z[7])
-        c = mb.CC_CENTRES
-        row["Y"] = sum((row[v]-c[v])**2 for v in ("A2", "B1", "B2", "D1", "D2")) + mb.SIGMA_Y*z[8]
-        return {k: float(row[k]) for k in NODES[scm]}
     raise ValueError(scm)
 
 
@@ -114,10 +101,6 @@ def natural_means(scm, iv):
     elif scm == mb.MC_NAME:
         row.setdefault("X1", 0.)
         row.setdefault("X2", mb.MC_BETA * row["X1"])
-    elif scm == mb.CC_NAME:
-        for v in ("A1", "A2", "B2", "D1", "D2"):
-            row.setdefault(v, 0.)
-        row.setdefault("B1", mb.CC_BETA * row["A1"])
     else:
         raise ValueError(scm)
     return row
@@ -255,22 +238,13 @@ def recommend(events, null_estimate=None):
     return best["event_id"]
 
 
-OPTIMUM = {mb.PP_NAME: 0., mb.FD_NAME: 0., mb.MC_NAME: mb.MC_SIGMA_2**2,
-           mb.CC_NAME: mb.ORACLE[mb.CC_NAME]["y_star"]}
+OPTIMUM = {mb.PP_NAME: 0., mb.FD_NAME: 0., mb.MC_NAME: mb.MC_SIGMA_2**2}
 
 
 def regret_start(scm):
     """First cost of the common cost grid. Without an initial design every
     method has a recommendation (the null intervention) from cost 0."""
     return 0
-
-
-def fine_mis_arms(scm):
-    """Fine MIS of the true graph (ClusterChain only; used for the cost grid)."""
-    if scm != mb.CC_NAME:
-        raise ValueError(scm)
-    # A1 reaches Y only through B1, so a fine set holding both is not minimal.
-    return [a for a in all_arms(scm) if not {"A1", "B1"} <= set(a)]
 
 
 def score_events(scm, events, budget, null_estimate=None):
@@ -392,27 +366,14 @@ def method_partition(scm, method, partition_id=None):
 
 
 def build_graph(scm, cond, method, obs, partition_id=None):
-    """Arms, manipulables and the CoarsenedGraph supplying priors for ``method``.
-
-    CBO-matched keeps the fine supplied graph for every prior but restricts its
-    arms to the quotient arms of ``partition_id``: it separates the effect of
-    the smaller action family from the effect of quotient-level priors.
-    """
+    """Arms, manipulables and the CoarsenedGraph supplying priors for ``method``."""
     from ccbo.scm_graphs import get_original_graph
     from ccbo.coarsened_graph import CoarsenedGraph
     graph = get_original_graph(scm, obs)
     pid = method_partition(scm, method, partition_id)
     assumed = mb.variant_name(cond)
-    if method == "CBO-matched":
-        coarse = CoarsenedGraph(graph, mb.partition(scm, pid), scm, obs,
-                                num_mc_samples=2000, assumed_graph_name=assumed)
-        cg = CoarsenedGraph(graph, mb.fine_partition(scm), scm, obs,
-                            num_mc_samples=2000, assumed_graph_name=assumed)
-        cg._exploration_set = [list(a) for a in coarse._exploration_set]
-        cg._do_cache = None
-    else:
-        cg = CoarsenedGraph(graph, mb.partition(scm, pid), scm, obs,
-                            num_mc_samples=2000, assumed_graph_name=assumed)
+    cg = CoarsenedGraph(graph, mb.partition(scm, pid), scm, obs,
+                        num_mc_samples=2000, assumed_graph_name=assumed)
     arms, _, manip = cg.get_sets()
     arms = [list(a) for a in arms]
     if method == "BO-S":
@@ -454,7 +415,7 @@ def run_scalar(scm, cond, method, seed, budget=None, n_init=None, max_purchases=
                 CBO(num_trials, arms, manip, xs, ys, bestx, besty, bestarm,
                     ranges, functions, obs, coverage, cg, N_OBS_BATCH, costs, pool,
                     "min", N_OBS_POOL, N_OBS_INITIAL, experiment.n_init,
-                    Causal_prior=method in ("CBO", "QCBO", "CBO-matched"),
+                    Causal_prior=method in ("CBO", "QCBO"),
                     target_evaluator=experiment.target, force_observe_on_entry=None)
         except (BudgetExhausted, PilotComplete):
             pass

@@ -35,11 +35,10 @@ def main():
     p.add_argument("--scm", required=True, choices=list(DEFAULT_BUDGET))
     p.add_argument("--cond", required=True)
     p.add_argument("--method", required=True, choices=list(SCALAR_METHODS) + ["HQCBO", "CBO-FALLBACK"])
-    p.add_argument("--partition", help="named partition for quotient methods (default: coarse)")
     p.add_argument("--seed", required=True, type=int)
     p.add_argument("--stage", required=True, choices=["pilot", "replication"])
     p.add_argument("--max-purchases", type=int, help="pilot only: sequential purchases after initialization")
-    p.add_argument("--budget", type=int, help="pilot override only; primary defaults 100/120/400")
+    p.add_argument("--budget", type=int, help="pilot override only; primary defaults 100/120")
     p.add_argument("--outdir", required=True)
     args = p.parse_args()
     if args.stage == "replication" and (args.seed not in range(2000,2030) or args.max_purchases is not None or args.budget is not None):
@@ -56,7 +55,7 @@ def main():
     try:
         partition = method_partition(args.scm, "QCBO" if args.method == "HQCBO" else
                                      "CBO" if args.method == "CBO-FALLBACK" else args.method,
-                                     args.partition)
+                                     None)
     except ValueError as exc:
         p.error(str(exc))
     out.mkdir(parents=True, exist_ok=True)
@@ -73,7 +72,7 @@ def main():
                   null_estimate=float(obs["Y"].iloc[:N_OBS_INITIAL].mean()),
                   budget=DEFAULT_BUDGET[args.scm] if args.budget is None else args.budget,
                   observational_sha256=hashlib.sha256(obs_bytes).hexdigest())
-    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py", "ccbo/coarsened_graph.py", "ccbo/cbo/graphs/ClusterChain.py"]
+    source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py", "ccbo/coarsened_graph.py"]
     config["source_sha256"] = {f:digest(ROOT/f) for f in source_files}
     (out/"config.json").write_text(json.dumps(config, indent=2))
     started = time.time()

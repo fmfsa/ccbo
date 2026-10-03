@@ -1,8 +1,9 @@
-"""Graph-free noisy HQCBO (staged hierarchy, mixed unions), using resumed vendored CBO.
+"""Graph-free HQCBO (staged hierarchy, mixed unions), using resumed vendored CBO.
 
-The original quotient's cached priors survive; newly exposed singleton arms use
-plain GPs. After exposure the backend receives a graph-access guard. Refinement
-uses measured incumbents only and pays the complete split design before use.
+The original arms keep their quotient priors (refreshed from the initial quotient
+when observing). Newly exposed arms receive no data and start from the engine's
+plain zero-mean GP prior, so refinement adds actions but no free information.
+The plateau trigger uses measured incumbents only.
 """
 import numpy as np
 from ccbo import minibench as mb
@@ -11,12 +12,12 @@ from ccbo.matched_protocol import (Experiment, BudgetExhausted, PilotComplete,
 
 
 class RefinementExperiment(Experiment):
-    def expose(self, new_arms, design_points=0, charged=True):
+    def expose(self, new_arms, design_points=0):
         """Add newly exposed arms. By default they start from a plain prior with
         no data (refinement adds actions, not free information); a paid design
         of ``design_points`` rows per arm is bought atomically if requested."""
         new_arms = sorted({canonical_arm(a) for a in new_arms} - set(self.arms), key=lambda a:(len(a),a))
-        needed = design_points*sum(map(len,new_arms)) if charged else 0
+        needed = design_points*sum(map(len,new_arms))
         if needed > self.remaining:
             return None
         # Validate before changing the allowed menu or charging any rows.
@@ -32,11 +33,11 @@ class RefinementExperiment(Experiment):
             rng=np.random.RandomState(keyed_seed(self.scm,self.seed,"split-levels",arm))
             xs=np.column_stack([rng.uniform(*domains(self.scm)[v],design_points) for v in arm])
             for x in xs:
-                rows[arm].append(self._buy(arm,x,"split_init",charged=charged))
+                rows[arm].append(self._buy(arm,x,"split_init"))
         return rows
 
 
-def extend_state(state, arms, experiment, new_rows, ranges, prior_centre=None, plain=False):
+def extend_state(state, arms, experiment, new_rows, ranges):
     """Append only genuinely purchased arm data; retain old GP/prior history."""
     from emukit.core import ParameterSpace, ContinuousParameter
     old_arms=[list(a) for a in arms]
@@ -58,21 +59,10 @@ def extend_state(state, arms, experiment, new_rows, ranges, prior_centre=None, p
         state["model_list"].append(None)
         state["mean_functions_list"].append(None)
         state["var_functions_list"].append(None)
-        # Graph-free uninformative prior: the observational mean and variance of
-        # Y (the fallback the paper uses for arms without identified effects).
-        if plain:
-            # Engine's plain GP prior (zero mean, unit RBF), no graph and no data.
-            state["prior_mask"].append(False)
-            continue
-        y=np.asarray(state["observational_samples"]["Y"],dtype=float)
-        mu,var=float(y.mean()),float(y.var())
-        if prior_centre is not None: mu=float(prior_centre)
-        state.setdefault("fixed_priors",{})[len(arms)-1]=(
-            lambda X,mu=mu:np.full((np.atleast_2d(X).shape[0],1),mu),
-            lambda X,var=var:np.full((np.atleast_2d(X).shape[0],1),var))
-        state["prior_mask"].append(True)
+        # Engine's plain GP prior (zero mean, unit RBF): no graph and no data.
+        state["prior_mask"].append(False)
     state["global_opt"][-1]=min(e["measured"]["Y"] for e in experiment.events)
-    state["cumulative_cost"] += experiment.n_init*sum(map(len,new_rows))
+    state["cumulative_cost"] = float(experiment.cost)   # charged spend, including any paid split design
     state["current_cost"][-1]=state["cumulative_cost"]
     state["force_rebuild_all"]=True
     state["models_fresh"]=False
@@ -95,23 +85,17 @@ def mixed_unions(clusters):
             for combo in combinations(clusters,k)]
 
 
-NEW_ARM_MODES=("fallback","free_design","incumbent","plain")
-
-
 def run_hqcbo(scm, cond, seed, budget=None, n_init=None, max_purchases=None, partition_id="coarse",
-              plateau_k=5, plateau_delta=1e-3, new_arm_mode="plain", max_stages=None):
+              plateau_k=5, plateau_delta=1e-3):
     """Graph-free staged refinement from ``partition_id`` along ``mb.REFINE_STAGES``.
 
     A stage fires when the measured incumbent improves by less than
     ``plateau_delta`` over the last ``plateau_k`` sequential measurements since
     the previous stage. It splits the stage's clusters and exposes every
     previously unavailable nonempty union of the *current* clusters (mixed
-    unions included). New arms get no data; ``new_arm_mode`` sets their prior:
-    "plain" (default; the engine's zero-mean plain GP, as for QCBO-NP and BO-S),
-    "fallback" (observational mean and variance of Y), "incumbent" (fallback
-    variance centred at the incumbent), or "free_design" (fallback prior plus
-    ``n_init`` uncharged points). Original arms keep their quotient priors,
-    refreshed from the initial quotient when observing.
+    unions included). New arms get no data and the engine's plain zero-mean GP
+    prior. Original arms keep their quotient priors, refreshed from the initial
+    quotient when observing.
     """
     if scm not in mb.REFINE_STAGES:
         raise ValueError(f"no refinement hierarchy declared for {scm}")
@@ -132,7 +116,7 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=None, max_purchases=None, par
                                     null_estimate=float(obs["Y"].mean()))
     xs,ys,bestx,besty,bestarm=experiment.scalar_initial(arms)
     clusters=[c for c in mb.partition(scm,pid) if c!=frozenset({"Y"})]
-    stages=list(mb.REFINE_STAGES[scm])[:max_stages]
+    stages=list(mb.REFINE_STAGES[scm])
     history=[besty]
     since=0                       # history index where the current stage began
     refinements=[]
@@ -162,10 +146,7 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=None, max_purchases=None, par
                     clusters=apply_stage(clusters,stage)
                     new_arms=[a for a in mixed_unions(clusters) if a not in experiment.arms]
                     before=len(experiment.events)
-                    if new_arm_mode=="free_design":
-                        new_rows=experiment.expose(new_arms,design_points=experiment.n_init,charged=False) if new_arms else {}
-                    else:
-                        new_rows=experiment.expose(new_arms) if new_arms else {}
+                    new_rows=experiment.expose(new_arms) if new_arms else {}
                     record=dict(stage=len(refinements),trigger_sequential_index=experiment.sequential_index,
                                 trigger_event_id=before-1,plateau_k=plateau_k,plateau_delta=plateau_delta,
                                 trigger_measurements=list(history[-(plateau_k+1):]),
@@ -173,10 +154,7 @@ def run_hqcbo(scm, cond, seed, budget=None, n_init=None, max_purchases=None, par
                                 partition_after=[sorted(c) for c in clusters],
                                 accepted=new_rows is not None,split_cost=0,split_arms=[])
                     if new_rows:
-                        centre=(min(e["measured"]["Y"] for e in experiment.events)
-                                if new_arm_mode=="incumbent" else None)
-                        extend_state(state,arms,experiment,new_rows,ranges,prior_centre=centre,
-                                     plain=new_arm_mode=="plain")
+                        extend_state(state,arms,experiment,new_rows,ranges)
                         prior_mask=list(state["prior_mask"])
                         record.update(split_cost=sum(e["cost"] for e in experiment.events[before:]),
                                       split_arms=[list(a) for a in new_rows],

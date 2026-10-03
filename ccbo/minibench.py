@@ -167,77 +167,34 @@ MC_REFINE_MAP: Dict[frozenset, List[frozenset]] = {
 }
 
 
-# --- ClusterChain (multi-cluster benchmark) ---------------------------------
-# Six manipulable variables in three pairs; the best fine intervention sets
-# A, B2 and D while leaving B1 to respond naturally to A1. See the
-# ClusterChain section of the module notes below ``cc_do``.
-CC_NAME = "ClusterChain"
-CC_MANIPULATIVE: List[str] = ["A1", "A2", "B1", "B2", "D1", "D2"]
-CC_TARGET = "Y"
-CC_NODES: List[str] = CC_MANIPULATIVE + [CC_TARGET]
-CC_TRUE_EDGES: List[Tuple[str, str]] = [
-    ("A1", "B1"), ("B1", "Y"), ("A2", "Y"), ("B2", "Y"), ("D1", "Y"), ("D2", "Y")]
-CC_CONFOUNDERS: List[Tuple[str, List[str]]] = [("UA", ["A1", "A2"]), ("UD", ["D1", "D2"])]
-
-CC_SIGMA_U = 0.5       # latent scale of UA and UD
-CC_SIGMA_IN = 0.5      # idiosyncratic scale of A1, A2, D1, D2
-CC_BETA = 2.0          # A1 -> B1 slope
-CC_SIGMA_B1 = 0.2      # B1 mechanism noise
-CC_SIGMA_B2 = 0.5      # B2 scale (root)
-CC_VAR_ROOT = CC_SIGMA_U ** 2 + CC_SIGMA_IN ** 2      # Var(A_i) = Var(D_i) = 0.5
-# Y = (A2 - CA2)^2 + (B1 - CB1)^2 + (B2 - CB2)^2 + (D1 - CD1)^2 + (D2 - CD2)^2
-CC_CENTRES = {"A2": -2.0, "B1": 4.0, "B2": 1.0, "D1": 1.0, "D2": -1.0}
-CC_B_BOX = (-2.0, 2.0)  # policy box for B1 and B2 (B1 cannot be clamped to 4)
-CC_BUDGET = 800
-CC_N_INIT = 3   # free initial points per arm (as for every SCM)
-
-# Named partitions: manipulable clusters only (Y is appended).
-CC_PARTITIONS: Dict[str, List[List[str]]] = {
-    "fine": [[v] for v in CC_MANIPULATIVE],
-    "alt": [["A1", "A2"], ["B1"], ["B2"], ["D1", "D2"]],
-    "pairs": [["A1", "A2"], ["B1", "B2"], ["D1", "D2"]],
-    "coarse": [["A1", "A2", "B1", "B2"], ["D1", "D2"]],
-}
-
-# Supplied refinement hierarchy, applied stage by stage (HQCBO starts at
-# "pairs"): first split {B1,B2}, then {A1,A2} and {D1,D2}.
+# Supplied refinement hierarchy, applied stage by stage by HQCBO.
 REFINE_STAGES: Dict[str, List[Dict[frozenset, List[frozenset]]]] = {
     MC_NAME: [MC_REFINE_MAP],
-    CC_NAME: [
-        {frozenset({"B1", "B2"}): [frozenset({"B1"}), frozenset({"B2"})]},
-        {frozenset({"A1", "A2"}): [frozenset({"A1"}), frozenset({"A2"})],
-         frozenset({"D1", "D2"}): [frozenset({"D1"}), frozenset({"D2"})]},
-    ],
 }
 
 # Standard normals consumed per SCM row (latents, mechanisms, target).
-NOISE_DIM: Dict[str, int] = {PP_NAME: 4, FD_NAME: 4, MC_NAME: 4, CC_NAME: 9}
+NOISE_DIM: Dict[str, int] = {PP_NAME: 4, FD_NAME: 4, MC_NAME: 4}
 MANIPULATIVE: Dict[str, List[str]] = {
-    PP_NAME: PP_MANIPULATIVE, FD_NAME: FD_MANIPULATIVE, MC_NAME: MC_MANIPULATIVE,
-    CC_NAME: CC_MANIPULATIVE}
+    PP_NAME: PP_MANIPULATIVE, FD_NAME: FD_MANIPULATIVE, MC_NAME: MC_MANIPULATIVE}
 NODES: Dict[str, List[str]] = {
-    PP_NAME: PP_NODES, FD_NAME: FD_NODES, MC_NAME: MC_NODES, CC_NAME: CC_NODES}
+    PP_NAME: PP_NODES, FD_NAME: FD_NODES, MC_NAME: MC_NODES}
 
 
 def domain(scm: str, var: str) -> Tuple[float, float]:
     """Intervention range of one manipulable variable."""
     if scm == MC_NAME and var == "X2":
         return MC_X2_BOX
-    if scm == CC_NAME and var in ("B1", "B2"):
-        return CC_B_BOX
     return DOMAIN
 
 
 def partition_ids(scm: str) -> List[str]:
     """Named partitions available for ``scm``."""
-    return list(CC_PARTITIONS) if scm == CC_NAME else ["fine", "coarse"]
+    return ["fine", "coarse"]
 
 
 def partition(scm: str, partition_id: str) -> List[frozenset]:
     """Named partition (manipulable clusters + {Y}) for ``scm``."""
-    if scm == CC_NAME:
-        clusters = CC_PARTITIONS[partition_id]
-    elif partition_id == "fine":
+    if partition_id == "fine":
         clusters = [[v] for v in MANIPULATIVE[scm]]
     elif partition_id == "coarse":
         clusters = {PP_NAME: PP_COARSE_CLUSTERS, FD_NAME: FD_COARSE_CLUSTERS,
@@ -312,40 +269,6 @@ def mc_do_x2(x2: float) -> float:
     return (x2 - MC_C) ** 2
 
 
-def cc_do(intervention: Mapping[str, float]) -> float:
-    """E[Y | do(intervention)] for ClusterChain, any subset including none.
-
-    ClusterChain::
-
-        UA, UD ~ N(0, SIGMA_U^2)            (latent; A1<->A2, D1<->D2)
-        A1 = UA + SIGMA_IN e,  A2 = UA + SIGMA_IN e
-        B1 = BETA A1 + SIGMA_B1 e,  B2 = SIGMA_B2 e
-        D1 = UD + SIGMA_IN e,  D2 = UD + SIGMA_IN e
-        Y  = (A2+2)^2 + (B1-4)^2 + (B2-1)^2 + (D1-1)^2 + (D2+1)^2 + SIGMA_Y e
-
-    Each term depends on one variable, so E[Y] is the sum of the terms'
-    expectations; an unset variable contributes its natural mean and
-    variance. B1 responds to A1 (set or natural); no other natural response
-    depends on an intervention.
-    """
-    iv = dict(intervention)
-    total = 0.0
-    for var in ("A2", "B2", "D1", "D2"):
-        centre = CC_CENTRES[var]
-        if var in iv:
-            total += (iv[var] - centre) ** 2
-        else:
-            var_nat = CC_SIGMA_B2 ** 2 if var == "B2" else CC_VAR_ROOT
-            total += centre ** 2 + var_nat
-    if "B1" in iv:
-        total += (iv["B1"] - CC_CENTRES["B1"]) ** 2
-    elif "A1" in iv:
-        total += (CC_BETA * iv["A1"] - CC_CENTRES["B1"]) ** 2 + CC_SIGMA_B1 ** 2
-    else:
-        total += CC_CENTRES["B1"] ** 2 + CC_BETA ** 2 * CC_VAR_ROOT + CC_SIGMA_B1 ** 2
-    return total
-
-
 def null_value(scm: str) -> float:
     """E[Y] with no intervention (the null intervention's population value)."""
     if scm == PP_NAME:
@@ -355,8 +278,6 @@ def null_value(scm: str) -> float:
             0.0, FD_B ** 2 * (FD_SIGMA_U ** 2 + FD_SIGMA_1 ** 2) + FD_SIGMA_M ** 2))
     if scm == MC_NAME:
         return MC_C ** 2 + MC_BETA ** 2 * MC_SIGMA_1 ** 2 + MC_SIGMA_2 ** 2
-    if scm == CC_NAME:
-        return cc_do({})
     raise ValueError(scm)
 
 
@@ -390,10 +311,6 @@ def population_do(scm: str, arm: Sequence[str], values) -> float:
 
     if not names:
         return null_value(scm)
-    if scm == CC_NAME:
-        if not key <= set(CC_MANIPULATIVE):
-            raise ValueError(f"unsupported ClusterChain intervention: {names}")
-        return cc_do(intervention)
     if scm == PP_NAME:
         if key == frozenset({"X1"}):
             return pp_do_x1(intervention["X1"])
@@ -466,52 +383,6 @@ ORACLE: Dict[str, Dict[str, float]] = {
 }
 
 
-def cc_mu_star(arm: Sequence[str]) -> float:
-    """Best population value of a ClusterChain intervention set (closed form).
-
-    Every target term is separable, so each set variable reaches its own
-    minimum inside its range; B1 clamped in the policy box reaches at best
-    (2 - 4)^2 = 4, while B1 left natural under do(A1 = 2) contributes
-    SIGMA_B1^2.
-    """
-    arm = set(arm)
-    total = 0.0
-    for var in ("A2", "B2", "D1", "D2"):
-        if var not in arm:
-            var_nat = CC_SIGMA_B2 ** 2 if var == "B2" else CC_VAR_ROOT
-            total += CC_CENTRES[var] ** 2 + var_nat
-    if "B1" in arm:
-        total += (CC_B_BOX[1] - CC_CENTRES["B1"]) ** 2
-    elif "A1" in arm:
-        total += CC_SIGMA_B1 ** 2
-    else:
-        total += CC_CENTRES["B1"] ** 2 + CC_BETA ** 2 * CC_VAR_ROOT + CC_SIGMA_B1 ** 2
-    return total
-
-
-def cc_partition_value(partition_id: str) -> float:
-    """V(Pi): best value over all unions of manipulable clusters, incl. none."""
-    from itertools import combinations
-    clusters = CC_PARTITIONS[partition_id]
-    best = null_value(CC_NAME)
-    for k in range(1, len(clusters) + 1):
-        for combo in combinations(clusters, k):
-            best = min(best, cc_mu_star([v for c in combo for v in c]))
-    return best
-
-
-ORACLE[CC_NAME] = {
-    "y_star": CC_SIGMA_B1 ** 2,                            # 0.04
-    "null": None,                                          # filled below
-    "v_pi": {},                                            # per partition
-    "price": {},
-}
-ORACLE[CC_NAME]["null"] = null_value(CC_NAME)              # 26.79
-for _pid in CC_PARTITIONS:
-    ORACLE[CC_NAME]["v_pi"][_pid] = cc_partition_value(_pid)
-    ORACLE[CC_NAME]["price"][_pid] = cc_partition_value(_pid) - CC_SIGMA_B1 ** 2
-
-
 # ---------------------------------------------------------------------------
 # Perturbation taxonomy (paper Table 1 is emitted from this list)
 # ---------------------------------------------------------------------------
@@ -576,43 +447,17 @@ PERTURBATIONS: List[Perturbation] = [
     {"id": "C0", "scm": MC_NAME, "label": "correct", "ops": [],
      "quotient_changed": False, "fine_mis_changed": False,
      "fine_prior_changed": False, "protected": True},
-    # ClusterChain. The quotient flags hold for every named coarse partition
-    # (alt, pairs, coarse), because each keeps {D1, D2} and {A1, A2} intact.
-    {"id": "K0", "scm": CC_NAME, "label": "correct", "ops": [],
-     "quotient_changed": False, "fine_mis_changed": False,
-     "fine_prior_changed": False, "protected": True},
-    # Quotient-preserving arm loss: D2->Y keeps the cluster edge {D1,D2}->Y,
-    # but every D1-containing fine arm leaves the MIS (regret >= 1.5).
-    {"id": "K1", "scm": CC_NAME, "label": "del D1->Y (quotient-redundant)",
-     "ops": [("del", "D1", "Y")],
-     "quotient_changed": False, "fine_mis_changed": True,
-     "fine_prior_changed": None, "protected": True},
-    # Quotient-changing negative control: {D1,D2} loses its edge to Y, so
-    # every method loses the D arms; outside the invariance guarantee.
-    {"id": "K2", "scm": CC_NAME, "label": "del D1->Y and D2->Y (quotient-visible)",
-     "ops": [("del", "D1", "Y"), ("del", "D2", "Y")],
-     "quotient_changed": True, "fine_mis_changed": True,
-     "fine_prior_changed": None, "protected": False},
-    # Identified but biased prior: dropping the latent A1<->A2 keeps every
-    # fine arm and every effect identified, but do(A1) and do(A2) are then
-    # estimated without the backdoor adjustment the true graph requires.
-    {"id": "K3", "scm": CC_NAME, "label": "drop A1<->A2 (biased identified prior)",
-     "ops": [], "drop_confounders": ["UA"],
-     "quotient_changed": False, "fine_mis_changed": False,
-     "fine_prior_changed": True, "protected": True},
 ]
 
 VARIANT_SUFFIX: Dict[str, str] = {
     "A0": "", "A1": "_NoX1Y", "A2": "_WrongX1X2", "A3": "_ConfXY",
     "B0": "", "B1": "_ConfX1M", "C0": "",
-    "K0": "", "K1": "_NoD1Y", "K2": "_NoDY", "K3": "_NoUA",
 }
 
 _SCM_SPEC = {
     PP_NAME: (PP_NODES, PP_TRUE_EDGES, PP_CONFOUNDERS, PP_MANIPULATIVE),
     FD_NAME: (FD_NODES, FD_TRUE_EDGES, FD_CONFOUNDERS, FD_MANIPULATIVE),
     MC_NAME: (MC_NODES, MC_TRUE_EDGES, MC_CONFOUNDERS, MC_MANIPULATIVE),
-    CC_NAME: (CC_NODES, CC_TRUE_EDGES, CC_CONFOUNDERS, CC_MANIPULATIVE),
 }
 
 

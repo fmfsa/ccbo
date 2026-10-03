@@ -111,14 +111,3 @@ def test_parallel_failure_does_not_launch_remaining_units_or_kill_peer(tmp_path)
     with pytest.raises(ValueError): paper.run_many(selected,tmp_path,jobs=0,identity='test')
     with pytest.raises(ValueError): paper.run_many([selected[0],selected[0]],tmp_path,jobs=2,identity='test')
 
-
-def test_clusterchain_matrix():
-    units = paper.units('clusterchain')
-    assert len(units) == 840 and len({u['id'] for u in units}) == 840
-    assert {u['seed'] for u in units} == set(range(2000, 2030))
-    cells = {(u['options']['--cond'], u['options']['--method'], u['options'].get('--partition', '')) for u in units}
-    assert len(cells) == 28
-    assert {p for c, m, p in cells if m == 'QCBO'} == {'alt', 'pairs', 'coarse'}
-    assert ('K1', 'HQCBO', 'pairs') in cells and ('K0', 'BO', '') in cells
-    smoke = paper.units('clusterchain', smoke=True)
-    assert all(u['options']['--stage'] == 'pilot' and u['options']['--max-purchases'] == '3' for u in smoke)

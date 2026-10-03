@@ -123,7 +123,6 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		models_fresh = state.get('models_fresh', False)
 		trial_log = list(state.get('trial_log', []))
 		opening_forced_observe = bool(state.get('opening_forced_observe', False))
-		fixed_priors = dict(state.get('fixed_priors', {}))
 		resumed = True
 	else:
 		# === ORIGINAL INITIALIZATION (unchanged) ===
@@ -168,7 +167,6 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		models_fresh = False
 		trial_log = []
 		opening_forced_observe = False
-		fixed_priors = {}
 		resumed = False
 
 
@@ -210,20 +208,10 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		f"prior mask length {len(prior_mask)} != {len(exploration_set)} arms")
 	any_prior = any(prior_mask)
 
-	## Arms whose prior is supplied directly (``state['fixed_priors']``: arm
-	## index -> (mean, var) functions) are never sent to the graph; the
-	## graph-free refinement uses this for newly exposed arms.
 	def refresh_priors():
-		graph_mask = [m and j not in fixed_priors for j, m in enumerate(prior_mask)]
-		if any(graph_mask):
-			means, variances = update_all_do_functions(
-				graph, exploration_set, functions, dict_interventions,
-				observational_samples, x_dict_mean, x_dict_var, prior_mask=graph_mask)
-		else:
-			means, variances = [None] * len(exploration_set), [None] * len(exploration_set)
-		for j, (mean_fn, var_fn) in fixed_priors.items():
-			means[j], variances[j] = mean_fn, var_fn
-		return means, variances
+		return update_all_do_functions(
+			graph, exploration_set, functions, dict_interventions,
+			observational_samples, x_dict_mean, x_dict_var, prior_mask=prior_mask)
 
 	############################# LOOP
 	start_time = time.perf_counter()
@@ -484,7 +472,6 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			'trial_log': trial_log,
 			'prior_mask': list(prior_mask),
 			'opening_forced_observe': bool(opening_forced_observe),
-			'fixed_priors': dict(fixed_priors),
 		}
 		return results, state_out
 
