@@ -42,17 +42,12 @@ class _StubGraph:
         return OrderedDict(self._ranges)
 
 
-_RANGES = {
-    mb.PP_NAME: [("X1", list(mb.DOMAIN)), ("X2", list(mb.DOMAIN))],
-    mb.FD_NAME: [("X1", list(mb.DOMAIN)), ("M", list(mb.DOMAIN))],
-    mb.MC_NAME: [("X1", list(mb.DOMAIN)), ("X2", list(mb.MC_X2_BOX))],
-}
+_RANGES = {scm: [(v, list(mb.domain(scm, v))) for v in mb.MANIPULATIVE[scm]]
+           for scm in mb.NODES}
 
 
 def _obs(scm):
-    nodes = {mb.PP_NAME: mb.PP_NODES, mb.FD_NAME: mb.FD_NODES,
-             mb.MC_NAME: mb.MC_NODES}[scm]
-    return pd.DataFrame({n: np.zeros(4) for n in nodes})
+    return pd.DataFrame({n: np.zeros(4) for n in mb.NODES[scm]})
 
 
 def _admg_signature(admg):

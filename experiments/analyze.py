@@ -39,8 +39,25 @@ def close(a,b):
 def finite(value, nonnegative=False):
     return isinstance(value,(int,float)) and math.isfinite(value) and (not nonnegative or value>=0)
 
+NODES={"ParallelParent":("X1","X2"),"FrontDoor":("X1","M"),"MediatedChain":("X1","X2")}
+OPTIMUM={"ParallelParent":0.,"FrontDoor":0.,"MediatedChain":.04}
+BUDGET={"ParallelParent":100,"FrontDoor":100,"MediatedChain":120}
+N_INIT={"ParallelParent":3,"FrontDoor":3,"MediatedChain":3}
+# Initial points are given (not charged), so every method has a recommendation from cost 0.
+REGRET_START={"ParallelParent":0,"FrontDoor":0,"MediatedChain":0}
+PROTOCOL={'protocol_id':'matched-controlled-cbo-v4','seed_namespace':'matched-controlled-noisy-v2',
+          'n_obs':100,'n_obs_pool':150,'n_obs_batch':20,'initial_design':'given_not_charged',
+          'observation_policy':'cbo_coverage_epsilon_greedy','feedback_mode':'population_expectation',
+          'recommendation_rule':'minimum_measured_Y_or_null_if_observational_mean_strictly_smaller;ties_canonical_arm_then_execution_index'}
+
+
+def bound(scm,v):
+    return 2 if (scm,v)==("MediatedChain","X2") else 3
+
+
 def population(scm, arm, x):
-    """Independent closed forms for the frozen three SCMs, including natural variance."""
+    """Independent closed forms for the frozen SCMs, including natural variance.
+    The empty arm is the null intervention, E[Y]."""
     iv = dict(zip(arm,x))
     if scm == "ParallelParent":
         return ((iv["X1"]-2)**2 if "X1" in iv else 4.25) + ((iv["X2"]+2)**2 if "X2" in iv else 4.25)
@@ -52,83 +69,103 @@ def population(scm, arm, x):
         return (iv["X2"]-4)**2 if "X2" in iv else (2*iv.get("X1",0.)-4)**2 + (.04 if "X1" in iv else 1.04)
     raise ValueError("unsupported SCM "+scm)
 
-def static_events(unit, config, events, scores, summary, replication, nominal_budget=False):
-    scm=unit["scm"]; budget=config["budget"]
+
+def same_value(a,b):
+    return a is None and b is None or close(a,b)
+
+
+def static_events(unit, config, events, scores, summary, replication, nominal_budget=False, null_estimate=None):
+    scm=unit["scm"]; budget=config["budget"]; n_init=config["n_init"]
     require(events and isinstance(events,list), "empty event log")
-    cost=0; best=None; init_cost=0; split_cost=0; sequential=0; scored=[]; oracle_best=math.inf
-    initial_counts={}; split_counts={}; split_ids=[]; sequential_started=False
-    nodes = {"X1","M"} if scm == "FrontDoor" else {"X1","X2"}
-    optimum=.04 if scm == "MediatedChain" else 0.
+    cost=0; init_cost=0; split_cost=0; sequential=0; scored=[]
+    initial_counts={}; split_counts={}; split_ids=[]; sequential_started=False; trials=[]
+    nodes=set(NODES[scm]); optimum=OPTIMUM[scm]
+    best=None
+    null_population=population(scm,[],[])
+    oracle_best=null_population
+    initial_row=dict(event_id=None,cum_cost=0,recommendation_event_id=None,recommendation_population=null_population,
+                     recommendation_regret=null_population-optimum,oracle_best_visited=null_population)
     for index,e in enumerate(events):
         arm=e["arm"]; x=e["x"]
         require(e["event_id"] == index, "event IDs must be consecutive")
         require(arm == sorted(set(arm)) and set(arm) <= nodes and 0 < len(arm)==len(x), "invalid canonical arm")
         require(e["phase"] in ("init","split_init","sequential"), "invalid event phase")
         for v,z in zip(arm,x):
-            bound=2 if scm=="MediatedChain" and v=="X2" else 3
-            require(math.isfinite(z) and -bound-1e-9 <= z <= bound+1e-9, "invalid intervention domain")
+            require(math.isfinite(z) and -bound(scm,v)-1e-9 <= z <= bound(scm,v)+1e-9, "invalid intervention domain")
             require(close(e["measured"][v],z), "measured clamped coordinate mismatch")
         require(set(e["measured"]) == nodes|{"Y"} and all(math.isfinite(v) for v in e["measured"].values()), "invalid measured row")
-        require(e["cost"] == len(arm), "purchase cost != arm size")
-        cost += len(arm)
+        require(close(e["measured"]["Y"],population(scm,arm,x)), "measurement is not the exact population value")
+        charged = e["phase"]!="init"
+        require(e["cost"] == (len(arm) if charged else 0), "purchase cost != arm size (initial points are free)")
+        cost += e["cost"]
         require(e["cum_cost"] == cost and cost <= budget, "cumulative cost mismatch or overshoot")
         if e["phase"]=="init":
-            require(not sequential_started, "initialization after sequential purchase")
-            init_cost+=len(arm); initial_counts[tuple(arm)]=initial_counts.get(tuple(arm),0)+1
+            require(not sequential_started and e.get("trial")==0, "initialization after sequential purchase")
+            initial_counts[tuple(arm)]=initial_counts.get(tuple(arm),0)+1
         elif e["phase"]=="split_init":
-            require(unit["method"]=="HQCBO" and scm=="MediatedChain" and unit["cond"]=="C0",
-                    "split initialization outside declared refinement method")
+            require(unit["method"]=="HQCBO", "split initialization outside declared refinement method")
             require(sequential_started and tuple(arm) not in initial_counts,"split arm was already initialized")
-            require(len(arm)==1,"refinement exposes singleton arms only")
             split_cost+=len(arm); split_counts[tuple(arm)]=split_counts.get(tuple(arm),0)+1; split_ids.append(index)
         else:
             sequential_started=True; sequential+=1
-            require(initial_counts.get(tuple(arm),split_counts.get(tuple(arm),0))==config["n_init"],
-                    "sequential arm lacks complete purchased initial design")
+            trials.append(e["trial"])
         key=lambda r:(r["measured"]["Y"],tuple(r["arm"]),r["event_id"])
         if best is None or key(e)<key(best): best=e
-        require(e.get("recommendation_event_id") == best["event_id"], "recommendation is not measured-data winner")
-        value=population(scm,best["arm"],best["x"])
+        chosen=None if null_estimate is not None and null_estimate<best["measured"]["Y"] else best["event_id"]
+        require(e.get("recommendation_event_id","missing") == chosen, "recommendation is not the declared measured-data winner")
+        value=population(scm,[],[]) if chosen is None else population(scm,best["arm"],best["x"])
         oracle_best=min(oracle_best,population(scm,arm,x))
-        scored.append(dict(event_id=index,cum_cost=cost,recommendation_event_id=best["event_id"],
+        scored.append(dict(event_id=index,cum_cost=cost,recommendation_event_id=chosen,
                            recommendation_population=value,recommendation_regret=value-optimum,
                            oracle_best_visited=oracle_best))
-    require(all(n==config["n_init"] for n in initial_counts.values()), "initial count does not match protocol")
+    require(all(n==n_init for n in initial_counts.values()), "initial count does not match protocol")
+    observes=summary.get("backend",{}).get("observation_log",[])
+    observe_trials=[o["trial"] for o in observes]
+    require(sorted(trials+observe_trials)==list(range(1,len(trials)+len(observe_trials)+1)),"trial indices are not a complete sequence")
+    require(all(o["n_rows_after"]<=config["n_obs_pool"] for o in observes) and
+            [o["n_rows_after"] for o in observes]==sorted(o["n_rows_after"] for o in observes),"observation log inconsistent")
+    require(summary["trials"]==len(trials)+len(observe_trials) and summary["observe_trials"]==len(observes),"trial counts mismatch")
     require(summary.get("split_init_cost",0)==split_cost,"split initialization cost mismatch")
-    if split_ids:
-        require(split_ids==list(range(split_ids[0],split_ids[-1]+1)) and split_cost==6 and
-                split_counts=={("X1",):3,("X2",):3},"split design is not the complete contiguous atomic design")
-    refinement=summary.get("backend",{}).get("refinement")
-    if unit["method"]=="HQCBO" and refinement is not None:
-        trigger=refinement["trigger_event_id"]
-        require(0<=trigger<len(events) and events[trigger]["phase"]=="sequential","invalid split trigger")
-        require(refinement["trigger_sequential_index"]==sum(e["phase"]=="sequential" for e in events[:trigger+1]),"split trigger index mismatch")
-        if refinement["accepted"]:
-            require(bool(split_ids) and split_ids[0]==trigger+1 and refinement["split_event_ids"]==split_ids and
-                    refinement["split_cost"]==6 and sorted(refinement["split_arms"])==[["X1"],["X2"]],"accepted split metadata mismatch")
-            require(refinement["recommendation_after_split"]==events[split_ids[-1]]["recommendation_event_id"],"post-split recommendation mismatch")
-        else:
-            require(not split_ids and refinement["split_cost"]==0 and budget-events[trigger]["cum_cost"]<6,
-                    "declined split must be unaffordable and uncharged")
+    refinements=summary.get("backend",{}).get("refinements")
+    if refinements is None:
+        single=summary.get("backend",{}).get("refinement")
+        refinements=[single] if single else []
+    if unit["method"]=="HQCBO":
+        accounted=[]
+        for k,ref in enumerate(refinements):
+            trigger=ref["trigger_event_id"]
+            require(0<=trigger<len(events) and events[trigger]["phase"]=="sequential","invalid split trigger")
+            require(ref["trigger_sequential_index"]==sum(e["phase"]=="sequential" for e in events[:trigger+1]),"split trigger index mismatch")
+            if ref["accepted"]:
+                ids=ref["split_event_ids"]
+                require(ids==list(range(trigger+1,trigger+1+len(ids))),"split design is not contiguous after its trigger")
+                require(ref["split_cost"]==sum(events[i]["cost"] for i in ids),"accepted split metadata mismatch")
+                last=ids[-1] if ids else trigger
+                require(ref["recommendation_after_split"]==events[last]["recommendation_event_id"],"post-split recommendation mismatch")
+                accounted+=ids
+            else:
+                require(ref["split_cost"]==0 and k==len(refinements)-1,"declined split must be uncharged and final")
+        require(sorted(accounted)==split_ids,"split events missing refinement metadata")
     else:
-        require(not split_ids,"split events missing refinement metadata")
+        require(not split_ids and not refinements,"split events outside HQCBO")
     require(summary["actual_cost"]==cost and summary["init_cost"]==init_cost and summary["n_purchases"]==len(events)
             and summary["sequential_purchases"]==sequential, "summary ledger counts mismatch")
-    if replication: require(cost==budget, "replication has not reached common budget B")
-    elif nominal_budget:
-        cheapest=min(len(arm) for arm in set(initial_counts)|set(split_counts))
-        require(0 <= budget-cost < cheapest, "nominal-budget pilot still has affordable actions")
+    cheapest=min(len(arm) for arm in set(initial_counts)|set(split_counts))
+    if replication or nominal_budget:
+        require(0 <= budget-cost < cheapest, "run stopped with affordable actions remaining")
     else: require(sequential==config["max_purchases"], "pilot purchase count mismatch")
     def same_row(a,b):
         require(set(a)==set(b), "score row schema mismatch")
-        for k,v in b.items(): require(close(a[k],v), "score/recommendation mismatch: "+k)
+        for k,v in b.items(): require(same_value(a[k],v), "score/recommendation mismatch: "+k)
     require(len(scores["scored_events"])==len(scored), "score event count mismatch")
     for a,b in zip(scores["scored_events"],scored): same_row(a,b)
     same_row(scores["final"],scored[-1]); same_row(summary["final"],scored[-1])
     checkpoints=[]
-    for c in range(12,cost+1):
-        row=next(r for r in reversed(scored) if r["cum_cost"]<=c)
-        checkpoints.append(dict(cost=c,**{k:v for k,v in row.items() if k!="cum_cost"}))
+    timeline=[initial_row]+scored
+    for c in range(REGRET_START[scm],budget+1):
+        row=next((r for r in reversed(timeline) if r["cum_cost"]<=c),None)
+        if row is not None:
+            checkpoints.append(dict(cost=c,**{k:v for k,v in row.items() if k!="cum_cost"}))
     require(len(scores["checkpoints"])==len(checkpoints), "cost checkpoints mismatch")
     for a,b in zip(scores["checkpoints"],checkpoints): same_row(a,b)
     area=sum(r["recommendation_regret"] for r in checkpoints)
@@ -136,7 +173,10 @@ def static_events(unit, config, events, scores, summary, replication, nominal_bu
             close(summary["cost_integrated_recommendation_regret"],area), "cost area mismatch")
     return dict(final_recommendation_regret=scored[-1]["recommendation_regret"],
                 cost_integrated_recommendation_regret=area, actual_cost=cost,
-                purchases=len(events), sequential_purchases=sequential)
+                purchases=len(events), sequential_purchases=sequential,
+                null_recommended_final=scored[-1]["recommendation_event_id"] is None,
+                split_cost=split_cost, unspent=budget-cost)
+
 
 def targets(env,menu):
     if env=='ToyGraph':
@@ -308,7 +348,7 @@ def typed_files(folder):
     return paths
 
 
-def static_arms(scm,cond,method):
+def static_arms(scm,cond,method,partition=None):
     joint=('M','X1') if scm=='FrontDoor' else ('X1','X2')
     singles=[(v,) for v in joint]
     if method in ('QCBO','HQCBO','BO'):return {joint}
@@ -331,21 +371,27 @@ def parse_unit(folder,unit):
         native={k:options['--'+k] for k in ('scm','cond','method')};native['seed']=unit['seed']
         for k,v in native.items():require(config[k]==summary[k]==v,'Static config identity mismatch: '+k)
         for k,v in config.items():require(summary.get(k)==v,'Summary/config mismatch: '+k)
-        require(config['protocol_id']=='matched-controlled-noisy-v2' and config['n_obs']==100 and config['n_init']==3,'Unsupported static protocol')
-        require(config['feedback_mode']=='single_true_SCM_draw' and config['recommendation_rule']=='minimum_measured_Y;ties_canonical_arm_then_execution_index','Wrong feedback/recommendation protocol')
+        scm=native['scm']
+        default_partition='fine' if native['method'] in ('CBO','CBO-NP','BO-S','BO','CBO-FALLBACK') else 'coarse'
+        native['partition']=options.get('--partition',default_partition)
+        require(config['partition']==native['partition'],'Wrong partition')
+        for key,value in PROTOCOL.items():require(config.get(key)==value,'Unsupported static protocol: '+key)
+        require(config['n_init']==N_INIT[scm],'Wrong initial design size')
         require(config['stage']==options['--stage'],'Wrong stage')
-        require(config['budget']==(120 if native['scm']=='MediatedChain' else 100),'Wrong budget')
+        require(config['budget']==BUDGET[scm],'Wrong budget')
         require(config.get('max_purchases')==(int(options['--max-purchases']) if '--max-purchases' in options else None),'Wrong purchase cap')
         require(summary['status']==('budget_complete' if unit['mode']=='paper' else 'pilot_complete'),'Backend incomplete')
         events=load(result/'events.json');scores=load(result/'scores.json')
         require(digest(result/'events.json')==summary['events_sha256'],'Backend event hash mismatch')
         require(digest(result/'observations.json')==config['observational_sha256'],'Observational hash mismatch')
-        obs=load(result/'observations.json');columns=['X1','M','Y'] if native['scm']=='FrontDoor' else ['X1','X2','Y']
-        require(obs['columns']==columns and len(obs['rows'])==100 and all(len(row)==3 and all(finite(v) for v in row) for row in obs['rows']),'Invalid observations')
-        require({tuple(e['arm']) for e in events if e['phase']=='init'}==static_arms(native['scm'],native['cond'],native['method']),'Wrong initial action menu')
-        metrics=static_events(native,config,events,scores,summary,unit['mode']=='paper')
+        obs=load(result/'observations.json');columns=list(NODES[scm])+['Y']
+        require(obs['columns']==columns and len(obs['rows'])==config['n_obs_pool'] and all(len(row)==len(columns) and all(finite(v) for v in row) for row in obs['rows']),'Invalid observations')
+        null_estimate=statistics.mean(row[-1] for row in obs['rows'][:config['n_obs']])
+        require(close(config['null_estimate'],null_estimate),'Null estimate is not the observational mean of Y')
+        require({tuple(e['arm']) for e in events if e['phase']=='init'}==static_arms(scm,native['cond'],native['method'],native['partition']),'Wrong initial action menu')
+        metrics=static_events(native,config,events,scores,summary,unit['mode']=='paper',null_estimate=config['null_estimate'])
         record.update(native,**metrics,observational_sha256=config['observational_sha256'],wall_seconds=summary['wall_seconds'],
-                      _events=events,_initial=[{k:e[k] for k in ('arm','x','measured','noise_seed')} for e in events if e['phase']=='init'])
+                      _events=events,_initial=[{k:e[k] for k in ('arm','x','measured')} for e in events if e['phase']=='init'])
         return record
     paths=typed_files(folder);info=load(paths['info']);data=load(paths['decisions'])
     with paths['csv'].open(newline='') as f:csv_rows=list(csv.DictReader(f))

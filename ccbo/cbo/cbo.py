@@ -122,6 +122,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		num_observations_collected = state.get('num_observations_collected', 0)
 		models_fresh = state.get('models_fresh', False)
 		trial_log = list(state.get('trial_log', []))
+		opening_forced_observe = bool(state.get('opening_forced_observe', False))
 		resumed = True
 	else:
 		# === ORIGINAL INITIALIZATION (unchanged) ===
@@ -165,6 +166,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		num_observations_collected = 0
 		models_fresh = False
 		trial_log = []
+		opening_forced_observe = False
 		resumed = False
 
 
@@ -206,6 +208,11 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		f"prior mask length {len(prior_mask)} != {len(exploration_set)} arms")
 	any_prior = any(prior_mask)
 
+	def refresh_priors():
+		return update_all_do_functions(
+			graph, exploration_set, functions, dict_interventions,
+			observational_samples, x_dict_mean, x_dict_var, prior_mask=prior_mask)
+
 	############################# LOOP
 	start_time = time.perf_counter()
 	for i in range(num_trials):
@@ -229,7 +236,12 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 		## doctored `uniform` values, so force_observe_on_entry=False really
 		## does permit an intervention at local step 0.
 		force_observe = bool(force_observe_on_entry) and i == 0 and can_observe
-		force_intervene = fresh_phase and i == 1
+		## The forced opening (observe, then intervene) spans resumed one-trial
+		## phases too, so a phase-by-phase run opens exactly like a single run.
+		force_intervene = (fresh_phase and i == 1) or (
+			not fresh_phase and opening_forced_observe and len(type_trial) == 1)
+		if force_observe and fresh_phase:
+			opening_forced_observe = True
 
 		if not can_observe:
 			choose_observe = False
@@ -283,9 +295,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 
 			## Update the mean functions and var functions given the current set of observational data. This is updating the prior.
 			if any_prior:
-				mean_functions_list, var_functions_list = update_all_do_functions(
-					graph, exploration_set, functions, dict_interventions,
-					observational_samples, x_dict_mean, x_dict_var, prior_mask=prior_mask)
+				mean_functions_list, var_functions_list = refresh_priors()
 			else:
 				mean_functions_list = [None] * len(exploration_set)
 				var_functions_list = [None] * len(exploration_set)
@@ -337,9 +347,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			## Lazy on purpose: for every run that does observe at step 0 this
 			## is a no-op, so existing trajectories are untouched.
 			if any_prior and any(f is None for f, m in zip(mean_functions_list, prior_mask) if m):
-				mean_functions_list, var_functions_list = update_all_do_functions(
-					graph, exploration_set, functions, dict_interventions,
-					observational_samples, x_dict_mean, x_dict_var, prior_mask=prior_mask)
+				mean_functions_list, var_functions_list = refresh_priors()
 
 			_force_rebuild = (state or {}).pop('force_rebuild_all', False) if state else False
 			## `models_fresh` guards against rebuilding every arm twice: when the
@@ -463,6 +471,7 @@ def CBO(num_trials, exploration_set, manipulative_variables, data_x_list, data_y
 			'models_fresh': bool(models_fresh),
 			'trial_log': trial_log,
 			'prior_mask': list(prior_mask),
+			'opening_forced_observe': bool(opening_forced_observe),
 		}
 		return results, state_out
 

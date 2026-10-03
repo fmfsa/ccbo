@@ -63,6 +63,14 @@ cluster. Dynamic experiments use 1,024 predictive particles, 2,048 feedback
 draws, and 100,000 scoring draws; the regularized nonstationary SCM is
 explicitly named.
 
+The static suite uses protocol `matched-controlled-cbo-v4`, which
+follows the CBO reference implementation (Aglietti et al., 2020):
+- Every measurement returns the exact population value E[Y | do(x)]. The reference implementation averages 100,000 SCM draws; we use closed forms.
+- Each arm starts with 3 uniformly drawn initial interventions that are given, not charged.
+- Every trial either observes or intervenes, using CBO's coverage-based ε rule: 100 initial observational rows, 20 more per observe trial, capped at 150. Observing is free.
+
+Runs stop at a fixed intervention-cost budget, counted from 0. Trial indices are logged for a trial-indexed view. The recommendation is the executed intervention with the smallest measured target, or no intervention when the observational mean of the target over the initial rows is strictly smaller. Exposed refinement arms start from a plain prior with no data.
+
 Use `--seed 2000` for one replicate across configurations, or `--index 0` for one
 unit in the listed matrix. Each worker uses one CPU. Completed runs resume only
 when settings, code identity and output hashes match; incomplete runs are
@@ -98,15 +106,18 @@ sources:
 | Paper | Output | Suite | Content |
 |---|---|---|---|
 | Figure 2 | `figures/cost_indexed.pdf` | static | ParallelParent and FrontDoor incumbent objective against cost |
+| Appendix | `figures/trial_indexed.pdf` | static | The same, against optimizer trials (observe or intervene) |
 | Figure 3 | `figures/minimal_refine.pdf` | static | MediatedChain incumbent objective and cumulative regret |
 | Figure 4 | `figures/family_suite.pdf` | dynamic, mcbo | Base, matched-exploration-set and quotient methods |
 | Table 1 | `tables/family_effects.tex` | dynamic, mcbo | Final dynamic and model-based outcomes |
 | Table 2 | `tables/minimal_taxonomy.tex` | static | Controlled conditions; written only if protected QCBO traces match |
 | Table 3 | `tables/minimal_ablations.tex` | static | Final and cumulative incumbent regret |
-| Table 4 | `tables/cost_accounting.tex` | static | Initialization and sequential spend |
+| Table 4 | `tables/cost_accounting.tex` | static | Free initial points, observe trials, sequential, refinement and unspent budget |
 
-All intervals are two-sided 95% Student-t intervals over paired seeds. Use
-`--suites static` to report the static suite alone, and `--smoke` to check the
+Cumulative regret sums the recommendation's regret at every integer cost from 0
+to the budget. All intervals are two-sided 95%
+Student-t intervals over paired seeds. Use `--suites static` to
+report the controlled suite alone, and `--smoke` to check the
 pipeline on pilot results (for example, `--results results/check`); smoke outputs
 are not paper evidence.
 

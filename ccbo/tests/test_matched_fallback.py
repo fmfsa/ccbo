@@ -19,7 +19,7 @@ class NativeFallbackIntegration(unittest.TestCase):
         self.assertEqual(a.arms,b.arms)
         self.assertEqual(a.cost,b.cost)
         self.assertEqual(control["gp_noise_audit"],normal["gp_noise_audit"])
-        self.assertEqual(score_events(a.scm,a.events,a.cost),score_events(b.scm,b.events,b.cost))
+        self.assertEqual(score_events(a.scm,a.events,a.cost,a.null_estimate),score_events(b.scm,b.events,b.cost,b.null_estimate))
         self.assertFalse(control["graph_substitution"])
         self.assertTrue(control["native_causal_kernel_retained"])
         self.assertEqual({tuple(q) for q in control["forced_functional_queries"]}, {("M",),("X1",),("M","X1")})
