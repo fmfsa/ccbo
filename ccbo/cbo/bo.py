@@ -96,12 +96,12 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 			target_evaluator(arm, value), dtype=float)[np.newaxis, np.newaxis]
 
 
-	if Causal_prior==False:
-		#### Define the model without Causal prior
-		gpy_model = GPy.models.GPRegression(data_x, data_y, GPy.kern.RBF(input_space, lengthscale=1., variance=1.), noise_var=NOISE_VAR)
-		fix_noise(gpy_model)
-		emukit_model = GPyModelWrapper(gpy_model)
-	else:
+	def build_model(data_x, data_y):
+		if Causal_prior==False:
+			#### Define the model without Causal prior
+			gpy_model = GPy.models.GPRegression(data_x, data_y, GPy.kern.RBF(input_space, lengthscale=1., variance=1.), noise_var=NOISE_VAR)
+			fix_noise(gpy_model)
+			return GPyModelWrapper(gpy_model)
 		#### Define the model with Causal prior
 		mf = GPy.core.Mapping(input_space, 1)
 		mf.f = lambda x: mean_function_do(x)
@@ -109,7 +109,12 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 		kernel = CausalRBF(input_space, variance_adjustment=var_function_do, lengthscale=1., variance=1., rescale_variance = 1., ARD = False)
 		gpy_model = GPy.models.GPRegression(data_x, data_y, kernel, noise_var=NOISE_VAR, mean_function=mf)
 		fix_noise(gpy_model)
-		emukit_model = CausalGPyModelWrapper(gpy_model)
+		return CausalGPyModelWrapper(gpy_model)
+
+	# Without initial data the first point is drawn uniformly from the domain
+	# (a flat prior makes every point equally acceptable); the surrogate is
+	# built from the first measurement onwards.
+	emukit_model = build_model(data_x, data_y) if len(data_x) else None
 
 
 	trial_log = []
@@ -118,10 +123,14 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 	for j in range(num_trials):
 		logger.debug('Iteration %s', j)
 		## Optimize model and get new evaluation point
-		emukit_model.optimize()
-		acquisition = ExpectedImprovement(emukit_model)
-		optimizer = GradientAcquisitionOptimizer(space_parameters)
-		x_new, _ = optimizer.optimize(acquisition)
+		if emukit_model is None:
+			bounds = space_parameters.get_bounds()
+			x_new = np.array([[np.random.uniform(lo, hi) for lo, hi in bounds]])
+		else:
+			emukit_model.optimize()
+			acquisition = ExpectedImprovement(emukit_model)
+			optimizer = GradientAcquisitionOptimizer(space_parameters)
+			x_new, _ = optimizer.optimize(acquisition)
 		y_new = target_function(x_new)
 
 		if intervention_callback is not None:
@@ -131,7 +140,10 @@ def NonCausal_BO(num_trials, graph, dict_ranges, interventional_data_x, interven
 		## Append the data
 		data_x = np.append(data_x, x_new, axis=0)
 		data_y = np.append(data_y, y_new, axis=0)
-		emukit_model.set_data(data_x, data_y)
+		if emukit_model is None:
+			emukit_model = build_model(data_x, data_y)
+		else:
+			emukit_model.set_data(data_x, data_y)
 
 		## Compute cost
 		x_new_dict = get_new_dict_x(x_new, intervention_variables)

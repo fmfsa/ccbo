@@ -179,17 +179,17 @@ CC_TRUE_EDGES: List[Tuple[str, str]] = [
     ("A1", "B1"), ("B1", "Y"), ("A2", "Y"), ("B2", "Y"), ("D1", "Y"), ("D2", "Y")]
 CC_CONFOUNDERS: List[Tuple[str, List[str]]] = [("UA", ["A1", "A2"]), ("UD", ["D1", "D2"])]
 
-CC_SIGMA_U = 0.2       # latent scale of UA and UD
-CC_SIGMA_IN = 0.2      # idiosyncratic scale of A1, A2, D1, D2
+CC_SIGMA_U = 0.5       # latent scale of UA and UD
+CC_SIGMA_IN = 0.5      # idiosyncratic scale of A1, A2, D1, D2
 CC_BETA = 2.0          # A1 -> B1 slope
 CC_SIGMA_B1 = 0.2      # B1 mechanism noise
-CC_SIGMA_B2 = 0.3      # B2 scale (root)
-CC_VAR_ROOT = CC_SIGMA_U ** 2 + CC_SIGMA_IN ** 2      # Var(A_i) = Var(D_i) = 0.08
+CC_SIGMA_B2 = 0.5      # B2 scale (root)
+CC_VAR_ROOT = CC_SIGMA_U ** 2 + CC_SIGMA_IN ** 2      # Var(A_i) = Var(D_i) = 0.5
 # Y = (A2 - CA2)^2 + (B1 - CB1)^2 + (B2 - CB2)^2 + (D1 - CD1)^2 + (D2 - CD2)^2
 CC_CENTRES = {"A2": -2.0, "B1": 4.0, "B2": 1.0, "D1": 1.0, "D2": -1.0}
 CC_B_BOX = (-2.0, 2.0)  # policy box for B1 and B2 (B1 cannot be clamped to 4)
 CC_BUDGET = 800
-CC_N_INIT = 2
+CC_N_INIT = 3   # free initial points per arm (as for every SCM)
 
 # Named partitions: manipulable clusters only (Y is appended).
 CC_PARTITIONS: Dict[str, List[List[str]]] = {
@@ -506,7 +506,7 @@ ORACLE[CC_NAME] = {
     "v_pi": {},                                            # per partition
     "price": {},
 }
-ORACLE[CC_NAME]["null"] = null_value(CC_NAME)              # 23.69
+ORACLE[CC_NAME]["null"] = null_value(CC_NAME)              # 26.79
 for _pid in CC_PARTITIONS:
     ORACLE[CC_NAME]["v_pi"][_pid] = cc_partition_value(_pid)
     ORACLE[CC_NAME]["price"][_pid] = cc_partition_value(_pid) - CC_SIGMA_B1 ** 2

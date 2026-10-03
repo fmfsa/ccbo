@@ -68,8 +68,8 @@ def test_null_value_matches_monte_carlo_and_analysis(scm):
     assert analyze.population(scm, [], []) == pytest.approx(mb.null_value(scm))
 
 
-def test_v3_keeps_v2_learner_randomness():
-    # Seeds are keyed by the frozen v2 namespace, so v3 reruns reproduce v2 measurements.
+def test_shared_seed_namespace_and_null_only_changes_recommendations():
+    # Observational data and initial levels are keyed by the frozen v2 namespace.
     import ccbo.matched_protocol as mp
     assert mp.SEED_NAMESPACE == "matched-controlled-noisy-v2" != mp.PROTOCOL_ID
     a = Experiment(mb.PP_NAME, 1000, all_arms(mb.PP_NAME))
@@ -127,10 +127,10 @@ def test_clusterchain_closed_forms_match_monte_carlo():
 def test_clusterchain_prices():
     o = mb.ORACLE[mb.CC_NAME]
     assert o["y_star"] == pytest.approx(0.04)
-    assert o["v_pi"] == pytest.approx({"fine": 0.04, "alt": 0.04, "pairs": 1.13, "coarse": 4.0})
+    assert o["v_pi"] == pytest.approx({"fine": 0.04, "alt": 0.04, "pairs": 1.29, "coarse": 4.0})
     assert mb.cc_do({"A1": 2, "A2": -2, "B2": 1, "D1": 1, "D2": -1}) == pytest.approx(0.04)
-    assert mb.cc_mu_star(["A1", "A2", "B2", "D2"]) - o["y_star"] == pytest.approx(1.08)   # CBO's floor under K1
-    assert regret_start(mb.CC_NAME) == 256 and regret_start(mb.PP_NAME) == 12
+    assert mb.cc_mu_star(["A1", "A2", "B2", "D2"]) - o["y_star"] == pytest.approx(1.5)   # CBO's floor under K1
+    assert regret_start(mb.CC_NAME) == 0 and regret_start(mb.PP_NAME) == 0
 
 
 def test_clusterchain_observations_shape():
@@ -167,3 +167,43 @@ def test_k3_keeps_fine_identification_but_changes_the_functional():
     true_adm = _build(mb.CC_NAME, fine, "K0")._coarsened_admg
     wrong_adm = _build(mb.CC_NAME, fine, "K3")._coarsened_admg
     assert len(true_adm.get("bi", ())) > len(wrong_adm.get("bi", ()))
+
+
+# ---------------------------------------------------------------------------
+# CBO-aligned protocol: free initial points, exact feedback, observation pool
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("scm", list(mb.NODES))
+def test_initial_points_are_free_and_measurements_exact(scm):
+    e = Experiment(scm, 1000, all_arms(scm))
+    assert e.cost == 0 and all(x["cost"] == 0 and x["cum_cost"] == 0 and x["trial"] == 0 for x in e.events)
+    assert sum(x["phase"] == "init" for x in e.events) == 3 * len(all_arms(scm))
+    arm = all_arms(scm)[-1]
+    e.purchase(arm, [mb.domain(scm, v)[0] for v in arm])
+    last = e.events[-1]
+    assert last["cost"] == len(arm) and last["trial"] == 1 and e.trial == 1
+    for x in e.events:
+        assert x["measured"]["Y"] == pytest.approx(mb.population_do(scm, x["arm"], x["x"]))
+    e.observed(120)
+    assert e.trial == 2 and e.observation_log == [dict(trial=2, cum_cost=len(arm), n_rows_after=120)]
+
+
+def test_observation_pool_extends_initial_rows():
+    small, pool = observational_data(mb.FD_NAME, 1000), observational_data(mb.FD_NAME, 1000, 150)
+    assert len(small) == 100 and len(pool) == 150 and pool.iloc[:100].equals(small)
+
+
+def test_prior_only_surrogate_matches_engine_prior_and_hands_over():
+    from ccbo.cbo.utils.BO_functions import PriorOnlyModel, update_BO_models
+    mean = lambda X: (X[:, :1] - 1.0) ** 2
+    var = lambda X: np.full((X.shape[0], 1), 0.5)
+    m = update_BO_models(mean, var, np.zeros((0, 1)), np.zeros((0, 1)), True)
+    assert isinstance(m, PriorOnlyModel) and m.model is None
+    mu, v = m.predict(np.array([[3.0]]))
+    assert mu[0, 0] == pytest.approx(4.0) and v[0, 0] == pytest.approx(1.5, rel=1e-6)
+    dmu, dv = m.get_prediction_gradients(np.array([[3.0]]))
+    assert dmu[0, 0] == pytest.approx(4.0, rel=1e-4) and dv[0, 0] == pytest.approx(0.0, abs=1e-6)
+    m.set_data(np.array([[3.0]]), np.array([[4.2]]))
+    assert m.model is not None and m.predict(np.array([[3.0]]))[0][0, 0] == pytest.approx(4.2, abs=1e-3)
+    plain = update_BO_models(None, None, np.zeros((0, 2)), np.zeros((0, 1)), False)
+    assert plain.predict(np.zeros((1, 2)))[0][0, 0] == 0.0

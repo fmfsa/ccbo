@@ -8,6 +8,7 @@ the pipeline can be exercised end to end, but its outputs are not evidence.
 
 Outputs (file names match the manuscript's ``\\includegraphics``/``\\input``):
   figures/cost_indexed.pdf     Figure 2  (ParallelParent, FrontDoor)
+  figures/trial_indexed.pdf    Figure 2 by optimizer trial (observe or intervene; appendix)
   figures/minimal_refine.pdf   Figure 3  (MediatedChain)
   figures/family_suite.pdf     Figure 4  (dynamic and model-based families)
   tables/family_effects.tex    Table 1
@@ -115,8 +116,12 @@ def static_units(results, smoke, summary, suite='static'):
             refinements = [backend['refinement']] if backend.get('refinement') else []
         accepted = [r for r in refinements if r.get('accepted')]
         refined_at = events[accepted[-1]['split_event_ids'][-1]]['cum_cost'] if accepted else None
+        trial_of = {e['event_id']: e.get('trial', 0) for e in events}
         units.append(dict(row, checkpoints=scores['checkpoints'], scored_events=scores['scored_events'],
+                          trials=run.get('trials', 0),
+                          trial_points=[(trial_of[r['event_id']], r) for r in scores['scored_events']],
                           init_cost=run['init_cost'], split_cost=run.get('split_init_cost', 0),
+                          init_points=run.get('init_points', 0), observe_trials=run.get('observe_trials', 0),
                           budget=run['budget'], refined_at=refined_at,
                           triggered_at=[events[r['trigger_event_id']]['cum_cost'] for r in refinements]))
     return units
@@ -190,6 +195,42 @@ def figure_cost_indexed(units, path):
             plot_band(ax, *cost_curves(group, 'recommendation_population'), label)
         style_axis(ax, title)
         ax.set_xlabel('Intervention cost', fontsize=8)
+        ax.set_ylabel('Incumbent objective', fontsize=8)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=7, frameon=False, bbox_to_anchor=(0.5, -0.06))
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches='tight')
+    plt.close(fig)
+
+
+def trial_curves(units, key):
+    """Seed-by-trial matrix: the recommendation after each optimizer trial
+    (trial 0 = after the given initial points), up to the fewest trials any
+    seed of the group ran."""
+    last = min(u['trials'] for u in units)
+    matrix = []
+    for u in units:
+        row, j, points = [], 0, u['trial_points']
+        for t in range(last + 1):
+            while j + 1 < len(points) and points[j + 1][0] <= t:
+                j += 1
+            row.append(points[j][1][key])
+        matrix.append(row)
+    return np.arange(last + 1), np.array(matrix)
+
+
+def figure_trial_indexed(units, path):
+    fig, axes = plt.subplots(2, 1, figsize=(3.3, 4.2))
+    panels = [('(a) ParallelParent', 'ParallelParent', 'A0', 'A1'),
+              ('(b) FrontDoor', 'FrontDoor', 'B0', 'B1')]
+    for ax, (title, scm, correct, edited) in zip(axes, panels):
+        series = [(m, select(units, scm=scm, cond=correct, method=m)) for m in ('CBO', 'QCBO', 'BO', 'BO-S', 'CBO-NP')]
+        series.append(('CBO (misspecified)', select(units, scm=scm, cond=edited, method='CBO')))
+        for label, group in series:
+            require(group, f'missing {scm} {label} results')
+            plot_band(ax, *trial_curves(group, 'recommendation_population'), label)
+        style_axis(ax, title)
+        ax.set_xlabel('Optimizer trial (observe or intervene)', fontsize=8)
         ax.set_ylabel('Incumbent objective', fontsize=8)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=7, frameon=False, bbox_to_anchor=(0.5, -0.06))
@@ -348,8 +389,8 @@ def table_costs(units, path):
     def number(values):
         mean = statistics.mean(values)
         return str(int(mean)) if float(mean).is_integer() else f'{mean:.1f}'
-    lines = [HEADER, '\\begin{tabular}{llrrrrr}\n\\toprule\n',
-             'Condition & Method & Budget & Init. & Sequential & Refinement & Unspent \\\\\n']
+    lines = [HEADER, '\\begin{tabular}{llrrrrrr}\n\\toprule\n',
+             'Condition & Method & Budget & Free init. points & Observe trials & Sequential & Refinement & Unspent \\\\\n']
     for scm, cond, short in CONDITIONS:
         lines.append('\\midrule\n')
         for method in sorted({u['method'] for u in select(units, scm=scm, cond=cond)}):
@@ -357,8 +398,8 @@ def table_costs(units, path):
             sequential = [u['actual_cost'] - u['init_cost'] - u['split_cost'] for u in group]
             unspent = [u['budget'] - u['actual_cost'] for u in group]
             lines.append(f'{short} {cond} & {method} & {number([u["budget"] for u in group])} & '
-                         f'{number([u["init_cost"] for u in group])} & {number(sequential)} & '
-                         f'{number([u["split_cost"] for u in group])} & {number(unspent)} \\\\\n')
+                         f'{number([u["init_points"] for u in group])} & {number([u["observe_trials"] for u in group])} & '
+                         f'{number(sequential)} & {number([u["split_cost"] for u in group])} & {number(unspent)} \\\\\n')
     lines.append('\\bottomrule\n\\end{tabular}\n')
     path.write_text(''.join(lines))
 
@@ -419,7 +460,7 @@ def figure_clusterchain(units, path):
 
 def table_clusterchain(units, path):
     lines = [HEADER, '\\begin{tabular}{lllrrr}\n\\toprule\n',
-             'Condition & Method & Partition & Init. cost & Final regret & Cumulative regret \\\\\n']
+             'Condition & Method & Partition & Free init. points & Final regret & Cumulative regret \\\\\n']
     for cond, _ in CC_CONDITIONS:
         lines.append('\\midrule\n')
         keys = sorted({(u['method'], u['partition']) for u in units if u['cond'] == cond})
@@ -427,7 +468,7 @@ def table_clusterchain(units, path):
             group = [u for u in units if u['cond'] == cond and u['method'] == method and u['partition'] == partition]
             _, final = fmt([u['final_recommendation_regret'] for u in group], 3)
             _, area = fmt([u['cost_integrated_recommendation_regret'] for u in group], 1)
-            init = statistics.mean(u['init_cost'] for u in group)
+            init = statistics.mean(u['init_points'] for u in group)
             lines.append(f'{cond} & {method} & {partition} & {init:.0f} & {final} & {area} \\\\\n')
     lines.append('\\bottomrule\n\\end{tabular}\n')
     path.write_text(''.join(lines))
@@ -436,12 +477,12 @@ def table_clusterchain(units, path):
 def table_clusterchain_partitions(analyze, path):
     from ccbo import minibench as mb
     lines = [HEADER, '\\begin{tabular}{llrrrr}\n\\toprule\n',
-             'Partition & Clusters & Arms & Init. cost & $V(\\Pi)$ & $\\Delta(\\Pi)$ \\\\\n\\midrule\n']
+             'Partition & Clusters & Arms & Free init. points & $V(\\Pi)$ & $\\Delta(\\Pi)$ \\\\\n\\midrule\n']
     for pid, clusters in analyze.CC_PARTITIONS.items():
         arms = analyze.cc_arms('K0', pid)
         text = ', '.join('\\{' + ','.join(f'${v[0]}_{v[1]}$' for v in c) + '\\}' for c in clusters)
         value = mb.ORACLE[mb.CC_NAME]['v_pi'][pid]
-        lines.append(f'{pid} & {text} & {len(arms)} & {mb.CC_N_INIT * sum(map(len, arms))} & '
+        lines.append(f'{pid} & {text} & {len(arms)} & {mb.CC_N_INIT * len(arms)} & '
                      f'{value:.2f} & {value - mb.ORACLE[mb.CC_NAME]["y_star"]:.2f} \\\\\n')
     lines.append('\\bottomrule\n\\end{tabular}\n')
     path.write_text(''.join(lines))
@@ -463,13 +504,14 @@ def main():
         summary = audited(analyze, args.results, 'static', args.smoke)
         units = static_units(args.results, args.smoke, summary)
         figure_cost_indexed(units, args.out / 'figures' / 'cost_indexed.pdf')
+        figure_trial_indexed(units, args.out / 'figures' / 'trial_indexed.pdf')
         refined = figure_minimal_refine(units, args.out / 'figures' / 'minimal_refine.pdf')
         if refined:
             print(f'HQCBO refinement completes at cost {sorted(set(refined))} (Figure 3 marks the median)')
         table_taxonomy(summary, args.out / 'tables' / 'minimal_taxonomy.tex')
         table_ablations(units, args.out / 'tables' / 'minimal_ablations.tex')
         table_costs(units, args.out / 'tables' / 'cost_accounting.tex')
-        written += ['figures/cost_indexed.pdf', 'figures/minimal_refine.pdf', 'tables/minimal_taxonomy.tex',
+        written += ['figures/cost_indexed.pdf', 'figures/trial_indexed.pdf', 'figures/minimal_refine.pdf', 'tables/minimal_taxonomy.tex',
                     'tables/minimal_ablations.tex', 'tables/cost_accounting.tex']
     if 'clusterchain' in args.suites:
         summary = audited(analyze, args.results, 'clusterchain', args.smoke)

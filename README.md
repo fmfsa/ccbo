@@ -65,14 +65,13 @@ cluster. Dynamic experiments use 1,024 predictive particles, 2,048 feedback
 draws, and 100,000 scoring draws; the regularized nonstationary SCM is
 explicitly named.
 
-The static and ClusterChain suites use protocol `matched-controlled-noisy-v3`.
-Each initial, sequential or refinement measurement returns **one draw** of the
-true SCM under the intervention (not its expectation). The recommendation is the
-executed intervention with the smallest measured target, or no intervention when
-the observational mean of the target is strictly smaller. Recommendations are
-then scored post hoc with closed-form population values. Learner randomness is
-keyed by the unchanged v2 namespace, so v3 reproduces v2 measurements exactly;
-only the recommendation rule differs.
+The static and ClusterChain suites use protocol `matched-controlled-cbo-v4`, which
+follows the CBO reference implementation (Aglietti et al., 2020):
+- Every measurement returns the exact population value E[Y | do(x)]. The reference implementation averages 100,000 SCM draws; we use closed forms.
+- Each arm starts with 3 uniformly drawn initial interventions that are given, not charged.
+- Every trial either observes or intervenes, using CBO's coverage-based ε rule: 100 initial observational rows, 20 more per observe trial, capped at 150. Observing is free.
+
+Runs stop at a fixed intervention-cost budget, counted from 0. Trial indices are logged for a trial-indexed view. The recommendation is the executed intervention with the smallest measured target, or no intervention when the observational mean of the target over the initial rows is strictly smaller. Exposed refinement arms start from a plain prior with no data.
 
 ClusterChain has six manipulable variables in three pairs and four named
 partitions (`fine`, `alt`, `pairs`, `coarse`). Its conditions are:
@@ -125,19 +124,19 @@ sources:
 | Paper | Output | Suite | Content |
 |---|---|---|---|
 | Figure 2 | `figures/cost_indexed.pdf` | static | ParallelParent and FrontDoor incumbent objective against cost |
+| Appendix | `figures/trial_indexed.pdf` | static | The same, against optimizer trials (observe or intervene) |
 | Figure 3 | `figures/minimal_refine.pdf` | static | MediatedChain incumbent objective and cumulative regret |
 | Figure 4 | `figures/family_suite.pdf` | dynamic, mcbo | Base, matched-exploration-set and quotient methods |
 | Table 1 | `tables/family_effects.tex` | dynamic, mcbo | Final dynamic and model-based outcomes |
 | Table 2 | `tables/minimal_taxonomy.tex` | static | Controlled conditions; written only if protected QCBO traces match |
 | Table 3 | `tables/minimal_ablations.tex` | static | Final and cumulative incumbent regret |
-| Table 4 | `tables/cost_accounting.tex` | static | Initialization, sequential, refinement and unspent budget |
+| Table 4 | `tables/cost_accounting.tex` | static | Free initial points, observe trials, sequential, refinement and unspent budget |
 | Appendix | `figures/clusterchain.pdf` | clusterchain | Incumbent regret against cost under K0–K3 |
 | Appendix | `tables/clusterchain_results.tex` | clusterchain | Final and cumulative regret, all cells |
-| Appendix | `tables/clusterchain_partitions.tex` | clusterchain | Partitions, arms, initialization cost, analytic V(Π) and Δ(Π) |
+| Appendix | `tables/clusterchain_partitions.tex` | clusterchain | Partitions, arms, free initial points, analytic V(Π) and Δ(Π) |
 
-Cumulative regret sums the recommendation's regret at every integer cost from
-the largest initialization cost of any method (12 for the original controlled
-SCMs, 256 for ClusterChain) to the budget. All intervals are two-sided 95%
+Cumulative regret sums the recommendation's regret at every integer cost from 0
+to the budget. All intervals are two-sided 95%
 Student-t intervals over paired seeds. Use `--suites static clusterchain` to
 report the controlled suites alone, and `--smoke` to check the
 pipeline on pilot results (for example, `--results results/check`); smoke outputs

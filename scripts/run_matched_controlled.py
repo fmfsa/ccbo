@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ccbo import minibench as mb
 from ccbo.matched_protocol import (PROTOCOL_ID, SEED_NAMESPACE, DEFAULT_BUDGET, DEFAULT_N_INIT,
+                                    FEEDBACK_MODE, N_OBS_INITIAL, N_OBS_POOL, N_OBS_BATCH,
                                     SCALAR_METHODS, method_partition, observational_data,
                                     run_scalar, score_events)
 
@@ -59,15 +60,17 @@ def main():
     except ValueError as exc:
         p.error(str(exc))
     out.mkdir(parents=True, exist_ok=True)
-    obs = observational_data(args.scm, args.seed)
+    obs = observational_data(args.scm, args.seed, N_OBS_POOL)
     observations = {"columns":list(obs.columns), "rows":obs.to_numpy().tolist()}
     obs_bytes = json.dumps(observations, sort_keys=True, separators=(",", ":")).encode()
     (out/"observations.json").write_bytes(obs_bytes)
     config = dict(vars(args), partition=partition, protocol_id=PROTOCOL_ID, seed_namespace=SEED_NAMESPACE,
-                  n_obs=100, n_init=DEFAULT_N_INIT[args.scm],
-                  feedback_mode="single_true_SCM_draw",
+                  n_obs=N_OBS_INITIAL, n_obs_pool=N_OBS_POOL, n_obs_batch=N_OBS_BATCH,
+                  n_init=DEFAULT_N_INIT[args.scm], initial_design="given_not_charged",
+                  observation_policy="cbo_coverage_epsilon_greedy",
+                  feedback_mode=FEEDBACK_MODE,
                   recommendation_rule="minimum_measured_Y_or_null_if_observational_mean_strictly_smaller;ties_canonical_arm_then_execution_index",
-                  null_estimate=float(obs["Y"].mean()),
+                  null_estimate=float(obs["Y"].iloc[:N_OBS_INITIAL].mean()),
                   budget=DEFAULT_BUDGET[args.scm] if args.budget is None else args.budget,
                   observational_sha256=hashlib.sha256(obs_bytes).hexdigest())
     source_files = ["ccbo/matched_protocol.py", "scripts/run_matched_controlled.py", "ccbo/minibench.py", "ccbo/cbo/cbo.py", "ccbo/cbo/bo.py", "ccbo/cbo/utils/BO_functions.py", "scripts/matched_refinement.py", "scripts/matched_fallback.py", "ccbo/coarsened_graph.py", "ccbo/cbo/graphs/ClusterChain.py"]
@@ -96,6 +99,8 @@ def main():
         summary = dict(config, status=status, backend=meta, wall_seconds=time.time()-started,
                        actual_cost=experiment.cost, init_cost=sum(e["cost"] for e in experiment.events if e["phase"]=="init"),
                        split_init_cost=sum(e["cost"] for e in experiment.events if e["phase"]=="split_init"),
+                       init_points=sum(e["phase"]=="init" for e in experiment.events),
+                       trials=experiment.trial, observe_trials=len(experiment.observation_log),
                        n_purchases=len(experiment.events), sequential_purchases=experiment.sequential_index,
                        final=scored["final"], cost_integrated_recommendation_regret=scored["cost_integrated_recommendation_regret"],
                        events_sha256=digest(events_path))

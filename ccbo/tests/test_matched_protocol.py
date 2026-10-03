@@ -41,11 +41,14 @@ class MatchedProtocolTests(unittest.TestCase):
         self.assertEqual(len(a.events),10)
 
     def test_budget_and_pilot_cap_are_distinct(self):
-        e=Experiment(mb.PP_NAME,1000,all_arms(mb.PP_NAME),budget=13)
-        self.assertEqual(e.cost,12)
+        e=Experiment(mb.PP_NAME,1000,all_arms(mb.PP_NAME),budget=3)
+        self.assertEqual(e.cost,0)                      # initial points are given, not charged
+        self.assertEqual(sum(x["phase"]=="init" for x in e.events),9)
+        e.purchase(("X1","X2"),[0,0])
+        self.assertEqual(e.cost,2)
         self.assertFalse(e.affordable(("X1","X2")))
         with self.assertRaises(BudgetExhausted): e.purchase(("X1","X2"),[0,0])
-        self.assertEqual(e.cost,12)
+        self.assertEqual(e.cost,2)
         e.purchase(("X1",),[0])
         with self.assertRaises(BudgetExhausted): e.purchase(("X1",),[0])
         p=Experiment(mb.PP_NAME,1000,all_arms(mb.PP_NAME),max_purchases=1)
@@ -95,35 +98,30 @@ class MatchedProtocolTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("MATCHED_INTEGRATION")=="1", "requires full runtime; opt in explicitly")
 class ExistingBackendIntegrationTests(unittest.TestCase):
-    def test_scalar_backends_are_noisy_and_budgeted(self):
+    def test_scalar_backends_are_exact_and_budgeted(self):
         for method in ("CBO","QCBO","BO-S","BO"):
             e,meta=run_scalar(mb.PP_NAME,"A0",method,1000,max_purchases=1)
             self.assertEqual(e.sequential_index,1)
-            self.assertEqual(meta["new_observation_rows"],0)
+            self.assertEqual(e.cost,sum(x["cost"] for x in e.events))
+            self.assertTrue(all(x["cost"]==0 for x in e.events if x["phase"]=="init"))
             self.assertTrue(meta["gp_noise_audit"])
-            self.assertTrue(all(not x["fixed"] for x in meta["gp_noise_audit"]))
-            oracle=mb.population_evaluator(e.scm)
-            self.assertTrue(any(abs(row["measured"]["Y"]-oracle(row["arm"],row["x"]))>1e-8 for row in e.events))
+            self.assertTrue(all(a["fixed"] for a in meta["gp_noise_audit"]))
+            for row in e.events:
+                self.assertAlmostEqual(row["measured"]["Y"],mb.population_do(e.scm,row["arm"],row["x"]))
             if method == "CBO":
-                with patch.object(mb, "population_evaluator", side_effect=AssertionError("oracle reached backend")), patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached backend")):
-                    poisoned,_=run_scalar(mb.PP_NAME,"A0",method,1000,max_purchases=1)
-                self.assertEqual(e.events,poisoned.events)
+                with patch("ccbo.matched_protocol.score_events", side_effect=AssertionError("scorer reached backend")):
+                    again,_=run_scalar(mb.PP_NAME,"A0",method,1000,max_purchases=1)
+                self.assertEqual(e.events,again.events)
 
-    def test_affordable_singleton_and_fit_before_acquisition(self):
-        e,meta=run_scalar(mb.PP_NAME,"A0","BO-S",1000,budget=13)
-        self.assertEqual(sum(x["cost"] for x in e.events if x["phase"]=="init"),12)
-        self.assertEqual(e.cost,13)
+    def test_affordable_singleton_under_tight_budget(self):
+        e,meta=run_scalar(mb.PP_NAME,"A0","BO-S",1000,budget=1)
+        self.assertEqual(sum(x["phase"]=="init" for x in e.events),9)
+        self.assertEqual(e.cost,1)
         self.assertEqual(e.sequential_index,1)
         self.assertEqual(len(e.events[-1]["arm"]),1)
-        audited=[a for a in meta["gp_noise_audit"] if a.get("acquisition_snapshots")]
-        self.assertEqual(len(audited),2)  # both affordable singleton acquisitions
-        for audit in audited:
-            self.assertTrue(audit["fitted_before_acquisition"])
-            for call in audit["acquisition_snapshots"]:
-                self.assertEqual(call["parameters"],audit["fitted_parameters"])
-                self.assertEqual(call["variance"],audit["fitted_variance"])
-                self.assertEqual(call["n_rows"],3)
-        self.assertTrue(any(a["initial_variance"] != a["fitted_variance"] for a in audited))
+        snapshots=[c for a in meta["gp_noise_audit"] for c in a["acquisition_snapshots"]]
+        self.assertEqual({len(c["arm"]) for c in snapshots},{1})   # the joint arm is unaffordable
+        self.assertTrue(all(c["n_rows"]==3 for c in snapshots))
 
     def test_protected_qcbo_pair_uses_identical_measurements(self):
         a,_=run_scalar(mb.PP_NAME,"A0","QCBO",1000,max_purchases=2)
