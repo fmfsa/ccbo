@@ -190,3 +190,24 @@ d6b527ce4cf270fc83e8614597d0a7508172f1cce72311a086cc968d214b9d07  results_v4_raw
 539a7357f7a9142b11543f7af4e1a2cc70905be4f8ea9540b1fb86a5715fd689  static.csv
 6e0f573669f1debeebcae7f656b2e78d6cd2dc1ce926e078b2eedb7d6daac263  static.json
 ```
+
+## Post-processing (2026-10-03, commit 20619eb)
+
+The ClusterChain benchmark was removed from the study. Its outputs (`clusterchain.{json,csv}` and its figures and tables) were deleted. `results_v4_raw.tar.gz` was re-packed with the 630 static units only; the units are unchanged. The obsolete noisy v3 outputs were removed. The static audit was rerun with the cleaned `analyze.py`: complete, 0 failures, 60/60 protected checks, and summaries identical to `static.json`. `report.py --suites static` regenerated the figures in the paper plot style; the tables are byte-identical to the server run.
+
+SHA-256 of the current files:
+
+```
+6c96e1344c2e9adfca5b47ab97b103d6eed3c1d38f3c4faa313ea84bace087d9  ./paper_outputs/figures/cost_indexed.pdf
+cbfbb19ae842b2a69f1f705d48516b0d301e0980d882331da9d8d5f4926a4741  ./paper_outputs/figures/cost_indexed.png
+736b7154faad5b8855e155acab17b8991045d634dd3e7b901476f8c1ef5c07b3  ./paper_outputs/figures/minimal_refine.pdf
+b33cd19cb53b0f9006cd12fa7bf376722d6c2d5768756f6fe6a45a742b560439  ./paper_outputs/figures/minimal_refine.png
+638356bc75a365677f1699c581e9b12d8c8105e0149268fdab1219503e5416a3  ./paper_outputs/figures/trial_indexed.pdf
+cb169d71846595efe318899af081a94b9d6c8a2490aabd6c6c5714df52f3ac7a  ./paper_outputs/figures/trial_indexed.png
+3eebac5ab50106df1131e6ca5b645b93b2de1309b978faae2985629ee265f937  ./paper_outputs/tables/cost_accounting.tex
+bb441acb7e0937bbdd41664151048cb185515bc2b4ed3474304aed8f5ced88bb  ./paper_outputs/tables/minimal_ablations.tex
+44af193e5ec624b04a1498666f89bb4b2b0ff8f70ceea1e3f4ee3b5aa0a60d4a  ./paper_outputs/tables/minimal_taxonomy.tex
+9c3e18a5558a298dedc0c9a391802736767cfc370709eeff62364b2625ffdd27  ./results_v4_raw.tar.gz
+539a7357f7a9142b11543f7af4e1a2cc70905be4f8ea9540b1fb86a5715fd689  ./static.csv
+6e0f573669f1debeebcae7f656b2e78d6cd2dc1ce926e078b2eedb7d6daac263  ./static.json
+```
