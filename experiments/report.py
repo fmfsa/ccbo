@@ -42,7 +42,6 @@ CONDITIONS = [('ParallelParent', 'A0', 'PP'), ('ParallelParent', 'A1', 'PP'),
               ('FrontDoor', 'B0', 'FD'), ('FrontDoor', 'B1', 'FD'),
               ('MediatedChain', 'C0', 'MC')]
 DYNAMIC = [('stat', 'Stationary'), ('ind', 'Independent'), ('nonstat_regularized', 'Nonstationary')]
-FAMILY_PANELS = [('stat', 'Stationary'), ('ind', 'Independent'), ('nonstat_regularized', 'Nonstationary (regularized)')]
 MODEL_BASED = [('ToyGraph', 'ToyGraph'), ('PSAGraph', 'PSAGraph')]
 
 def require(ok, message):
@@ -267,7 +266,7 @@ def figure_family(dynamic, mcbo, path):
     top = [fig.add_subplot(grid[0, 2 * i:2 * i + 2]) for i in range(3)]
     bottom = [fig.add_subplot(grid[1, 3 * i:3 * i + 3]) for i in range(2)]
     variants = [('DCBO', 'DCBO', 'native'), ('DCBO (matched exploration set)', 'DCBO', 'coarse'), ('QDCBO', 'QDCBO', 'native')]
-    for i, (ax, (setup, name)) in enumerate(zip(top, FAMILY_PANELS)):
+    for i, (ax, (setup, name)) in enumerate(zip(top, DYNAMIC)):
         for label, algo, menu in variants:
             group = select(dynamic, setup=setup, algo=algo, action_menu=menu)
             require(group, f'missing dynamic {setup} {label} results')
