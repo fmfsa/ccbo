@@ -63,7 +63,7 @@ The freeze was taken after pulling `198022d`. The editable `ccbo` line therefore
 ```
 ananke-causal==0.5.0
 annotated-types==0.8.0
--e git+ssh://git@github.com/fmfsa/ccbo.git@198022d0e41c9f2f918687820a18369f3cc82201#egg=ccbo&subdirectory=../../.claude/worktrees/pr9-experiment-runs-c22831
+-e .
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.2
@@ -207,7 +207,11 @@ cb169d71846595efe318899af081a94b9d6c8a2490aabd6c6c5714df52f3ac7a  ./paper_output
 3eebac5ab50106df1131e6ca5b645b93b2de1309b978faae2985629ee265f937  ./paper_outputs/tables/cost_accounting.tex
 bb441acb7e0937bbdd41664151048cb185515bc2b4ed3474304aed8f5ced88bb  ./paper_outputs/tables/minimal_ablations.tex
 44af193e5ec624b04a1498666f89bb4b2b0ff8f70ceea1e3f4ee3b5aa0a60d4a  ./paper_outputs/tables/minimal_taxonomy.tex
-9c3e18a5558a298dedc0c9a391802736767cfc370709eeff62364b2625ffdd27  ./results_v4_raw.tar.gz
+f3081c3bf1a9586772b7714c5f6565a693ff849f2b14ad609b03f256708fe59b  ./results_v4_raw.tar.gz
 539a7357f7a9142b11543f7af4e1a2cc70905be4f8ea9540b1fb86a5715fd689  ./static.csv
 6e0f573669f1debeebcae7f656b2e78d6cd2dc1ce926e078b2eedb7d6daac263  ./static.json
 ```
+
+## Anonymization (2026-10-07)
+
+`results_v4_raw.tar.gz` was re-packed for anonymous review. In every unit, the `outdir` field of `result/config.json` and `result/summary.json` now holds the relative path `results/v4/paper/static/<unit>/result`, and `unit.json` carries the matching output hashes. No other bytes changed. Archive entries have no owner names. The static audit of the re-packed archive is complete with 0 failures and is identical to the audit of the previous archive. The SHA-256 of the archive above is updated to `f3081c3bf1a9586772b7714c5f6565a693ff849f2b14ad609b03f256708fe59b` (8,760,457 bytes). The editable install in the `pip freeze` listing is shown as `-e .`.
