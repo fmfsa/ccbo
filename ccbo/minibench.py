@@ -167,18 +167,51 @@ MC_REFINE_MAP: Dict[frozenset, List[frozenset]] = {
 }
 
 
+# Supplied refinement hierarchy, applied stage by stage by HQCBO.
+REFINE_STAGES: Dict[str, List[Dict[frozenset, List[frozenset]]]] = {
+    MC_NAME: [MC_REFINE_MAP],
+}
+
+# Standard normals consumed per SCM row (latents, mechanisms, target).
+NOISE_DIM: Dict[str, int] = {PP_NAME: 4, FD_NAME: 4, MC_NAME: 4}
+MANIPULATIVE: Dict[str, List[str]] = {
+    PP_NAME: PP_MANIPULATIVE, FD_NAME: FD_MANIPULATIVE, MC_NAME: MC_MANIPULATIVE}
+NODES: Dict[str, List[str]] = {
+    PP_NAME: PP_NODES, FD_NAME: FD_NODES, MC_NAME: MC_NODES}
+
+
+def domain(scm: str, var: str) -> Tuple[float, float]:
+    """Intervention range of one manipulable variable."""
+    if scm == MC_NAME and var == "X2":
+        return MC_X2_BOX
+    return DOMAIN
+
+
+def partition_ids(scm: str) -> List[str]:
+    """Named partitions available for ``scm``."""
+    return ["fine", "coarse"]
+
+
+def partition(scm: str, partition_id: str) -> List[frozenset]:
+    """Named partition (manipulable clusters + {Y}) for ``scm``."""
+    if partition_id == "fine":
+        clusters = [[v] for v in MANIPULATIVE[scm]]
+    elif partition_id == "coarse":
+        clusters = {PP_NAME: PP_COARSE_CLUSTERS, FD_NAME: FD_COARSE_CLUSTERS,
+                    MC_NAME: MC_COARSE_CLUSTERS}[scm]
+    else:
+        raise ValueError(f"unknown partition {partition_id!r} for {scm}")
+    return [frozenset(c) for c in clusters] + [frozenset({"Y"})]
+
+
 def coarse_partition(scm: str) -> List[frozenset]:
     """Coarse partition (manipulable clusters + {Y}) for ``scm``."""
-    clusters = {PP_NAME: PP_COARSE_CLUSTERS, FD_NAME: FD_COARSE_CLUSTERS,
-                MC_NAME: MC_COARSE_CLUSTERS}[scm]
-    return [frozenset(c) for c in clusters] + [frozenset({"Y"})]
+    return partition(scm, "coarse")
 
 
 def fine_partition(scm: str) -> List[frozenset]:
     """Identity (all-singleton) partition for ``scm`` — full-DAG CBO."""
-    manip = {PP_NAME: PP_MANIPULATIVE, FD_NAME: FD_MANIPULATIVE,
-             MC_NAME: MC_MANIPULATIVE}[scm]
-    return [frozenset({v}) for v in manip] + [frozenset({"Y"})]
+    return partition(scm, "fine")
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +269,18 @@ def mc_do_x2(x2: float) -> float:
     return (x2 - MC_C) ** 2
 
 
+def null_value(scm: str) -> float:
+    """E[Y] with no intervention (the null intervention's population value)."""
+    if scm == PP_NAME:
+        return PP_LAM * (PP_A ** 2 + PP_VAR_X) + (PP_B ** 2 + PP_VAR_X)
+    if scm == FD_NAME:
+        return FD_AMP * (1.0 - _gauss_smooth(
+            0.0, FD_B ** 2 * (FD_SIGMA_U ** 2 + FD_SIGMA_1 ** 2) + FD_SIGMA_M ** 2))
+    if scm == MC_NAME:
+        return MC_C ** 2 + MC_BETA ** 2 * MC_SIGMA_1 ** 2 + MC_SIGMA_2 ** 2
+    raise ValueError(scm)
+
+
 def population_do(scm: str, arm: Sequence[str], values) -> float:
     """Exact MinimalBench population objective for an intervention.
 
@@ -264,6 +309,8 @@ def population_do(scm: str, arm: Sequence[str], values) -> float:
     intervention: Mapping[str, float] = dict(zip(names, flat))
     key = frozenset(names)
 
+    if not names:
+        return null_value(scm)
     if scm == PP_NAME:
         if key == frozenset({"X1"}):
             return pp_do_x1(intervention["X1"])

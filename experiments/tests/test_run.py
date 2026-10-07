@@ -110,3 +110,4 @@ def test_parallel_failure_does_not_launch_remaining_units_or_kill_peer(tmp_path)
     assert completed == [selected[1]['id']]
     with pytest.raises(ValueError): paper.run_many(selected,tmp_path,jobs=0,identity='test')
     with pytest.raises(ValueError): paper.run_many([selected[0],selected[0]],tmp_path,jobs=2,identity='test')
+

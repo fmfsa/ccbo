@@ -1,0 +1,77 @@
+# ccbo_paper.mplstyle -- matplotlib style for the AISTATS 2027 paper.
+# Matches the paper's Computer Modern text at 7-8 pt, thin recessive axes,
+# light y-grid, no frames. Use with exact figure sizes (style.COLUMN /
+# style.TEXT) and constrained layout so figures are included at 100 % scale
+# (\includegraphics without width=..., or width=\linewidth on a figure that
+# is already exactly \linewidth wide).
+
+# --- typography: Computer Modern, like the body text -----------------------
+font.family:              serif
+font.serif:               cmr10, Computer Modern Roman, CMU Serif, DejaVu Serif
+mathtext.fontset:         cm
+axes.formatter.use_mathtext: True   # cmr10 has no unicode minus; mathtext supplies it
+font.size:                8
+axes.titlesize:           8
+axes.labelsize:           8
+xtick.labelsize:          7.5
+ytick.labelsize:          7.5
+legend.fontsize:          7.5
+legend.title_fontsize:    7
+
+# --- layout ----------------------------------------------------------------
+figure.constrained_layout.use: True
+figure.constrained_layout.h_pad: 0.02
+figure.constrained_layout.w_pad: 0.04
+figure.constrained_layout.hspace: 0.04
+figure.constrained_layout.wspace: 0.03
+savefig.bbox:             standard   # keep the exact figsize (no tight crop)
+savefig.dpi:              300
+savefig.pad_inches:       0.01
+pdf.fonttype:             42
+ps.fonttype:              42
+
+# --- axes: thin, recessive --------------------------------------------------
+axes.linewidth:           0.5
+axes.edgecolor:           444444
+axes.labelcolor:          222222
+axes.titlelocation:       left
+axes.titlepad:            3
+axes.labelpad:            2
+axes.spines.top:          False
+axes.spines.right:        False
+axes.grid:                True
+axes.grid.axis:           y
+axes.axisbelow:           True
+grid.color:               e3e3e3
+grid.linewidth:           0.4
+grid.linestyle:           -
+xtick.color:              444444
+ytick.color:              444444
+xtick.labelcolor:         333333
+ytick.labelcolor:         333333
+xtick.major.width:        0.5
+ytick.major.width:        0.5
+xtick.minor.width:        0.4
+ytick.minor.width:        0.4
+xtick.major.size:         2.5
+ytick.major.size:         2.5
+xtick.minor.size:         1.5
+ytick.minor.size:         1.5
+xtick.major.pad:          2
+ytick.major.pad:          2
+axes.xmargin:             0
+axes.ymargin:             0.04
+
+# --- marks -------------------------------------------------------------------
+lines.linewidth:          1.1
+lines.solid_capstyle:     butt
+lines.dash_capstyle:      butt
+patch.linewidth:          0
+
+# --- legend ------------------------------------------------------------------
+legend.frameon:           False
+legend.handlelength:      2.2
+legend.handletextpad:     0.5
+legend.columnspacing:     1.2
+legend.labelspacing:      0.25
+legend.borderaxespad:     0.2
