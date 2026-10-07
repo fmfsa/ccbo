@@ -121,6 +121,20 @@ report the controlled suite alone, and `--smoke` to check the
 pipeline on pilot results (for example, `--results results/check`); smoke outputs
 are not paper evidence.
 
+### From the released static results
+
+`experiment_outputs/v4/results_v4_raw.tar.gz` contains the 630 static runs
+reported in the paper, and `experiment_outputs/v4/paper_outputs/` the figures
+and tables generated from them. To audit the runs and regenerate Figures 2–3
+and Tables 2–4 without rerunning the experiments:
+
+```sh
+mkdir -p results/released
+tar -xzf experiment_outputs/v4/results_v4_raw.tar.gz -C results/released
+.venv-static/bin/python experiments/analyze.py --suite static --results results/released --out results/released/static.json
+.venv-static/bin/python experiments/report.py --results results/released --out results/released/paper_outputs --suites static
+```
+
 ## Test
 
 ```sh
